@@ -1,0 +1,17 @@
+{
+  "short_name": "MyBac Hub",
+  "name": "منصة التحضير للامتحان الوطني للبكالوريا",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0c1424",
+  "theme_color": "#0d9488",
+  "display": "standalone",
+  "orientation": "any"
+}

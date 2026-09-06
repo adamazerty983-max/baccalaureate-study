@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Firestore Blueprint",
+  "description": "Database schema definition for Baccalaureate Study Hub",
+  "entities": {
+    "User": {
+      "collection": "users",
+      "description": "User profile records",
+      "fields": {
+        "id": { "type": "string", "description": "Auth UID" },
+        "email": { "type": "string", "description": "User email address" },
+        "displayName": { "type": "string", "description": "Display name" },
+        "createdAt": { "type": "string", "description": "Account creation timestamp" },
+        "lastLoginAt": { "type": "string", "description": "Last login timestamp" }
+      },
+      "roles": {
+        "read": ["owner"],
+        "write": ["owner"]
+      }
+    },
+    "UserData": {
+      "collection": "userData",
+      "description": "Comprehensive student study data, tasks, notes, quizzes, habits, and time blocks",
+      "fields": {
+        "userId": { "type": "string", "description": "Owner user ID" },
+        "version": { "type": "number", "description": "Data schema version" },
+        "settings": { "type": "object", "description": "Application settings and preferences" },
+        "tasks": { "type": "array", "description": "Daily study tasks" },
+        "quizzes": { "type": "array", "description": "Subject quizzes and scores" },
+        "homework": { "type": "array", "description": "Homework assignments" },
+        "notes": { "type": "array", "description": "Lecture notes and formulas" },
+        "timeBlocks": { "type": "array", "description": "Timetable schedule blocks" },
+        "grades": { "type": "array", "description": "Grade items and coefficients" },
+        "goals": { "type": "array", "description": "Bac target goals" },
+        "lessons": { "type": "array", "description": "Lesson progress status" },
+        "habits": { "type": "array", "description": "Habit items" },
+        "habitLogs": { "type": "object", "description": "Date to habit completion logs" },
+        "weeklyReviews": { "type": "object", "description": "Weekly reflection notes" },
+        "updatedAt": { "type": "string", "description": "ISO timestamp of last update" }
+      },
+      "roles": {
+        "read": ["owner"],
+        "write": ["owner"]
+      }
+    },
+    "StudyRoom": {
+      "collection": "studyRooms",
+      "description": "Shared study room / sync code data for multi-device sync",
+      "fields": {
+        "roomId": { "type": "string", "description": "Unique room sync code" },
+        "appData": { "type": "object", "description": "Synced study hub data" },
+        "updatedAt": { "type": "string", "description": "Last updated timestamp" },
+        "ownerId": { "type": "string", "description": "Creator user UID" }
+      },
+      "roles": {
+        "read": ["authenticated"],
+        "write": ["authenticated"]
+      }
+    }
+  }
+}

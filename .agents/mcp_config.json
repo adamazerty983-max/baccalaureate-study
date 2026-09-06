@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "stata": {
+      "serverUrl": "http://localhost:4000/mcp-s",
+      "url": "http://localhost:4000/mcp-s"
+    },
+    "klingai": {
+      "serverUrl": "https://kling.ai/mcp",
+      "url": "https://kling.ai/mcp"
+    }
+  }
+}
+
