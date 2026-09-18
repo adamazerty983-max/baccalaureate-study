@@ -30,6 +30,8 @@ import {
   Timer,
   Flame,
   CheckCircle,
+  Brain,
+  RotateCcw,
 } from 'lucide-react';
 import { ActivitySticker, AppLanguage, StickerActivityType, TaskItem, TimeBlock } from '../types';
 import { ACTIVITY_STICKERS, BAC_SUBJECTS } from '../utils/constants';
@@ -125,29 +127,75 @@ const parseNaturalLanguageTask = (text: string) => {
 
   const lower = text.toLowerCase();
 
-  // Match subjects
-  for (const s of BAC_SUBJECTS) {
-    if (lower.includes(s.name.toLowerCase()) || lower.includes(s.id.toLowerCase())) {
-      subject = s.name;
+  // Match subjects (French and Arabic)
+  const ARABIC_SUBJECT_MAP: Record<string, string> = {
+    'رياضيات': 'Mathématiques',
+    'الرياضيات': 'Mathématiques',
+    'فرنسية': 'Français',
+    'الفرنسية': 'Français',
+    'عربية': 'Arabe',
+    'العربية': 'Arabe',
+    'إنجليزية': 'Anglais',
+    'انجليزية': 'Anglais',
+    'الانجليزية': 'Anglais',
+    'الإنجليزية': 'Anglais',
+    'فلسفة': 'Philosophie',
+    'الفلسفة': 'Philosophie',
+    'إسلامية': 'Éducation Islamique',
+    'اسلامية': 'Éducation Islamique',
+    'التربية الإسلامية': 'Éducation Islamique',
+    'علوم': 'Sciences de la Vie et de la Terre',
+    'svt': 'Sciences de la Vie et de la Terre',
+    'فيزياء': 'Physique Chimie',
+    'الفيزياء': 'Physique Chimie',
+    'كيمياء': 'Physique Chimie',
+    'تاريخ': 'Histoire & Géographie',
+    'جغرافيا': 'Histoire & Géographie',
+    'اجتماعيات': 'Histoire & Géographie',
+    'اقتصاد': 'Économie & Sociologie',
+    'إعلاميات': 'Informatique',
+    'اعلاميات': 'Informatique',
+  };
+
+  for (const [arKey, subjName] of Object.entries(ARABIC_SUBJECT_MAP)) {
+    if (lower.includes(arKey)) {
+      subject = subjName;
       break;
     }
   }
 
+  if (!subject) {
+    for (const s of BAC_SUBJECTS) {
+      if (lower.includes(s.name.toLowerCase()) || lower.includes(s.id.toLowerCase())) {
+        subject = s.name;
+        break;
+      }
+    }
+  }
+
   // Match day
-  if (lower.includes('demain') || lower.includes('tomorrow')) {
+  if (lower.includes('demain') || lower.includes('tomorrow') || lower.includes('غدا') || lower.includes('غداً')) {
     dayOffset = 1;
   }
 
-  // Match duration: "1h30", "2h", "45min", "1h"
+  // Match duration: "1h30", "2h", "45min", "1h", "45 دقيقة", "ساعة"
   const hMatch = lower.match(/(\d+)\s*h\s*(\d+)?/);
   if (hMatch) {
     const h = parseInt(hMatch[1], 10);
     const m = hMatch[2] ? parseInt(hMatch[2], 10) : 0;
     durationMins = h * 60 + m;
   } else {
-    const minMatch = lower.match(/(\d+)\s*min/);
+    const minMatch = lower.match(/(\d+)\s*(?:min|دقيقة)/);
     if (minMatch) {
       durationMins = parseInt(minMatch[1], 10);
+    } else if (lower.includes('ساعتين') || lower.includes('ساعتان') || lower.includes('2h')) {
+      durationMins = 120;
+    } else if (lower.includes('ساعة ونصف') || lower.includes('1h30')) {
+      durationMins = 90;
+    } else if (lower.includes('ساعة') || lower.includes('1h')) {
+      durationMins = 60;
+    } else if (lower.includes('نصف ساعة')) {
+      durationMins = 30;
     }
   }
 
@@ -165,6 +213,178 @@ const STICKER_ICONS: Record<string, React.ReactNode> = {
   sleeping: <Moon className="w-3.5 h-3.5 text-purple-400" />,
 };
 
+const STICKER_THEMES: Record<string, { bg: string; border: string; text: string; iconColor: string }> = {
+  praying: {
+    bg: 'bg-indigo-50/90 dark:bg-indigo-950/40',
+    border: 'border-indigo-200/80 dark:border-indigo-800/60',
+    text: 'text-indigo-800 dark:text-indigo-200',
+    iconColor: 'text-indigo-600 dark:text-indigo-400',
+  },
+  rest: {
+    bg: 'bg-amber-50/90 dark:bg-amber-950/40',
+    border: 'border-amber-200/80 dark:border-amber-800/60',
+    text: 'text-amber-800 dark:text-amber-200',
+    iconColor: 'text-amber-600 dark:text-amber-400',
+  },
+  pause: {
+    bg: 'bg-yellow-50/90 dark:bg-yellow-950/40',
+    border: 'border-yellow-200/80 dark:border-yellow-800/60',
+    text: 'text-yellow-800 dark:text-yellow-200',
+    iconColor: 'text-yellow-600 dark:text-yellow-400',
+  },
+  repas: {
+    bg: 'bg-orange-50/90 dark:bg-orange-950/40',
+    border: 'border-orange-200/80 dark:border-orange-800/60',
+    text: 'text-orange-800 dark:text-orange-200',
+    iconColor: 'text-orange-600 dark:text-orange-400',
+  },
+  walking: {
+    bg: 'bg-emerald-50/90 dark:bg-emerald-950/40',
+    border: 'border-emerald-200/80 dark:border-emerald-800/60',
+    text: 'text-emerald-800 dark:text-emerald-200',
+    iconColor: 'text-emerald-600 dark:text-emerald-400',
+  },
+  sport: {
+    bg: 'bg-teal-50/90 dark:bg-teal-950/40',
+    border: 'border-teal-200/80 dark:border-teal-800/60',
+    text: 'text-teal-800 dark:text-teal-200',
+    iconColor: 'text-teal-600 dark:text-teal-400',
+  },
+  perso: {
+    bg: 'bg-pink-50/90 dark:bg-pink-950/40',
+    border: 'border-pink-200/80 dark:border-pink-800/60',
+    text: 'text-pink-800 dark:text-pink-200',
+    iconColor: 'text-pink-600 dark:text-pink-400',
+  },
+  sleeping: {
+    bg: 'bg-purple-50/90 dark:bg-purple-950/40',
+    border: 'border-purple-200/80 dark:border-purple-800/60',
+    text: 'text-purple-800 dark:text-purple-200',
+    iconColor: 'text-purple-600 dark:text-purple-400',
+  },
+};
+
+const FALLBACK_STICKER_THEME = {
+  bg: 'bg-slate-100 dark:bg-slate-800',
+  border: 'border-slate-200 dark:border-slate-700',
+  text: 'text-slate-700 dark:text-slate-300',
+  iconColor: 'text-slate-600 dark:text-slate-400',
+};
+
+// Single source of truth for sticker theming: sticker bar, placed cards and drag ghost
+const getStickerTheme = (type?: string) => (type && STICKER_THEMES[type]) || FALLBACK_STICKER_THEME;
+
+interface TimeBlockTheme {
+  bg: string;
+  border: string;
+  text: string;
+  badgeBg: string;
+  badgeText: string;
+  accent: string;
+  dot: string;
+}
+
+const getSubjectCardTheme = (subjectName: string): TimeBlockTheme => {
+  const s = subjectName?.toLowerCase() || '';
+  if (s.includes('math')) {
+    return {
+      bg: 'bg-teal-50/80 dark:bg-teal-950/35',
+      border: 'border-teal-200/80 dark:border-teal-800/50',
+      text: 'text-teal-950 dark:text-teal-100',
+      badgeBg: 'bg-teal-500/15 dark:bg-teal-500/20 border-teal-500/30',
+      badgeText: 'text-teal-700 dark:text-teal-300',
+      accent: 'text-teal-600 dark:text-teal-400',
+      dot: 'bg-teal-500',
+    };
+  }
+  if (s.includes('phys')) {
+    return {
+      bg: 'bg-sky-50/80 dark:bg-sky-950/35',
+      border: 'border-sky-200/80 dark:border-sky-800/50',
+      text: 'text-sky-950 dark:text-sky-100',
+      badgeBg: 'bg-sky-500/15 dark:bg-sky-500/20 border-sky-500/30',
+      badgeText: 'text-sky-700 dark:text-sky-300',
+      accent: 'text-sky-600 dark:text-sky-400',
+      dot: 'bg-sky-500',
+    };
+  }
+  if (s.includes('vie') || s.includes('svt') || s.includes('terre')) {
+    return {
+      bg: 'bg-emerald-50/80 dark:bg-emerald-950/35',
+      border: 'border-emerald-200/80 dark:border-emerald-800/50',
+      text: 'text-emerald-950 dark:text-emerald-100',
+      badgeBg: 'bg-emerald-500/15 dark:bg-emerald-500/20 border-emerald-500/30',
+      badgeText: 'text-emerald-700 dark:text-emerald-300',
+      accent: 'text-emerald-600 dark:text-emerald-400',
+      dot: 'bg-emerald-500',
+    };
+  }
+  if (s.includes('philo')) {
+    return {
+      bg: 'bg-purple-50/80 dark:bg-purple-950/35',
+      border: 'border-purple-200/80 dark:border-purple-800/50',
+      text: 'text-purple-950 dark:text-purple-100',
+      badgeBg: 'bg-purple-500/15 dark:bg-purple-500/20 border-purple-500/30',
+      badgeText: 'text-purple-700 dark:text-purple-300',
+      accent: 'text-purple-600 dark:text-purple-400',
+      dot: 'bg-purple-500',
+    };
+  }
+  if (s.includes('fran')) {
+    return {
+      bg: 'bg-amber-50/80 dark:bg-amber-950/35',
+      border: 'border-amber-200/80 dark:border-amber-800/50',
+      text: 'text-amber-950 dark:text-amber-100',
+      badgeBg: 'bg-amber-500/15 dark:bg-amber-500/20 border-amber-500/30',
+      badgeText: 'text-amber-700 dark:text-amber-300',
+      accent: 'text-amber-600 dark:text-amber-400',
+      dot: 'bg-amber-500',
+    };
+  }
+  if (s.includes('ang') || s.includes('engl') || s.includes('arab')) {
+    return {
+      bg: 'bg-indigo-50/80 dark:bg-indigo-950/35',
+      border: 'border-indigo-200/80 dark:border-indigo-800/50',
+      text: 'text-indigo-950 dark:text-indigo-100',
+      badgeBg: 'bg-indigo-500/15 dark:bg-indigo-500/20 border-indigo-500/30',
+      badgeText: 'text-indigo-700 dark:text-indigo-300',
+      accent: 'text-indigo-600 dark:text-indigo-400',
+      dot: 'bg-indigo-500',
+    };
+  }
+  if (s.includes('islam')) {
+    return {
+      bg: 'bg-emerald-50/80 dark:bg-emerald-950/35',
+      border: 'border-emerald-200/80 dark:border-emerald-800/50',
+      text: 'text-emerald-950 dark:text-emerald-100',
+      badgeBg: 'bg-emerald-500/15 dark:bg-emerald-500/20 border-emerald-500/30',
+      badgeText: 'text-emerald-700 dark:text-emerald-300',
+      accent: 'text-emerald-600 dark:text-emerald-400',
+      dot: 'bg-emerald-500',
+    };
+  }
+  if (s.includes('hist') || s.includes('géo')) {
+    return {
+      bg: 'bg-orange-50/80 dark:bg-orange-950/35',
+      border: 'border-orange-200/80 dark:border-orange-800/50',
+      text: 'text-orange-950 dark:text-orange-100',
+      badgeBg: 'bg-orange-500/15 dark:bg-orange-500/20 border-orange-500/30',
+      badgeText: 'text-orange-700 dark:text-orange-300',
+      accent: 'text-orange-600 dark:text-orange-400',
+      dot: 'bg-orange-500',
+    };
+  }
+  return {
+    bg: 'bg-slate-50/90 dark:bg-slate-900/60',
+    border: 'border-slate-200/80 dark:border-white/10',
+    text: 'text-slate-900 dark:text-slate-100',
+    badgeBg: 'bg-teal-500/15 dark:bg-teal-500/20 border-teal-500/30',
+    badgeText: 'text-teal-700 dark:text-teal-300',
+    accent: 'text-teal-600 dark:text-teal-400',
+    dot: 'bg-teal-500',
+  };
+};
+
 interface ActiveMoveState {
   blockId: string;
   initialBlock: TimeBlock;
@@ -174,7 +394,141 @@ interface ActiveMoveState {
   type: 'move' | 'resize-top' | 'resize-bottom';
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SMART SCHEDULE OPTIMIZER
+// Chronobiology + Cognitive Load Theory priority classifier
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Returns a cognitive priority score for a subject name.
+ * Lower = harder / more demanding (placed earlier in the day).
+ * 1 → Deep analytical (Math, Physics-Chemistry)
+ * 2 → Critical thinking (Philosophy, Economics)
+ * 3 → Language / verbal (Arabic, French, English)
+ * 4 → Memorisation / recall (History, Islamic, SVT facts)
+ * 5 → Light review / general
+ */
+const getSubjectCognitivePriority = (subject: string): number => {
+  const s = subject.toLowerCase();
+  // Tier 1 — Deep analytic (morning peak: 06h–10h)
+  if (s.includes('math') || s.includes('physique') || s.includes('chimie') || s.includes('pc'))
+    return 1;
+  // Tier 2 — Critical thinking (mid-morning: 10h–12h)
+  if (s.includes('philo') || s.includes('économie') || s.includes('sociolo') || s.includes('inform'))
+    return 2;
+  // Tier 3 — Language (midday: 12h–15h)
+  if (
+    s.includes('arab') || s.includes('français') || s.includes('anglais') ||
+    s.includes('franc') || s.includes('english') || s.includes('langue')
+  )
+    return 3;
+  // Tier 4 — Memorisation (afternoon: 15h–18h)
+  if (
+    s.includes('histoir') || s.includes('géograph') || s.includes('islamique') ||
+    s.includes('svt') || s.includes('vie') || s.includes('terre') ||
+    s.includes('tarbiya') || s.includes('islámi')
+  )
+    return 4;
+  // Tier 5 — Light / revision (evening: 18h+)
+  if (s.includes('révision') || s.includes('revision') || s.includes('activit') || s.includes('général'))
+    return 5;
+  return 3; // Default: treat as language tier
+};
+
+/**
+ * Pure function: given the day's blocks, returns new start/end times for
+ * study blocks only — sticker_activity blocks are left untouched.
+ *
+ * Algorithm:
+ * 1. Separate study blocks from sticker (anchor) blocks.
+ * 2. Determine window: min(startTime) → max(endTime) across ALL blocks.
+ * 3. Sort stickers by their start time (they are fixed anchors).
+ * 4. Sort study blocks by cognitive priority (1 = first).
+ * 5. Fill study slots in the window, skipping over sticker time ranges.
+ * 6. Returns array of { id, startTime, endTime } patches.
+ */
+export const smartRedistribute = (
+  blocks: TimeBlock[]
+): { id: string; startTime: string; endTime: string }[] => {
+  if (blocks.length === 0) return [];
+
+  const studyBlocks = blocks
+    .filter((b) => b.type === 'study' && !b.isCompleted)
+    .sort((a, b) => getSubjectCognitivePriority(a.subject) - getSubjectCognitivePriority(b.subject));
+
+  const stickerBlocks = blocks
+    .filter((b) => b.type === 'sticker_activity' || b.isCompleted)
+    .sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
+
+  if (studyBlocks.length === 0) return [];
+
+  // Window boundaries
+  const allStarts = blocks.map((b) => timeToMinutes(b.startTime));
+  const allEnds = blocks.map((b) => timeToMinutes(b.endTime));
+  const windowStart = Math.min(...allStarts);
+  const windowEnd = Math.max(...allEnds);
+
+  // Build list of "free" intervals by subtracting sticker ranges from the window
+  type Interval = { start: number; end: number };
+  const blocked: Interval[] = stickerBlocks.map((b) => ({
+    start: timeToMinutes(b.startTime),
+    end: timeToMinutes(b.endTime),
+  }));
+
+  // Compute free slots in the window
+  const freeSlots: Interval[] = [];
+  let cursor = windowStart;
+  for (const blk of blocked) {
+    if (blk.start > cursor) freeSlots.push({ start: cursor, end: blk.start });
+    cursor = Math.max(cursor, blk.end);
+  }
+  if (cursor < windowEnd) freeSlots.push({ start: cursor, end: windowEnd });
+
+  // Assign study blocks into free slots in order
+  const patches: { id: string; startTime: string; endTime: string }[] = [];
+  let slotIdx = 0;
+  let slotCursor = freeSlots[0]?.start ?? windowStart;
+
+  for (const sb of studyBlocks) {
+    const dur = timeToMinutes(sb.endTime) - timeToMinutes(sb.startTime);
+    let placed = false;
+
+    while (slotIdx < freeSlots.length) {
+      const slot = freeSlots[slotIdx];
+      // Advance cursor to slot start if needed
+      if (slotCursor < slot.start) slotCursor = slot.start;
+
+      if (slotCursor + dur <= slot.end) {
+        patches.push({
+          id: sb.id,
+          startTime: minutesToTime(slotCursor),
+          endTime: minutesToTime(slotCursor + dur),
+        });
+        slotCursor += dur;
+        placed = true;
+        break;
+      } else {
+        // Move to next slot
+        slotIdx++;
+        if (freeSlots[slotIdx]) slotCursor = freeSlots[slotIdx].start;
+      }
+    }
+
+    // If no slot fit: place at window end (overflow, rare case)
+    if (!placed) {
+      patches.push({
+        id: sb.id,
+        startTime: sb.startTime,
+        endTime: sb.endTime,
+      });
+    }
+  }
+
+  return patches;
+};
+
 export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
+
   timeBlocks,
   tasks = [],
   language = 'fr',
@@ -222,16 +576,20 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
   // "Ajouter / Modifier une tâche" Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
-  const [modalMode, setModalMode] = useState<'precision' | 'rapide'>('precision');
+  const [modalMode, setModalMode] = useState<'precision' | 'rapide'>('rapide');
   const [naturalInput, setNaturalInput] = useState('');
   const [taskTitle, setTaskTitle] = useState('');
   const [taskSubject, setTaskSubject] = useState('');
   const [subjectError, setSubjectError] = useState('');
   const [isSubjectDropdownOpen, setIsSubjectDropdownOpen] = useState(false);
+  const subjectDropdownRef = useRef<HTMLDivElement>(null);
   const [taskNotes, setTaskNotes] = useState('');
+  const [isCustomTimeExpanded, setIsCustomTimeExpanded] = useState(false);
+  const [isDetailsExpanded, setIsDetailsExpanded] = useState(false);
 
   // Selected Day Pill in modal: 'today' | 'tomorrow' | 'week' | 'custom'
   const [modalDayOption, setModalDayOption] = useState<'today' | 'tomorrow' | 'week' | 'custom'>('today');
+  const [modalCustomDay, setModalCustomDay] = useState<number>(() => new Date().getDay());
 
   // Time & Duration inside Modal
   const [modalStartMinutes, setModalStartMinutes] = useState(360); // 06:00
@@ -242,6 +600,11 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
 
   // Dismissible reminder notification banner state
   const [isReminderVisible, setIsReminderVisible] = useState(true);
+
+  // Smart Schedule Optimizer: snapshot of original block times before redistribution
+  const [originalSnapshot, setOriginalSnapshot] = useState<{ id: string; startTime: string; endTime: string }[] | null>(null);
+  const isSmartDistributed = originalSnapshot !== null;
+
 
   // Subject display name localization helper
   const getSubjectDisplayName = (name: string) => {
@@ -380,6 +743,10 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
   };
 
   const handleGridMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    // Only the primary (left) button may start a drag-to-create. A right or
+    // middle click used to arm the drag and then open the "add task" modal on
+    // release, which made the context menu feel like it created a block.
+    if (e.button !== 0) return;
     // If clicking directly on a button or existing block, ignore
     if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('.time-block-card')) {
       return;
@@ -452,17 +819,16 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
     const startMins = Math.min(dragStartMinutes, dragCurrentMinutes);
     const rawEndMins = Math.max(dragStartMinutes, dragCurrentMinutes);
 
-    // Ensure at least 30 minutes duration if clicked quickly
+    // A quick click (no actual drag) keeps the 1-hour default. A deliberate but
+    // short drag is clamped up to the 15-minute minimum instead of being
+    // inflated to a full hour, which used to discard the user's chosen range.
     let duration = rawEndMins - startMins;
-    if (duration < 15) {
-      duration = 60; // default 1 hour
+    if (duration <= 0) {
+      duration = 60; // quick click → default 1 hour
+    } else if (duration < 15) {
+      duration = 15;
     }
 
-    setEditingBlockId(null);
-    setModalStartMinutes(startMins);
-    setModalDurationMinutes(duration);
-
-    // Open clean modal with EMPTY fields for new task
     setEditingBlockId(null);
     setModalStartMinutes(startMins);
     setModalDurationMinutes(duration);
@@ -472,6 +838,10 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
     setTaskNotes('');
     setNaturalInput('');
     setModalDayOption('today');
+    setModalCustomDay(selectedDay);
+    setModalMode('rapide');
+    setIsCustomTimeExpanded(false);
+    setIsDetailsExpanded(false);
 
     setIsModalOpen(true);
   };
@@ -487,19 +857,67 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
     setTaskNotes('');
     setNaturalInput('');
     setModalDayOption('today');
+    setModalCustomDay(selectedDay);
+    setModalMode('rapide');
+    setIsCustomTimeExpanded(false);
+    setIsDetailsExpanded(false);
     setIsModalOpen(true);
   };
 
-  // Global mouseup & mousemove listener
+  // Global mouseup listener + stuck-drag rescue
   useEffect(() => {
     const handleGlobalMouseUp = () => {
       if (isDragging || activeMove) {
         handleGridMouseUp();
       }
     };
+    // Releasing the mouse outside the window (or alt-tabbing mid-drag) can
+    // swallow the mouseup, which left a phantom selection box stuck on the grid
+    // with the drag state still armed.
+    const handleCancelDrag = () => {
+      setIsDragging(false);
+      setActiveMove(null);
+    };
     window.addEventListener('mouseup', handleGlobalMouseUp);
-    return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
+    window.addEventListener('blur', handleCancelDrag);
+    return () => {
+      window.removeEventListener('mouseup', handleGlobalMouseUp);
+      window.removeEventListener('blur', handleCancelDrag);
+    };
   }, [isDragging, activeMove]);
+
+  // Dismiss modal or subject dropdown on Escape key
+  useEffect(() => {
+    if (!isModalOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        if (isSubjectDropdownOpen) {
+          setIsSubjectDropdownOpen(false);
+        } else {
+          setIsModalOpen(false);
+          setEditingBlockId(null);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isModalOpen, isSubjectDropdownOpen]);
+
+  // Dismiss subject dropdown when clicking outside
+  useEffect(() => {
+    if (!isSubjectDropdownOpen) return;
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (
+        subjectDropdownRef.current &&
+        !subjectDropdownRef.current.contains(e.target as Node)
+      ) {
+        setIsSubjectDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [isSubjectDropdownOpen]);
 
   // Quick shift block by +/- hours
   const handleShiftBlockHours = (block: TimeBlock, deltaHours: number) => {
@@ -537,11 +955,18 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
 
     if (block.dayOfWeek === selectedDay) {
       setModalDayOption('today');
+      setModalCustomDay(selectedDay);
     } else if (block.dayOfWeek === (selectedDay + 1) % 7) {
       setModalDayOption('tomorrow');
+      setModalCustomDay((selectedDay + 1) % 7);
     } else {
       setModalDayOption('custom');
+      setModalCustomDay(block.dayOfWeek);
     }
+
+    setModalMode('precision');
+    setIsCustomTimeExpanded(false);
+    setIsDetailsExpanded(Boolean(block.notes || (block.title && block.title !== block.subject)));
 
     setIsModalOpen(true);
   };
@@ -559,6 +984,7 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
     }
     if (parsed.durationMins) setModalDurationMinutes(parsed.durationMins);
     if (parsed.dayOffset === 1) setModalDayOption('tomorrow');
+    chimePlayer.playChime('click');
   };
 
   const handleDurationPresetClick = (minutes: number) => {
@@ -586,27 +1012,35 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
     }
   };
 
-  const handleSaveModalTask = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveModalTask = (e?: React.FormEvent, overrideSubject?: string) => {
+    if (e && typeof e.preventDefault === 'function') {
+      e.preventDefault();
+    }
+
+    const subjectToValidate = (overrideSubject !== undefined ? overrideSubject : taskSubject).trim();
 
     // Subject is MANDATORY (إجباري للمادة فقط)
-    if (!taskSubject.trim()) {
+    if (!subjectToValidate) {
       setSubjectError(
         isAr ? 'يرجى اختيار المادة إجبارياً لحفظ المهمة.' : 'Veuillez sélectionner une matière obligatoirement.'
       );
-      setIsSubjectDropdownOpen(true);
+      if (modalMode === 'precision') {
+        setIsSubjectDropdownOpen(true);
+      }
       return;
     }
 
     let targetDay = selectedDay;
     if (modalDayOption === 'tomorrow') {
       targetDay = (selectedDay + 1) % 7;
+    } else if (modalDayOption === 'custom' || modalDayOption === 'week') {
+      targetDay = modalCustomDay;
     }
 
     const startStr = minutesToTime(modalStartMinutes);
     const endStr = minutesToTime(modalStartMinutes + modalDurationMinutes);
     // Title is OPTIONAL - falls back to selected subject name if empty
-    const finalTitle = taskTitle.trim() || taskSubject.trim();
+    const finalTitle = taskTitle.trim() || subjectToValidate;
 
     const targetDateKey = computeDateKeyForDay(targetDay);
 
@@ -616,7 +1050,7 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
         onUpdateTimeBlock({
           ...existing,
           title: finalTitle,
-          subject: taskSubject.trim(),
+          subject: subjectToValidate,
           dayOfWeek: targetDay,
           dateKey: existing.dateKey || targetDateKey,
           startTime: startStr,
@@ -631,7 +1065,7 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
         startTime: startStr,
         endTime: endStr,
         title: finalTitle,
-        subject: taskSubject.trim(),
+        subject: subjectToValidate,
         isCompleted: false,
         type: 'study',
         notes: taskNotes.trim(),
@@ -641,12 +1075,29 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
 
     setIsModalOpen(false);
     setEditingBlockId(null);
+    setIsSubjectDropdownOpen(false);
     setSubjectError('');
     chimePlayer.playChime('add');
     toast.success(
       isAr ? 'تم الحفظ بنجاح ✓' : editingBlockId ? 'Bloc mis à jour ✓' : 'Bloc ajouté ✓',
-      isAr ? 'تم تسجيل الكتلة في جدولك' : `${taskSubject || taskTitle} · ${startStr} – ${endStr}`,
+      isAr ? 'تم تسجيل الكتلة في جدولك' : `${subjectToValidate || taskTitle} · ${startStr} – ${endStr}`,
     );
+  };
+
+  const handleFormKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
+    if (e.key === 'Enter') {
+      const target = e.target as HTMLElement;
+      // Allow multi-line input in textarea unless Ctrl/Cmd is pressed
+      if (target.tagName === 'TEXTAREA' && !e.ctrlKey && !e.metaKey) {
+        return;
+      }
+      // Allow button keyboard activation without early submit interception
+      if (target.tagName === 'BUTTON') {
+        return;
+      }
+      e.preventDefault();
+      handleSaveModalTask(e);
+    }
   };
 
   // Handler for dropping a sticker directly onto the timetable at a specific start time
@@ -706,21 +1157,85 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
   const dragTopPx = minutesToPixelOffset(dragMinMins);
   const dragHeightPx = Math.max(24, minutesToPixelOffset(dragMaxMins) - dragTopPx);
 
+  // ─── Smart Schedule Optimizer handlers ─────────────────────────────────────
+
+  /** Saves a snapshot of current block times then applies the smart redistribution */
+  const handleSmartRedistribute = () => {
+    if (dayBlocks.length === 0) {
+      toast.error(
+        isAr ? 'لا توجد حصص لإعادة توزيعها' : 'Aucune séance à redistribuer',
+        isAr ? 'أضف حصصًا أولاً ثم استخدم التوزيع الذكي' : 'Ajoutez des séances d\'abord',
+      );
+      return;
+    }
+
+    // Save original snapshot (study blocks only — we only move those)
+    const snapshot = dayBlocks
+      .filter((b) => b.type === 'study' && !b.isCompleted)
+      .map((b) => ({ id: b.id, startTime: b.startTime, endTime: b.endTime }));
+
+    if (snapshot.length === 0) {
+      toast.error(
+        isAr ? 'لا توجد حصص دراسة قابلة للإعادة' : 'Aucune séance d\'étude à redistribuer',
+        isAr ? 'الحصص المكتملة والأنشطة لا تتأثر' : 'Les sessions complètes et activités restent fixes',
+      );
+      return;
+    }
+
+    const patches = smartRedistribute(dayBlocks);
+    if (patches.length === 0) return;
+
+    // Apply patches
+    patches.forEach((patch) => {
+      const existing = timeBlocks.find((b) => b.id === patch.id);
+      if (existing) {
+        onUpdateTimeBlock({ ...existing, startTime: patch.startTime, endTime: patch.endTime });
+      }
+    });
+
+    setOriginalSnapshot(snapshot);
+    chimePlayer.playChime('add');
+    toast.success(
+      isAr ? '🧠 تم التوزيع الذكي' : '🧠 Redistribution intelligente',
+      isAr
+        ? 'الأصعب صباحًا • الحفظ مساءً • الراحة ثابتة — اضغط "تراجع" للعودة'
+        : 'Analytique le matin • Mémorisation l\'après-midi — "Annuler" pour revenir',
+    );
+  };
+
+  /** Reverts blocks to their original times before smart redistribution */
+  const handleRevert = () => {
+    if (!originalSnapshot) return;
+    originalSnapshot.forEach((snap) => {
+      const existing = timeBlocks.find((b) => b.id === snap.id);
+      if (existing) {
+        onUpdateTimeBlock({ ...existing, startTime: snap.startTime, endTime: snap.endTime });
+      }
+    });
+    setOriginalSnapshot(null);
+    chimePlayer.playChime('delete');
+    toast.success(
+      isAr ? '↩ تم التراجع' : '↩ Annulé',
+      isAr ? 'تم استعادة التوزيع الأصلي الخاص بك' : 'Votre planning original a été restauré',
+    );
+  };
+
+
   return (
-    <div className="space-y-4 pb-16 select-none font-sans text-slate-100">
+    <div className="space-y-4 pb-16 select-none font-sans text-slate-900 dark:text-slate-100">
       {/* 1. TOP HEADER BAR: PLANNED TIME, SESSIONS, DATE SELECTOR & ADD BUTTON */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#191515] p-3.5 sm:p-4 rounded-2xl border border-white/5 shadow-md">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/90 dark:bg-[#111827]/95 p-3.5 sm:p-4 rounded-3xl border border-slate-200/80 dark:border-white/[0.08] shadow-xs backdrop-blur-md">
         {/* Left: Stats Badges (1h planifiées • 0/1 sessions) & Direct Add Button */}
         <div className="flex items-center gap-2.5 flex-wrap">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs font-semibold text-slate-200">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100/80 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 text-xs font-semibold text-slate-700 dark:text-slate-200">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <span>
               {plannedStudyMinutes > 0 ? formatDurationLabel(plannedStudyMinutes) : '0h'}{' '}
               {isAr ? 'مخطط' : 'planifiées'}
             </span>
           </div>
 
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs font-semibold text-slate-400">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100/80 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 text-xs font-semibold text-slate-600 dark:text-slate-400">
             <Layers className="w-3.5 h-3.5 text-slate-400" />
             <span>
               {completedSessionsCount}/{totalSessionsCount} {isAr ? 'حصص' : 'sessions'}
@@ -730,8 +1245,8 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
           {/* Daily Streak Flame Badge */}
           <div
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${streakData.isTodayCompleted
-              ? 'bg-orange-500/20 text-[#FF9600] border border-orange-500/40 shadow-xs'
-              : 'bg-white/5 text-slate-400 border border-white/10'
+              ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 shadow-xs'
+              : 'bg-slate-100/80 dark:bg-white/5 text-slate-600 dark:text-slate-400 border border-slate-200/80 dark:border-white/10'
               }`}
             title={
               streakData.isTodayCompleted
@@ -744,7 +1259,7 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
             }
           >
             <Flame
-              className={`w-3.5 h-3.5 ${streakData.isTodayCompleted ? 'text-[#FF9600] fill-current animate-pulse' : 'text-slate-500'
+              className={`w-3.5 h-3.5 ${streakData.isTodayCompleted ? 'text-amber-500 fill-current animate-pulse' : 'text-slate-400'
                 }`}
             />
             <span>
@@ -754,8 +1269,8 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
 
           {/* Today Completed & Calculated Study Hours */}
           {completedStudyMinutes > 0 && (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-bold">
-              <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 dark:bg-emerald-500/15 border border-emerald-500/25 text-emerald-700 dark:text-emerald-300 text-xs font-bold">
+              <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
               <span>
                 {formatDurationLabel(completedStudyMinutes)} {isAr ? 'منجزة ومحسوبة' : 'validées'}
               </span>
@@ -765,11 +1280,39 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
           <button
             type="button"
             onClick={() => handleOpenAddNewBlock(8 * 60)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold transition-transform active:scale-95 shadow-sm shadow-teal-500/20"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-700 hover:from-teal-500 hover:to-emerald-500 text-white text-xs font-bold transition-transform active:scale-95 shadow-md shadow-teal-600/20 cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>{isAr ? 'إضافة حصة جديدة' : '+ Bloquer un créneau'}</span>
           </button>
+
+          {/* Smart Schedule Optimizer Button */}
+          <button
+            type="button"
+            onClick={handleSmartRedistribute}
+            title={isAr ? 'توزيع ذكي وفق منطق الطاقة المعرفية' : 'Redistribution intelligente (charge cognitive)'}
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 shadow-md cursor-pointer ${
+              isSmartDistributed
+                ? 'bg-violet-600 hover:bg-violet-500 text-white shadow-violet-500/25'
+                : 'bg-violet-500/10 hover:bg-violet-500/20 text-violet-600 dark:text-violet-400 border border-violet-500/30'
+            }`}
+          >
+            <Brain className="w-3.5 h-3.5" />
+            <span>{isAr ? 'توزيع ذكي' : 'Optimiser'}</span>
+          </button>
+
+          {/* Revert to original button — visible only after smart redistribution */}
+          {isSmartDistributed && (
+            <button
+              type="button"
+              onClick={handleRevert}
+              title={isAr ? 'استعادة التوزيع الأصلي' : 'Restaurer le planning original'}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30 text-xs font-bold transition-all active:scale-95 cursor-pointer"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>{isAr ? 'تراجع' : 'Annuler'}</span>
+            </button>
+          )}
         </div>
 
         {/* Right: Day Selector Pills */}
@@ -780,9 +1323,9 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
               <button
                 key={d.id}
                 onClick={() => setSelectedDay(d.id)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${isSelected
-                  ? 'bg-teal-600 text-white shadow-sm shadow-teal-500/30'
-                  : 'bg-white/5 text-slate-400 hover:bg-white/10 hover:text-slate-200'
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${isSelected
+                  ? 'bg-teal-600 text-white shadow-md shadow-teal-600/25'
+                  : 'bg-slate-100/80 hover:bg-slate-200/70 dark:bg-white/5 dark:hover:bg-white/10 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                   }`}
               >
                 {isAr ? d.nameAr : d.name}
@@ -793,10 +1336,10 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
       </div>
 
       {/* 2. "ACTIVITÉS" STICKERS BAR (DRAG & DROP TO TIMETABLE) */}
-      <div className="bg-[#191515] p-3 rounded-2xl border border-white/5 shadow-md flex items-center justify-between gap-3 overflow-x-auto no-scrollbar">
+      <div className="bg-white/90 dark:bg-[#111827]/95 p-3 sm:p-3.5 rounded-3xl border border-slate-200/80 dark:border-white/[0.08] shadow-xs flex items-center justify-between gap-3 overflow-x-auto no-scrollbar">
         <div className="flex items-center gap-2 shrink-0">
-          <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 px-1 shrink-0 flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-teal-400 animate-pulse" />
+          <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-600 dark:text-slate-400 px-1 shrink-0 flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-teal-500 animate-pulse" />
             {isAr ? 'أنشطة (اسحب وضع في الجدول)' : 'ACTIVITÉS (Glisser-Déposer)'}
           </span>
         </div>
@@ -804,6 +1347,7 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
         <div className="flex items-center gap-1.5 shrink-0">
           {ACTIVITY_STICKERS.map((sticker) => {
             const isBeingDragged = draggingSticker?.type === sticker.type;
+            const stickerTheme = getStickerTheme(sticker.type);
             return (
               <div
                 key={sticker.type}
@@ -811,7 +1355,12 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                 onDragStart={(e) => {
                   setDraggingSticker(sticker);
                   e.dataTransfer.setData('text/plain', sticker.type);
-                  e.dataTransfer.effectAllowed = 'copy';
+                  // 'copy' made the OS paint its copy cursor (a pointer with a
+                  // "+" badge) all over the timetable. The user asked for the
+                  // normal cursor, so advertise a plain 'move' instead — the
+                  // drop handler below still creates a brand-new block, so
+                  // nothing about the resulting behaviour changes.
+                  e.dataTransfer.effectAllowed = 'move';
                   chimePlayer.playChime('click');
                 }}
                 onDragEnd={() => {
@@ -821,8 +1370,8 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                 }}
                 onClick={() => handlePlaceActivitySticker(sticker)}
                 className={`group flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium border cursor-grab active:cursor-grabbing select-none transition-all duration-150 hover:scale-105 active:scale-95 shadow-xs ${isBeingDragged
-                  ? 'opacity-40 scale-95 border-teal-400 ring-2 ring-teal-400/40'
-                  : `${sticker.colorClass.bg} ${sticker.colorClass.border} ${sticker.colorClass.text} hover:shadow-md`
+                  ? 'opacity-40 scale-95 border-teal-500 ring-2 ring-teal-500/40'
+                  : `${stickerTheme.bg} ${stickerTheme.border} ${stickerTheme.text} hover:shadow-md`
                   }`}
                 title={
                   isAr
@@ -844,18 +1393,25 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
       </div>
 
       {/* 3. FLUID DRAG-TO-BLOCK & DRAG-TO-MOVE TIMETABLE MATRIX */}
-      <div className="relative bg-[#191515] rounded-3xl border border-white/5 shadow-2xl p-4 sm:p-6 overflow-hidden">
+      <div className="relative bg-white/95 dark:bg-[#111827]/95 rounded-3xl border border-slate-200/80 dark:border-white/[0.08] shadow-sm p-4 sm:p-6 overflow-hidden">
         {/* Main Coordinate Grid */}
+        {/* data-mybac-cursor opts this zone into the smooth two-layer cursor
+            (PlannerCursor.tsx). It is the only place in the app where the
+            native pointer is hidden, so the rest of the interface is untouched. */}
         <div
           ref={gridContainerRef}
           id="timetable-drag-matrix"
+          data-mybac-cursor="planner-tasks"
           onMouseMove={handleGridMouseMove}
           onMouseDown={handleGridMouseDown}
           onMouseLeave={() => setHoverY(null)}
           onDragOver={(e) => {
             if (!gridContainerRef.current) return;
             e.preventDefault();
-            e.dataTransfer.dropEffect = 'copy';
+            // Must stay in sync with effectAllowed on the sticker ('move'),
+            // otherwise the browser rejects the drop. 'copy' here is what drew
+            // the "+" copy cursor the user reported.
+            e.dataTransfer.dropEffect = 'move';
             const rect = gridContainerRef.current.getBoundingClientRect();
             const relativeY = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
             const mins = pixelOffsetToMinutes(relativeY);
@@ -886,7 +1442,11 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
             setStickerDropY(null);
             setStickerDropMinutes(null);
           }}
-          className={`relative min-h-[900px] select-none ${activeMove ? 'cursor-grabbing' : 'cursor-crosshair'
+          // Cursor: a plain arrow, always. Do NOT switch this back to a
+          // cross-shaped selection cursor — it painted a "+" over the whole
+          // timetable during drag-to-create, which is exactly what the user
+          // reported. Dragging an existing block keeps its grab affordance.
+          className={`relative min-h-[900px] select-none ${activeMove ? 'cursor-grabbing' : 'cursor-default'
             }`}
           style={{ height: `${(TIMETABLE_END_HOUR - TIMETABLE_START_HOUR) * 2 * SLOT_HEIGHT_PX}px` }}
         >
@@ -896,23 +1456,27 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
             const topPx = idx * SLOT_HEIGHT_PX;
 
             return (
+              // -translate-y-1/2 keeps the drawn line ON the row's coordinate.
+              // Without it the row (as tall as its label) centres the 1px line
+              // ~8px lower, so every grid line and hour label was drawn below
+              // its real position and never lined up with the session blocks.
               <div
                 key={time}
                 style={{ top: `${topPx}px` }}
-                className="absolute inset-x-0 flex items-center pointer-events-none"
+                className="absolute inset-x-0 flex items-center pointer-events-none -translate-y-1/2"
               >
                 {/* Left Time label */}
-                <div className="w-16 shrink-0 text-right pr-4 font-mono text-xs text-slate-500 font-medium">
+                <div className="w-16 shrink-0 text-right pr-4 font-mono text-xs font-medium">
                   {isHour ? (
-                    <span className="font-bold text-slate-300">{time}</span>
+                    <span className="font-bold text-slate-700 dark:text-slate-300">{time}</span>
                   ) : (
-                    <span className="text-slate-600 text-[10px]">{time}</span>
+                    <span className="text-slate-400 dark:text-slate-600 text-[10px]">{time}</span>
                   )}
                 </div>
 
                 {/* Horizontal Guideline */}
                 <div
-                  className={`flex-1 border-t ${isHour ? 'border-white/10' : 'border-dashed border-white/5'
+                  className={`flex-1 border-t ${isHour ? 'border-slate-200/80 dark:border-white/10' : 'border-dashed border-slate-200/50 dark:border-white/5'
                     }`}
                 />
               </div>
@@ -921,18 +1485,22 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
 
           {/* DYNAMIC HOVER TIME TAG & GUIDELINE */}
           {hoverY !== null && !isDragging && !activeMove && !draggingSticker && (
+            // -translate-y-1/2 makes the guideline sit exactly under the pointer,
+            // so the circle's centre lies ON the line and the line reads as its
+            // diameter. Without it the line floated ~12px below the cursor and
+            // the circle looked like it pointed a few minutes before the hour.
             <div
               style={{ top: `${hoverY}px` }}
-              className="absolute inset-x-0 flex items-center pointer-events-none transition-all duration-75"
+              className="absolute inset-x-0 flex items-center pointer-events-none -translate-y-1/2"
             >
               {/* Teal Pointed Badge */}
               <div className="w-16 shrink-0 text-right pr-2">
-                <span className="inline-block px-1.5 py-0.5 rounded-md bg-teal-500 text-[#141010] font-mono text-[10px] font-extrabold shadow-sm">
+                <span className="inline-block px-2 py-0.5 rounded-md bg-teal-600 text-white dark:bg-teal-500 dark:text-slate-950 font-mono text-[10px] font-black shadow-sm">
                   {hoverTimeStr}
                 </span>
               </div>
-              {/* Red target dot */}
-              <div className="w-2.5 h-2.5 -ml-1.5 rounded-full bg-red-500 border-2 border-[#191515] ring-2 ring-red-500/30" />
+              {/* Target dot */}
+              <div className="w-2.5 h-2.5 -ml-1.5 rounded-full bg-teal-500 border-2 border-white dark:border-[#111827] ring-2 ring-teal-500/40" />
               {/* Guideline line */}
               <div className="flex-1 border-t border-teal-500/40" />
             </div>
@@ -947,26 +1515,26 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                 left: '4.5rem',
                 right: '1rem',
               }}
-              className="absolute z-20 rounded-2xl border-2 border-teal-400 bg-teal-500/10 backdrop-blur-2xs shadow-xl flex items-center justify-center transition-all duration-75 pointer-events-none"
+              className="absolute z-20 rounded-2xl border-2 border-teal-500 bg-teal-500/10 backdrop-blur-sm shadow-xl flex items-center justify-center transition-all duration-75 pointer-events-none"
             >
               {/* Top guideline time tag */}
               <div
                 style={{ top: '-14px', left: '-5rem' }}
                 className="absolute flex items-center"
               >
-                <span className="px-1.5 py-0.5 rounded-md bg-teal-500 text-[#141010] font-mono text-[10px] font-black">
+                <span className="px-2 py-0.5 rounded-md bg-teal-600 text-white dark:bg-teal-500 dark:text-slate-950 font-mono text-[10px] font-black shadow-sm">
                   {minutesToTime(dragMinMins)}
                 </span>
               </div>
 
               {/* Center Floating Duration Pill */}
-              <div className="px-3.5 py-1.5 rounded-full bg-teal-600 text-white font-mono text-xs font-black shadow-lg shadow-teal-900/50 border border-teal-300/40 animate-pulse">
+              <div className="px-3.5 py-1.5 rounded-full bg-teal-600 text-white font-mono text-xs font-black shadow-lg shadow-teal-900/30 border border-teal-300/40 animate-pulse">
                 {formatDurationLabel(dragDurationMins)}
               </div>
 
-              {/* Bottom Red Circular Drag Handle Following Cursor */}
-              <div className="absolute bottom-2 left-6 w-6 h-6 rounded-full border-2 border-red-500 bg-red-500/20 flex items-center justify-center animate-bounce">
-                <div className="w-2 h-2 rounded-full bg-red-500" />
+              {/* Bottom Circular Drag Handle Following Cursor */}
+              <div className="absolute bottom-2 left-6 w-6 h-6 rounded-full border-2 border-teal-500 bg-teal-500/20 flex items-center justify-center animate-bounce">
+                <div className="w-2 h-2 rounded-full bg-teal-500" />
               </div>
             </div>
           )}
@@ -980,31 +1548,31 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                 left: '4.5rem',
                 right: '1rem',
               }}
-              className={`absolute z-30 rounded-2xl border-2 border-dashed ${draggingSticker.colorClass.border} ${draggingSticker.colorClass.bg} shadow-2xl backdrop-blur-xs flex items-center justify-between px-4 transition-all duration-75 pointer-events-none animate-pulse`}
+              className={`absolute z-30 rounded-2xl border-2 border-dashed ${getStickerTheme(draggingSticker.type).border} ${getStickerTheme(draggingSticker.type).bg} shadow-2xl backdrop-blur-xs flex items-center justify-between px-4 transition-all duration-75 pointer-events-none animate-pulse`}
             >
               {/* Top guideline time tag */}
               <div
                 style={{ top: '-14px', left: '-5rem' }}
                 className="absolute flex items-center"
               >
-                <span className="px-1.5 py-0.5 rounded-md bg-teal-500 text-[#141010] font-mono text-[10px] font-black">
+                <span className="px-2 py-0.5 rounded-md bg-teal-600 text-white dark:bg-teal-500 dark:text-slate-950 font-mono text-[10px] font-black">
                   {minutesToTime(stickerDropMinutes)}
                 </span>
               </div>
 
               {/* Left: Sticker icon, label and duration */}
               <div className="flex items-center gap-2.5">
-                <div className="p-1.5 rounded-lg bg-black/40 border border-white/10 text-white shadow-inner">
+                <div className="p-1.5 rounded-lg bg-black/20 dark:bg-black/50 border border-white/10 text-white shadow-inner">
                   {STICKER_ICONS[draggingSticker.type] || <Sparkles className="w-4 h-4 text-teal-400" />}
                 </div>
                 <div>
-                  <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                     <span>{draggingSticker.label}</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/10 text-white/90 font-mono">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-black/10 dark:bg-white/10 font-mono">
                       {draggingSticker.defaultDurationMinutes} min
                     </span>
                   </div>
-                  <div className="text-[11px] font-mono font-bold text-teal-300">
+                  <div className="text-[11px] font-mono font-bold text-teal-700 dark:text-teal-300">
                     {minutesToTime(stickerDropMinutes)} –{' '}
                     {minutesToTime(
                       Math.min(24 * 60, stickerDropMinutes + draggingSticker.defaultDurationMinutes)
@@ -1014,7 +1582,7 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
               </div>
 
               {/* Right: Drop indicator badge */}
-              <div className="px-3 py-1 rounded-full bg-white/20 border border-white/30 text-xs font-bold text-white shadow-md flex items-center gap-1.5">
+              <div className="px-3 py-1 rounded-full bg-teal-600 text-white border border-teal-400/40 text-xs font-bold shadow-md flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-spin" />
                 <span>{isAr ? 'أفلت للوضع هنا' : 'Lâcher pour placer ici'}</span>
               </div>
@@ -1033,13 +1601,17 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
               : Math.max(15, timeToMinutes(block.endTime) - timeToMinutes(block.startTime));
 
             const topPx = minutesToPixelOffset(startM);
-            const heightPx = Math.max(42, duration * PIXELS_PER_MINUTE);
+            const heightPx = Math.max(46, duration * PIXELS_PER_MINUTE);
 
             const isSticker = block.type === 'sticker_activity';
             const stickerData = isSticker
               ? ACTIVITY_STICKERS.find((s) => s.type === block.stickerType)
               : null;
             const subjectData = BAC_SUBJECTS.find((s) => s.name === block.subject);
+
+            const cardTheme = isSticker && stickerData
+              ? getStickerTheme(stickerData.type)
+              : getSubjectCardTheme(block.subject);
 
             const startTimeFormatted = isBeingMoved ? minutesToTime(startM) : block.startTime;
             const endTimeFormatted = isBeingMoved
@@ -1056,32 +1628,30 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                   left: '4.5rem',
                   right: '1rem',
                 }}
-                className={`time-block-card absolute p-3 rounded-2xl border transition-all select-none flex flex-col justify-between overflow-hidden group cursor-grab active:cursor-grabbing card-hover-elevate ${isBeingMoved
-                  ? 'z-40 ring-2 ring-teal-400 shadow-2xl scale-[1.01] opacity-95 bg-[#251e1d]'
-                  : isSticker && stickerData
-                    ? `${stickerData.colorClass.bg} ${stickerData.colorClass.border} hover:border-teal-400/80 shadow-md`
-                    : 'bg-[#231b1a] border-white/10 hover:border-teal-400/80 shadow-md'
+                className={`time-block-card absolute p-3 rounded-2xl border transition-all select-none flex flex-col justify-between overflow-hidden group cursor-grab active:cursor-grabbing shadow-sm hover:shadow-md ${isBeingMoved
+                  ? 'z-40 ring-2 ring-teal-500 shadow-2xl scale-[1.01] opacity-95 bg-white dark:bg-slate-800'
+                  : `${cardTheme.bg} ${cardTheme.border} hover:border-teal-500/60`
                   }`}
               >
                 {/* Top Resize Drag Handle */}
                 <div
                   onMouseDown={(e) => handleStartMoveBlock(e, block, 'resize-top')}
-                  className="absolute top-0 inset-x-0 h-2 cursor-ns-resize hover:bg-teal-400/40 z-30 transition-colors"
-                  title="Glisser pour modifier l'heure de début"
+                  className="absolute top-0 inset-x-0 h-2 cursor-ns-resize hover:bg-teal-500/40 z-30 transition-colors"
+                  title={isAr ? 'اسحب لتعديل وقت البدء' : "Glisser pour modifier l'heure de début"}
                 />
 
                 {/* Card Header & Content */}
                 <div className="flex items-start justify-between gap-2 pointer-events-auto">
-                  <div className="min-w-0 flex items-center gap-2">
+                  <div className="min-w-0 flex items-center gap-2.5">
                     {/* Move Grip Icon */}
                     <div
-                      className="text-slate-500 group-hover:text-teal-400 cursor-grab active:cursor-grabbing shrink-0"
-                      title="Glisser pour déplacer à n'importe quelle heure"
+                      className="text-slate-400 group-hover:text-teal-600 dark:group-hover:text-teal-400 cursor-grab active:cursor-grabbing shrink-0"
+                      title={isAr ? 'اسحب لنقل الحصة' : "Glisser pour déplacer"}
                     >
                       <GripVertical className="w-4 h-4" />
                     </div>
 
-                    {/* Completion Checkbox */}
+                    {/* Completion Checkbox (Comfortable Touch Target) */}
                     <button
                       type="button"
                       onClick={(e) => {
@@ -1101,29 +1671,29 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                           );
                         }
                       }}
-                      className={`w-5 h-5 rounded-md flex items-center justify-center text-xs shrink-0 border transition-all button-spring ${block.isCompleted
-                        ? 'bg-emerald-500 border-emerald-500 text-white animate-check-pop'
-                        : 'border-white/20 hover:border-teal-400 bg-white/5 text-transparent'
+                      className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl flex items-center justify-center shrink-0 border transition-all active:scale-95 cursor-pointer ${block.isCompleted
+                        ? 'bg-emerald-500 border-emerald-500 text-white shadow-sm shadow-emerald-500/30'
+                        : 'border-slate-300 dark:border-white/20 bg-white/80 dark:bg-white/5 hover:border-teal-500 text-transparent'
                         }`}
+                      title={block.isCompleted ? (isAr ? 'إلغاء التأكيد' : 'Décocher') : (isAr ? 'تأكيد الإنجاز' : 'Valider')}
                     >
-                      <Check className="w-3 h-3 text-white" />
+                      <Check className="w-4 h-4 text-white stroke-[3]" />
                     </button>
 
                     <div className="truncate">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-bold text-sm text-white truncate">
+                        <span className={`font-bold text-xs sm:text-sm truncate ${block.isCompleted ? 'line-through opacity-70' : 'text-slate-900 dark:text-white'}`}>
                           {block.title}
                         </span>
-                        <span className="text-[11px] font-mono font-semibold text-teal-400 bg-teal-950/60 px-1.5 py-0.5 rounded-md border border-teal-500/30">
+                        <span className="text-[10px] sm:text-[11px] font-mono font-bold text-teal-700 dark:text-teal-300 bg-teal-500/10 dark:bg-teal-500/20 px-2 py-0.5 rounded-md border border-teal-500/25">
                           {formatDurationLabel(duration)}
                         </span>
                       </div>
-                      <div className="text-[11px] text-slate-400 truncate flex items-center gap-1.5 mt-0.5">
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate flex items-center gap-1.5 mt-0.5">
                         <span
-                          className={`w-2 h-2 rounded-full shrink-0 ${subjectData?.dotColor || 'bg-teal-400'
-                            }`}
+                          className={`w-2 h-2 rounded-full shrink-0 ${subjectData?.dotColor || ('dot' in cardTheme ? cardTheme.dot : 'bg-teal-500')}`}
                         />
-                        <span>{block.subject}</span>
+                        <span>{getSubjectDisplayName(block.subject)}</span>
                       </div>
                     </div>
                   </div>
@@ -1131,7 +1701,7 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                   {/* Actions Bar (Quick Move, Edit, Delete) */}
                   <div className="flex items-center gap-1 shrink-0">
                     {/* Time Range Badge */}
-                    <span className="text-[11px] font-mono font-bold text-slate-300 bg-black/40 px-2 py-0.5 rounded-lg border border-white/10">
+                    <span className="text-[10px] sm:text-[11px] font-mono font-bold text-slate-700 dark:text-slate-300 bg-black/5 dark:bg-black/40 px-2 py-0.5 rounded-lg border border-slate-200/60 dark:border-white/10">
                       {startTimeFormatted} - {endTimeFormatted}
                     </span>
 
@@ -1142,8 +1712,8 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                         e.stopPropagation();
                         handleShiftBlockHours(block, -1);
                       }}
-                      className="p-1 rounded-lg text-slate-400 hover:text-teal-300 hover:bg-white/10 hidden group-hover:inline-flex"
-                      title="Avancer d'une heure (-1h)"
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-teal-600 dark:hover:text-teal-300 hover:bg-slate-200/60 dark:hover:bg-white/10 hidden group-hover:inline-flex cursor-pointer transition-colors"
+                      title={isAr ? 'تقديم بساعة (-1h)' : "Avancer d'une heure (-1h)"}
                     >
                       <ArrowUp className="w-3.5 h-3.5" />
                     </button>
@@ -1155,8 +1725,8 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                         e.stopPropagation();
                         handleShiftBlockHours(block, 1);
                       }}
-                      className="p-1 rounded-lg text-slate-400 hover:text-teal-300 hover:bg-white/10 hidden group-hover:inline-flex"
-                      title="Reculer d'une heure (+1h)"
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-teal-600 dark:hover:text-teal-300 hover:bg-slate-200/60 dark:hover:bg-white/10 hidden group-hover:inline-flex cursor-pointer transition-colors"
+                      title={isAr ? 'تأخير بساعة (+1h)' : "Reculer d'une heure (+1h)"}
                     >
                       <ArrowDown className="w-3.5 h-3.5" />
                     </button>
@@ -1168,8 +1738,8 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                         e.stopPropagation();
                         handleOpenEditBlock(block);
                       }}
-                      className="p-1 rounded-lg text-slate-400 hover:text-teal-300 hover:bg-white/10"
-                      title="Modifier / Déplacer à une heure précise"
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-teal-600 dark:hover:text-teal-300 hover:bg-slate-200/60 dark:hover:bg-white/10 cursor-pointer transition-colors"
+                      title={isAr ? 'تعديل / تحديد الوقت' : 'Modifier'}
                     >
                       <Pencil className="w-3.5 h-3.5" />
                     </button>
@@ -1186,8 +1756,8 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                           block.title,
                         );
                       }}
-                      className="p-1 rounded-lg text-slate-400 hover:text-red-400 hover:bg-white/10"
-                      title="Supprimer la tâche"
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer transition-colors"
+                      title={isAr ? 'حذف الحصة' : 'Supprimer'}
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -1195,7 +1765,7 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                 </div>
 
                 {block.notes && (
-                  <div className="text-[10px] text-slate-400 truncate mt-1">
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate mt-1">
                     {block.notes}
                   </div>
                 )}
@@ -1203,8 +1773,8 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                 {/* Bottom Resize Drag Handle */}
                 <div
                   onMouseDown={(e) => handleStartMoveBlock(e, block, 'resize-bottom')}
-                  className="absolute bottom-0 inset-x-0 h-2 cursor-ns-resize hover:bg-teal-400/40 z-30 transition-colors"
-                  title="Glisser pour modifier l'heure de fin"
+                  className="absolute bottom-0 inset-x-0 h-2 cursor-ns-resize hover:bg-teal-500/40 z-30 transition-colors"
+                  title={isAr ? 'اسحب لتعديل وقت النهاية' : "Glisser pour modifier l'heure de fin"}
                 />
               </div>
             );
@@ -1214,8 +1784,8 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
         {/* Empty state hint */}
         {dayBlocks.length === 0 && !isDragging && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <span className="text-xs font-semibold text-slate-600">
-              Aucune tâche — cliquez + ou glissez pour bloquer une heure
+            <span className="text-xs font-semibold text-slate-400 dark:text-slate-500">
+              {isAr ? 'لا توجد حصص لهذا اليوم — انقر + أو اسحب في الجدول لإضافة حصة' : 'Aucune tâche — cliquez + ou glissez pour bloquer une heure'}
             </span>
           </div>
         )}
@@ -1223,30 +1793,38 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
 
       {/* 4. DISMISSIBLE NOTIFICATION CARD AT BOTTOM RIGHT */}
       {isReminderVisible && (
-        <div className="fixed bottom-6 right-6 z-40 max-w-sm w-full bg-[#241c1c] border border-white/10 rounded-2xl p-4 shadow-2xl animate-fade-in flex items-start justify-between gap-3">
+        <div className="fixed bottom-6 right-6 z-40 max-w-sm w-full bg-white/95 dark:bg-[#192237]/95 border border-slate-200/90 dark:border-white/10 rounded-3xl p-4 sm:p-5 shadow-2xl backdrop-blur-md animate-fade-in flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold text-slate-200">
-              Vous n'avez pas étudié <strong>Mathématiques</strong> aujourd'hui.
+            <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+              {isAr ? 'لم تراجع مادة' : "Vous n'avez pas étudié"} <strong>{isAr ? 'الرياضيات' : 'Mathématiques'}</strong> {isAr ? 'اليوم.' : "aujourd'hui."}
             </p>
             <button
               onClick={() => {
                 setEditingBlockId(null);
                 setModalStartMinutes(16 * 60);
                 setModalDurationMinutes(90);
-                setTaskTitle('Révision Mathématiques');
+                setTaskTitle('');
                 setTaskSubject('Mathématiques');
+                setSubjectError('');
+                setTaskNotes('');
+                setNaturalInput('');
+                setModalDayOption('today');
+                setModalCustomDay(selectedDay);
+                setModalMode('rapide');
+                setIsCustomTimeExpanded(false);
+                setIsDetailsExpanded(false);
                 setIsModalOpen(true);
               }}
-              className="mt-1.5 text-xs font-bold text-teal-400 hover:text-teal-300 hover:underline flex items-center gap-1"
+              className="mt-1.5 text-xs font-bold text-teal-600 dark:text-teal-400 hover:text-teal-500 hover:underline flex items-center gap-1 cursor-pointer"
             >
-              + Ajouter une séance
+              + {isAr ? 'إضافة حصة للمادة' : 'Ajouter une séance'}
             </button>
           </div>
 
           <button
             onClick={() => setIsReminderVisible(false)}
-            className="text-slate-500 hover:text-slate-300 p-1"
-            title="Fermer"
+            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1.5 rounded-xl cursor-pointer"
+            title={isAr ? 'إغلاق' : 'Fermer'}
           >
             <X className="w-4 h-4" />
           </button>
@@ -1255,421 +1833,725 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
 
       {/* 5. "AJOUTER / MODIFIER UNE TÂCHE" MODAL DIALOG */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs overflow-y-auto">
-          <div className="bg-[#211a1a] text-slate-100 rounded-3xl max-w-lg w-full p-6 border border-white/10 shadow-2xl space-y-5 my-8 animate-scale-in">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setIsModalOpen(false);
+              setEditingBlockId(null);
+              setIsSubjectDropdownOpen(false);
+            }
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm overflow-y-auto"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white dark:bg-[#111827] text-slate-900 dark:text-slate-100 rounded-3xl max-w-lg w-full p-5 sm:p-7 border border-slate-200/80 dark:border-white/10 shadow-2xl space-y-4 my-6 animate-scale-in"
+          >
             {/* Modal Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-white/10">
-              <h2 className="text-lg font-bold font-['Outfit'] text-white flex items-center gap-2">
-                <span>{editingBlockId ? 'Modifier la tâche' : 'Ajouter une tâche'}</span>
-                <span className="p-1 rounded-full bg-teal-500/20 text-teal-400">
-                  {editingBlockId ? <Move className="w-3.5 h-3.5" /> : <Check className="w-3.5 h-3.5" />}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-white/10">
+              <div className="flex items-center gap-2.5">
+                <span className="p-2 rounded-2xl bg-teal-500/10 text-teal-600 dark:text-teal-400">
+                  {editingBlockId ? (
+                    <Move className="w-4 h-4" />
+                  ) : modalMode === 'rapide' ? (
+                    <Zap className="w-4 h-4 text-amber-500" />
+                  ) : (
+                    <Sliders className="w-4 h-4" />
+                  )}
                 </span>
-              </h2>
+                <div>
+                  <h2 className="text-base sm:text-lg font-bold font-['Outfit'] text-slate-900 dark:text-white leading-tight">
+                    {editingBlockId
+                      ? isAr ? 'تعديل الحصة' : 'Modifier la tâche'
+                      : modalMode === 'rapide'
+                        ? isAr ? 'إضافة سريعة لحصة' : 'Ajout rapide'
+                        : isAr ? 'تخصيص الحصة الدراسية' : 'Ajout détaillé'}
+                  </h2>
+                  <p className="text-[11px] text-slate-400 dark:text-slate-500">
+                    {modalMode === 'rapide'
+                      ? isAr ? 'المادة والمدة بنقرات بسيطة' : 'Matière + durée en 3 clics'
+                      : isAr ? 'تحكم كامل في الأوقات والعنوان والملاحظات' : 'Contrôle complet des horaires et détails'}
+                  </p>
+                </div>
+              </div>
 
               <button
+                type="button"
                 onClick={() => {
                   setIsModalOpen(false);
                   setEditingBlockId(null);
+                  setIsSubjectDropdownOpen(false);
                 }}
-                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/10"
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 cursor-pointer transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Quick Natural Language Bar */}
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={naturalInput}
-                onChange={(e) => setNaturalInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleApplyNaturalLanguage()}
-                placeholder="Ex: révision maths demain soir 1h30..."
-                className="flex-1 px-4 py-2.5 rounded-2xl bg-[#181313] border border-white/10 text-xs font-medium text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-teal-500"
-              />
-              <button
-                type="button"
-                onClick={handleApplyNaturalLanguage}
-                className="p-2.5 rounded-2xl bg-teal-600 hover:bg-teal-500 text-white transition-transform active:scale-95"
-                title="Appliquer"
-              >
-                <Check className="w-4 h-4" />
-              </button>
-            </div>
-
             {/* Mode Switcher Tabs */}
-            <div className="grid grid-cols-2 gap-2 p-1 rounded-2xl bg-[#181313] border border-white/5">
+            <div className="grid grid-cols-2 gap-1.5 p-1 rounded-2xl bg-slate-100 dark:bg-[#182030] border border-slate-200/60 dark:border-white/5">
               <button
                 type="button"
-                onClick={() => setModalMode('rapide')}
-                className={`py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${modalMode === 'rapide'
-                  ? 'bg-teal-600 text-white shadow-md'
-                  : 'text-slate-400 hover:text-slate-200'
+                onClick={() => {
+                  setModalMode('rapide');
+                  chimePlayer.playChime('click');
+                }}
+                className={`py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${modalMode === 'rapide'
+                  ? 'bg-teal-600 text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                   }`}
               >
                 <Zap className="w-3.5 h-3.5" />
-                <span>⚡ Mode Rapide</span>
+                <span>{isAr ? '⚡ السريع (3 نقرات)' : '⚡ Rapide'}</span>
               </button>
 
               <button
                 type="button"
-                onClick={() => setModalMode('precision')}
-                className={`py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${modalMode === 'precision'
-                  ? 'bg-teal-600 text-white shadow-md'
-                  : 'text-slate-400 hover:text-slate-200'
+                onClick={() => {
+                  setModalMode('precision');
+                  chimePlayer.playChime('click');
+                }}
+                className={`py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${modalMode === 'precision'
+                  ? 'bg-teal-600 text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                   }`}
               >
                 <Sliders className="w-3.5 h-3.5" />
-                <span>🎯 Précision</span>
+                <span>{isAr ? '🎯 وضع الدقة' : '🎯 Précision'}</span>
               </button>
             </div>
 
-            <form onSubmit={handleSaveModalTask} className="space-y-4 text-xs">
-              {/* 1. TITRE FIELD (OPTIONNEL / اختياري) */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                    {isAr ? 'العنوان (اختياري)' : 'TITRE (OPTIONNEL)'}
-                  </label>
-                  <span className="text-[10px] text-slate-500 font-medium">
-                    {isAr ? 'ليس إجباري' : 'Facultatif'}
-                  </span>
+            {/* Quick Natural Language Bar */}
+            <div className="relative">
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    value={naturalInput}
+                    onChange={(e) => setNaturalInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (naturalInput.trim()) {
+                          const parsed = parseNaturalLanguageTask(naturalInput);
+                          if (parsed.title) setTaskTitle(parsed.title);
+                          if (parsed.durationMins) setModalDurationMinutes(parsed.durationMins);
+                          if (parsed.dayOffset === 1) setModalDayOption('tomorrow');
+                          if (parsed.subject) {
+                            setTaskSubject(parsed.subject);
+                            setSubjectError('');
+                            handleSaveModalTask(e, parsed.subject);
+                            return;
+                          }
+                        }
+                        handleSaveModalTask(e);
+                      }
+                    }}
+                    placeholder={
+                      isAr
+                        ? 'اكتب مثلاً: رياضيات 45 دقيقة غداً...'
+                        : 'Ex : maths 45min demain 1h30...'
+                    }
+                    className="w-full pl-9 pr-4 rtl:pl-4 rtl:pr-9 py-2.5 rounded-2xl bg-slate-50 dark:bg-[#182030] border border-slate-200 dark:border-white/10 text-xs font-medium text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-teal-500 transition-colors"
+                  />
+                  <Sparkles className="w-4 h-4 text-teal-500 absolute left-3 rtl:left-auto rtl:right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
-                <input
-                  type="text"
-                  placeholder={
-                    isAr
-                      ? 'مثال: مراجعة الرياضيات، حل التمارين... (اختياري)'
-                      : 'Ex: Révision Maths, exercices... (optionnel)'
-                  }
-                  value={taskTitle}
-                  onChange={(e) => setTaskTitle(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl bg-[#181313] border border-white/10 text-slate-100 font-medium placeholder:text-slate-500 focus:outline-none focus:border-teal-500 transition-colors"
-                />
-                <p className="mt-1 text-[10px] text-slate-500">
-                  {isAr
-                    ? '💡 إذا تُرك العنوان فارغاً، سيتم اعتماد اسم المادة تلقائياً.'
-                    : '💡 Si vide, le nom de la matière sera utilisé comme titre.'}
-                </p>
-              </div>
-
-              {/* 2. MATIÈRE FIELD (OBLIGATOIRE / إجباري) */}
-              <div className="relative">
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-[11px] font-extrabold uppercase tracking-wider text-teal-400 flex items-center gap-1">
-                    <span>{isAr ? 'المادة' : 'MATIÈRE'}</span>
-                    <span className="text-rose-400 font-black">*</span>
-                    <span className="text-[10px] text-rose-400 font-semibold">
-                      ({isAr ? 'إجباري للاعتماد' : 'OBLIGATOIRE'})
-                    </span>
-                  </label>
-                  {subjectError && (
-                    <span className="text-[11px] text-rose-400 font-bold flex items-center gap-1 animate-pulse">
-                      <AlertCircle className="w-3 h-3" />
-                      <span>{subjectError}</span>
-                    </span>
-                  )}
-                </div>
-
                 <button
                   type="button"
-                  onClick={() => setIsSubjectDropdownOpen(!isSubjectDropdownOpen)}
-                  className={`w-full px-4 py-2.5 rounded-xl bg-[#181313] border text-slate-100 font-medium flex items-center justify-between transition-all ${subjectError
-                    ? 'border-rose-500 ring-2 ring-rose-500/30'
-                    : taskSubject
-                      ? 'border-teal-500/50 hover:border-teal-400'
-                      : 'border-white/15 hover:border-white/30'
-                    }`}
+                  onClick={handleApplyNaturalLanguage}
+                  className="px-3.5 py-2.5 rounded-2xl bg-teal-600 hover:bg-teal-500 text-white transition-transform active:scale-95 cursor-pointer shadow-sm text-xs font-bold flex items-center gap-1 shrink-0"
+                  title={isAr ? 'تطبيق التحليل' : 'Appliquer'}
                 >
-                  <div className="flex items-center gap-2 truncate">
-                    {taskSubject ? (
-                      <>
-                        <span
-                          className={`w-2.5 h-2.5 rounded-full shrink-0 ${BAC_SUBJECTS.find((s) => s.name === taskSubject)?.dotColor || 'bg-teal-500'
-                            }`}
-                        />
-                        <span className="truncate font-semibold text-slate-100">
-                          {getSubjectDisplayName(taskSubject)}
+                  <Check className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">{isAr ? 'تطبيق' : 'OK'}</span>
+                </button>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveModalTask} onKeyDown={handleFormKeyDown} className="space-y-4 text-xs">
+              {modalMode === 'rapide' ? (
+                /* ------------------------------------------------------------- */
+                /* REAL MINIMAL 'RAPIDE' FLOW (ZERO CLUTTER, 3 TAPS ONLY)       */
+                /* ------------------------------------------------------------- */
+                <div className="space-y-4">
+                  {/* 1. Subject Quick-Pick Chips Row (Single Tap, No Dropdown) */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                        <span>{isAr ? 'المادة الدراسية' : 'MATIÈRE'}</span>
+                        <span className="text-rose-500 font-bold">*</span>
+                      </label>
+                      {taskSubject && (
+                        <span className="text-[11px] font-bold text-teal-600 dark:text-teal-400">
+                          {getSubjectDisplayName(taskSubject)} ✓
                         </span>
-                      </>
-                    ) : (
-                      <span className="text-amber-400/90 font-medium flex items-center gap-1.5">
-                        <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                        <span>
-                          {isAr ? 'اختر المادة * (إجباري للاعتماد)' : 'Sélectionner une matière * (Obligatoire)'}
-                        </span>
-                      </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1 px-0.5 scroll-smooth">
+                      {BAC_SUBJECTS.map((s) => {
+                        const isSelected = taskSubject === s.name;
+                        return (
+                          <button
+                            key={s.id}
+                            type="button"
+                            onClick={() => {
+                              setTaskSubject(s.name);
+                              setSubjectError('');
+                              chimePlayer.playChime('click');
+                            }}
+                            className={`px-3 py-2 rounded-2xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-2 cursor-pointer shrink-0 border ${isSelected
+                              ? 'bg-teal-600 text-white border-teal-500 shadow-md ring-2 ring-teal-500/30 scale-[1.02]'
+                              : 'bg-slate-50 dark:bg-[#182030] border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:border-teal-500/40 hover:bg-slate-100 dark:hover:bg-slate-800/80'
+                              }`}
+                          >
+                            <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${isSelected ? 'bg-white' : s.dotColor}`} />
+                            <span>{getSubjectDisplayName(s.name)}</span>
+                            {isSelected && <Check className="w-3.5 h-3.5 ml-0.5 rtl:mr-0.5" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {subjectError && (
+                      <p className="mt-1.5 text-[11px] text-rose-500 font-bold flex items-center gap-1 animate-pulse">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                        <span>{subjectError}</span>
+                      </p>
                     )}
                   </div>
-                  <ChevronDown
-                    className={`w-4 h-4 text-slate-400 transition-transform ${isSubjectDropdownOpen ? 'rotate-180 text-teal-400' : ''
-                      }`}
-                  />
-                </button>
 
-                {/* Dropdown Options List */}
-                {isSubjectDropdownOpen && (
-                  <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-[#181313] border border-white/10 rounded-2xl max-h-52 overflow-y-auto no-scrollbar shadow-2xl p-1.5 ring-1 ring-black/50">
-                    <div className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase border-b border-white/5 mb-1">
-                      {isAr ? 'قائمة المواد' : 'Matières disponibles'}
-                    </div>
-                    {BAC_SUBJECTS.map((s) => (
+                  {/* 2. Day Pills (Today / Tomorrow only) */}
+                  <div>
+                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
+                      {isAr ? 'اليوم' : 'JOUR'}
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
                       <button
-                        key={s.id}
                         type="button"
                         onClick={() => {
-                          setTaskSubject(s.name);
-                          setSubjectError('');
-                          setIsSubjectDropdownOpen(false);
+                          setModalDayOption('today');
+                          chimePlayer.playChime('click');
                         }}
-                        className={`w-full p-2 rounded-xl text-left text-xs font-semibold flex items-center justify-between hover:bg-white/10 transition-colors ${taskSubject === s.name
-                          ? 'text-teal-300 bg-teal-950/60 border border-teal-500/30'
-                          : 'text-slate-300'
+                        className={`py-2.5 px-4 rounded-2xl text-xs font-bold transition-all text-center cursor-pointer border ${modalDayOption === 'today'
+                          ? 'bg-teal-600 text-white border-teal-500 shadow-sm'
+                          : 'bg-slate-50 dark:bg-[#182030] border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                           }`}
                       >
-                        <div className="flex items-center gap-2.5">
-                          <span className={`w-2.5 h-2.5 rounded-full ${s.dotColor}`} />
-                          <span>{getSubjectDisplayName(s.name)}</span>
-                        </div>
-                        {taskSubject === s.name && <Check className="w-3.5 h-3.5 text-teal-400" />}
+                        {isAr ? 'اليوم' : "Aujourd'hui"}
                       </button>
-                    ))}
-                  </div>
-                )}
-              </div>
 
-              {/* 3. JOUR SELECTION */}
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                  {isAr ? 'اليوم' : 'JOUR'}
-                </label>
-
-                <div className="flex items-center gap-2 flex-wrap">
-                  <button
-                    type="button"
-                    onClick={() => setModalDayOption('today')}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${modalDayOption === 'today'
-                      ? 'bg-rose-900/60 border border-rose-500 text-rose-200 shadow-sm'
-                      : 'bg-[#181313] border border-white/10 text-slate-400 hover:text-slate-200'
-                      }`}
-                  >
-                    {isAr ? 'اليوم' : "Aujourd'hui"}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setModalDayOption('tomorrow')}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${modalDayOption === 'tomorrow'
-                      ? 'bg-rose-900/60 border border-rose-500 text-rose-200 shadow-sm'
-                      : 'bg-[#181313] border border-white/10 text-slate-400 hover:text-slate-200'
-                      }`}
-                  >
-                    {isAr ? 'غداً' : 'Demain'}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setModalDayOption('week')}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1 ${modalDayOption === 'week'
-                      ? 'bg-rose-900/60 border border-rose-500 text-rose-200 shadow-sm'
-                      : 'bg-[#181313] border border-white/10 text-slate-400 hover:text-slate-200'
-                      }`}
-                  >
-                    <span>{isAr ? 'هذا الأسبوع' : 'Cette semaine'}</span>
-                    <ChevronDown className="w-3 h-3" />
-                  </button>
-                </div>
-              </div>
-
-              {/* 4. TIME & DURATION CUSTOMIZATION (HORAIRE ET DURÉE PERSONNALISÉE) */}
-              <div className="p-3.5 rounded-2xl bg-[#181313] border border-white/10 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-teal-400 flex items-center gap-1.5">
-                    <Timer className="w-3.5 h-3.5" />
-                    <span>{isAr ? 'تخصيص الوقت والمدة' : 'HORAIRE & DURÉE PERSONNALISÉE'}</span>
-                  </span>
-                  <span className="font-mono text-xs font-bold text-teal-300">
-                    {formatDurationLabel(modalDurationMinutes)}
-                  </span>
-                </div>
-
-                {/* Start Time & End Time Inputs */}
-                <div className="grid grid-cols-2 gap-2.5">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
-                      {isAr ? 'وقت البدء' : 'HEURE DE DÉBUT'}
-                    </label>
-                    <input
-                      type="time"
-                      value={minutesToTime(modalStartMinutes)}
-                      onChange={(e) => {
-                        const mins = timeToMinutes(e.target.value);
-                        setModalStartMinutes(mins);
-                      }}
-                      className="w-full px-3 py-2 rounded-xl bg-[#211a1a] border border-white/10 text-slate-100 font-mono font-bold text-xs focus:outline-none focus:border-teal-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
-                      {isAr ? 'وقت الانتهاء' : 'HEURE DE FIN'}
-                    </label>
-                    <input
-                      type="time"
-                      value={minutesToTime(modalStartMinutes + modalDurationMinutes)}
-                      onChange={(e) => {
-                        const endMins = timeToMinutes(e.target.value);
-                        if (endMins > modalStartMinutes) {
-                          setModalDurationMinutes(endMins - modalStartMinutes);
-                        } else if (endMins < modalStartMinutes) {
-                          // Handle crossing midnight or wrap
-                          setModalDurationMinutes(Math.max(15, 24 * 60 - modalStartMinutes + endMins));
-                        }
-                      }}
-                      className="w-full px-3 py-2 rounded-xl bg-[#211a1a] border border-white/10 text-slate-100 font-mono font-bold text-xs focus:outline-none focus:border-teal-500"
-                    />
-                  </div>
-                </div>
-
-                {/* Live Badges Display (Début -> Durée -> Fin) */}
-                <div className="grid grid-cols-3 gap-2 text-center pt-1">
-                  <div className="p-2 rounded-xl bg-[#211a1a] border border-white/5">
-                    <span className="text-[9px] text-slate-500 uppercase font-bold block">
-                      {isAr ? 'البداية' : 'DÉBUT'}
-                    </span>
-                    <span className="font-mono text-xs font-bold text-white">
-                      {minutesToTime(modalStartMinutes)}
-                    </span>
-                  </div>
-
-                  <div className="p-2 rounded-xl bg-teal-950/80 border border-teal-500/40 flex flex-col justify-center items-center shadow-xs">
-                    <span className="text-[9px] text-teal-400 uppercase font-bold block">
-                      {isAr ? 'المدة' : 'DURÉE'}
-                    </span>
-                    <span className="font-mono text-xs font-black text-teal-200">
-                      {formatDurationLabel(modalDurationMinutes)}
-                    </span>
-                  </div>
-
-                  <div className="p-2 rounded-xl bg-[#211a1a] border border-white/5">
-                    <span className="text-[9px] text-slate-500 uppercase font-bold block">
-                      {isAr ? 'النهاية' : 'FIN'}
-                    </span>
-                    <span className="font-mono text-xs font-bold text-white">
-                      {minutesToTime(modalStartMinutes + modalDurationMinutes)}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Custom Hours and Minutes Direct Number Inputs */}
-                <div>
-                  <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold uppercase mb-1.5">
-                    <span>{isAr ? 'تحديد المدة الدقيقة (ساعات ودقائق)' : 'Durée personnalisée'}</span>
-                    <span className="text-teal-400 font-mono font-bold">
-                      {modalDurationMinutes} {isAr ? 'دقيقة' : 'min'}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 flex items-center gap-1.5 bg-[#211a1a] p-1.5 rounded-xl border border-white/10">
-                      <span className="text-xs font-bold text-slate-400 px-1">
-                        {isAr ? 'ساعات:' : 'Heures:'}
-                      </span>
-                      <input
-                        type="number"
-                        min={0}
-                        max={12}
-                        value={Math.floor(modalDurationMinutes / 60)}
-                        onChange={(e) => {
-                          const h = Math.max(0, parseInt(e.target.value, 10) || 0);
-                          const m = modalDurationMinutes % 60;
-                          setModalDurationMinutes(Math.max(5, h * 60 + m));
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setModalDayOption('tomorrow');
+                          chimePlayer.playChime('click');
                         }}
-                        className="w-full px-2 py-1 rounded-lg bg-[#181313] text-center font-mono font-bold text-teal-300 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
-                      />
+                        className={`py-2.5 px-4 rounded-2xl text-xs font-bold transition-all text-center cursor-pointer border ${modalDayOption === 'tomorrow'
+                          ? 'bg-teal-600 text-white border-teal-500 shadow-sm'
+                          : 'bg-slate-50 dark:bg-[#182030] border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                          }`}
+                      >
+                        {isAr ? 'غداً' : 'Demain'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 3. ONE Single Duration Control (Presets Only) */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                        <Timer className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                        <span>{isAr ? 'المدة' : 'DURÉE'}</span>
+                      </label>
+                      <span className="font-mono text-xs font-bold text-teal-700 dark:text-teal-300 px-2 py-0.5 rounded-lg bg-teal-500/10 border border-teal-500/20">
+                        {formatDurationLabel(modalDurationMinutes)}
+                      </span>
                     </div>
 
-                    <div className="flex-1 flex items-center gap-1.5 bg-[#211a1a] p-1.5 rounded-xl border border-white/10">
-                      <span className="text-xs font-bold text-slate-400 px-1">
-                        {isAr ? 'دقائق:' : 'Minutes:'}
-                      </span>
-                      <input
-                        type="number"
-                        min={0}
-                        max={59}
-                        step={5}
-                        value={modalDurationMinutes % 60}
-                        onChange={(e) => {
-                          const m = Math.max(0, Math.min(59, parseInt(e.target.value, 10) || 0));
-                          const h = Math.floor(modalDurationMinutes / 60);
-                          setModalDurationMinutes(Math.max(5, h * 60 + m));
-                        }}
-                        className="w-full px-2 py-1 rounded-lg bg-[#181313] text-center font-mono font-bold text-teal-300 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
-                      />
+                    <div className="grid grid-cols-5 gap-1.5">
+                      {[
+                        { mins: 25, label: '25m', sub: 'Pomo' },
+                        { mins: 45, label: '45m', sub: null },
+                        { mins: 60, label: '1h', sub: '60m' },
+                        { mins: 90, label: '1h30', sub: '90m' },
+                        { mins: 120, label: '2h', sub: '120m' },
+                      ].map((p) => {
+                        const isSelected = modalDurationMinutes === p.mins;
+                        return (
+                          <button
+                            key={p.mins}
+                            type="button"
+                            onClick={() => {
+                              handleDurationPresetClick(p.mins);
+                              chimePlayer.playChime('click');
+                            }}
+                            className={`py-2 px-1 rounded-2xl font-mono text-center transition-all cursor-pointer border flex flex-col items-center justify-center ${isSelected
+                              ? 'bg-teal-600 text-white border-teal-500 shadow-md ring-2 ring-teal-500/30 scale-[1.02]'
+                              : 'bg-slate-50 dark:bg-[#182030] border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:border-teal-500/30'
+                              }`}
+                          >
+                            <span className="text-xs font-bold">{p.label}</span>
+                            {p.sub && (
+                              <span className={`text-[9px] ${isSelected ? 'text-teal-100' : 'text-slate-400 dark:text-slate-500'}`}>
+                                {p.sub}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
+              ) : (
+                /* ------------------------------------------------------------- */
+                /* 'PRECISION' FULL FORM (COLLAPSED & STREAMLINED)               */
+                /* ------------------------------------------------------------- */
+                <div className="space-y-4">
+                  {/* 1. Subject Field (Chips + Optional Dropdown) */}
+                  <div ref={subjectDropdownRef} className="relative">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-[11px] font-extrabold uppercase tracking-wider text-teal-600 dark:text-teal-400 flex items-center gap-1">
+                        <span>{isAr ? 'المادة' : 'MATIÈRE'}</span>
+                        <span className="text-rose-500 font-black">*</span>
+                      </label>
+                      {subjectError && (
+                        <span className="text-[11px] text-rose-500 font-bold flex items-center gap-1 animate-pulse">
+                          <AlertCircle className="w-3 h-3" />
+                          <span>{subjectError}</span>
+                        </span>
+                      )}
+                    </div>
 
-                {/* Interactive Duration Slider */}
-                <div className="space-y-1 pt-1">
-                  <input
-                    type="range"
-                    min={5}
-                    max={360}
-                    step={5}
-                    value={modalDurationMinutes}
-                    onChange={(e) => setModalDurationMinutes(parseInt(e.target.value, 10))}
-                    className="w-full accent-teal-500 cursor-pointer h-2 bg-[#211a1a] rounded-lg"
-                  />
-                  <div className="flex items-center justify-between text-[9px] font-mono text-slate-500 px-1">
-                    <span>5m</span>
-                    <span>1h</span>
-                    <span>2h</span>
-                    <span>3h</span>
-                    <span>4h</span>
-                    <span>6h</span>
+                    {/* Quick chips shortcut row in precision mode */}
+                    <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-2">
+                      {BAC_SUBJECTS.slice(0, 6).map((s) => {
+                        const isSelected = taskSubject === s.name;
+                        return (
+                          <button
+                            key={s.id}
+                            type="button"
+                            onClick={() => {
+                              setTaskSubject(s.name);
+                              setSubjectError('');
+                              setIsSubjectDropdownOpen(false);
+                            }}
+                            className={`px-2.5 py-1 rounded-xl text-[11px] font-medium whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer border ${isSelected
+                              ? 'bg-teal-600 text-white border-teal-500 font-bold shadow-xs'
+                              : 'bg-slate-50 dark:bg-[#182030] border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:border-slate-300'
+                              }`}
+                          >
+                            <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-white' : s.dotColor}`} />
+                            <span>{getSubjectDisplayName(s.name)}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsSubjectDropdownOpen(!isSubjectDropdownOpen)}
+                      className={`w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-[#182030] border text-slate-900 dark:text-slate-100 font-medium flex items-center justify-between transition-all cursor-pointer ${subjectError
+                        ? 'border-rose-500 ring-2 ring-rose-500/30'
+                        : taskSubject
+                          ? 'border-teal-500/50 hover:border-teal-500'
+                          : 'border-slate-200 dark:border-white/15 hover:border-teal-500/40'
+                        }`}
+                    >
+                      <div className="flex items-center gap-2 truncate">
+                        {taskSubject ? (
+                          <>
+                            <span
+                              className={`w-2.5 h-2.5 rounded-full shrink-0 ${BAC_SUBJECTS.find((s) => s.name === taskSubject)?.dotColor || 'bg-teal-500'
+                                }`}
+                            />
+                            <span className="truncate font-semibold text-slate-900 dark:text-slate-100">
+                              {getSubjectDisplayName(taskSubject)}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1.5">
+                            <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                            <span>
+                              {isAr ? 'اختر المادة * (إجباري)' : 'Sélectionner une matière *'}
+                            </span>
+                          </span>
+                        )}
+                      </div>
+                      <ChevronDown
+                        className={`w-4 h-4 text-slate-400 transition-transform ${isSubjectDropdownOpen ? 'rotate-180 text-teal-600 dark:text-teal-400' : ''
+                          }`}
+                      />
+                    </button>
+
+                    {/* Dropdown Options List */}
+                    {isSubjectDropdownOpen && (
+                      <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-white dark:bg-[#182030] border border-slate-200 dark:border-white/10 rounded-2xl max-h-52 overflow-y-auto no-scrollbar shadow-2xl p-1.5 ring-1 ring-black/10 dark:ring-black/50">
+                        <div className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase border-b border-slate-100 dark:border-white/5 mb-1">
+                          {isAr ? 'قائمة المواد' : 'Matières disponibles'}
+                        </div>
+                        {BAC_SUBJECTS.map((s) => (
+                          <button
+                            key={s.id}
+                            type="button"
+                            onClick={() => {
+                              setTaskSubject(s.name);
+                              setSubjectError('');
+                              setIsSubjectDropdownOpen(false);
+                            }}
+                            className={`w-full p-2 rounded-xl text-left rtl:text-right text-xs font-semibold flex items-center justify-between hover:bg-slate-100 dark:hover:bg-white/10 transition-colors cursor-pointer ${taskSubject === s.name
+                              ? 'text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/60 border border-teal-500/30'
+                              : 'text-slate-700 dark:text-slate-300'
+                              }`}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <span className={`w-2.5 h-2.5 rounded-full ${s.dotColor}`} />
+                              <span>{getSubjectDisplayName(s.name)}</span>
+                            </div>
+                            {taskSubject === s.name && <Check className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 2. Jour Selection (Today / Tomorrow / Custom Day) */}
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
+                      {isAr ? 'اليوم' : 'JOUR'}
+                    </label>
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setModalDayOption('today');
+                          setModalCustomDay(selectedDay);
+                        }}
+                        className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${modalDayOption === 'today'
+                          ? 'bg-teal-600 text-white shadow-sm border border-teal-500'
+                          : 'bg-slate-100 dark:bg-[#182030] border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                          }`}
+                      >
+                        {isAr ? 'اليوم' : "Aujourd'hui"}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setModalDayOption('tomorrow');
+                          setModalCustomDay((selectedDay + 1) % 7);
+                        }}
+                        className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${modalDayOption === 'tomorrow'
+                          ? 'bg-teal-600 text-white shadow-sm border border-teal-500'
+                          : 'bg-slate-100 dark:bg-[#182030] border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                          }`}
+                      >
+                        {isAr ? 'غداً' : 'Demain'}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setModalDayOption('custom')}
+                        className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${modalDayOption === 'custom' || modalDayOption === 'week'
+                          ? 'bg-teal-600 text-white shadow-sm border border-teal-500'
+                          : 'bg-slate-100 dark:bg-[#182030] border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                          }`}
+                      >
+                        <Calendar className="w-3 h-3" />
+                        <span>{isAr ? 'يوم مخصص' : 'Autre jour'}</span>
+                      </button>
+                    </div>
+
+                    {(modalDayOption === 'custom' || modalDayOption === 'week') && (
+                      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-2">
+                        {DAYS_OF_WEEK.map((d) => (
+                          <button
+                            key={d.id}
+                            type="button"
+                            onClick={() => {
+                              setModalCustomDay(d.id);
+                              chimePlayer.playChime('click');
+                            }}
+                            className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${modalCustomDay === d.id
+                              ? 'bg-teal-600 text-white shadow-xs'
+                              : 'bg-slate-100 dark:bg-[#182030] text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                              }`}
+                          >
+                            {isAr ? d.shortAr : d.short}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 3. Duration Section (Presets Primary, Custom Time Expandable) */}
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                        <Timer className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                        <span>{isAr ? 'المدة الزمنية' : 'DURÉE DE LA SÉANCE'}</span>
+                      </label>
+                      <span className="font-mono text-xs font-bold text-teal-700 dark:text-teal-300 px-2 py-0.5 rounded-lg bg-teal-500/10 border border-teal-500/20">
+                        {formatDurationLabel(modalDurationMinutes)}
+                      </span>
+                    </div>
+
+                    {/* Primary Duration Presets */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {[
+                        { mins: 15, label: '15m' },
+                        { mins: 25, label: '25m (Pomo)' },
+                        { mins: 30, label: '30m' },
+                        { mins: 45, label: '45m' },
+                        { mins: 60, label: '1h' },
+                        { mins: 75, label: '1h15' },
+                        { mins: 90, label: '1h30' },
+                        { mins: 120, label: '2h' },
+                        { mins: 150, label: '2h30' },
+                        { mins: 180, label: '3h' },
+                        { mins: 240, label: '4h' },
+                      ].map((p) => {
+                        const isSelected = modalDurationMinutes === p.mins;
+                        return (
+                          <button
+                            key={p.mins}
+                            type="button"
+                            onClick={() => {
+                              handleDurationPresetClick(p.mins);
+                              chimePlayer.playChime('click');
+                            }}
+                            className={`px-2.5 py-1 rounded-xl font-mono text-[11px] font-bold transition-all cursor-pointer border ${isSelected
+                              ? 'bg-teal-600 text-white border-teal-500 shadow-sm ring-1 ring-teal-400'
+                              : 'bg-white dark:bg-[#182030] border-slate-200/80 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                              }`}
+                          >
+                            {p.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Expandable Custom Time Sub-panel */}
+                    <div className="pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setIsCustomTimeExpanded(!isCustomTimeExpanded)}
+                        className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-slate-100/80 dark:bg-[#182030]/60 hover:bg-slate-200/60 dark:hover:bg-[#182030] text-slate-700 dark:text-slate-300 transition-colors text-xs font-semibold cursor-pointer border border-slate-200/60 dark:border-white/5"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                          <span>{isAr ? 'تخصيص أوقات البدء والانتهاء والدقائق' : "Ajuster l'horaire précis (début, fin, slider)"}</span>
+                        </div>
+                        <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isCustomTimeExpanded ? 'rotate-180' : ''}`} />
+                      </button>
+
+                      {isCustomTimeExpanded && (
+                        <div className="mt-2.5 p-3.5 rounded-2xl bg-slate-50 dark:bg-[#182030] border border-slate-200/80 dark:border-white/10 space-y-3 animate-scale-in">
+                          {/* Start Time & End Time Inputs */}
+                          <div className="grid grid-cols-2 gap-2.5">
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">
+                                {isAr ? 'وقت البدء' : 'Heure de début'}
+                              </label>
+                              <input
+                                type="time"
+                                value={minutesToTime(modalStartMinutes)}
+                                onChange={(e) => {
+                                  const mins = timeToMinutes(e.target.value);
+                                  setModalStartMinutes(mins);
+                                }}
+                                className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#111827] border border-slate-200 dark:border-white/10 text-slate-900 dark:text-slate-100 font-mono font-bold text-xs focus:outline-none focus:border-teal-500"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">
+                                {isAr ? 'وقت الانتهاء' : 'Heure de fin'}
+                              </label>
+                              <input
+                                type="time"
+                                value={minutesToTime(modalStartMinutes + modalDurationMinutes)}
+                                onChange={(e) => {
+                                  const endMins = timeToMinutes(e.target.value);
+                                  if (endMins > modalStartMinutes) {
+                                    setModalDurationMinutes(endMins - modalStartMinutes);
+                                  } else if (endMins < modalStartMinutes) {
+                                    setModalDurationMinutes(Math.max(15, 24 * 60 - modalStartMinutes + endMins));
+                                  }
+                                }}
+                                className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#111827] border border-slate-200 dark:border-white/10 text-slate-900 dark:text-slate-100 font-mono font-bold text-xs focus:outline-none focus:border-teal-500"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Live Badges Display (Début -> Durée -> Fin) */}
+                          <div className="grid grid-cols-3 gap-2 text-center pt-1">
+                            <div className="p-2 rounded-xl bg-white dark:bg-[#111827] border border-slate-200/60 dark:border-white/5">
+                              <span className="text-[9px] text-slate-400 dark:text-slate-500 uppercase font-bold block">
+                                {isAr ? 'البداية' : 'Début'}
+                              </span>
+                              <span className="font-mono text-xs font-bold text-slate-900 dark:text-white">
+                                {minutesToTime(modalStartMinutes)}
+                              </span>
+                            </div>
+
+                            <div className="p-2 rounded-xl bg-teal-50 dark:bg-teal-950/80 border border-teal-500/40 flex flex-col justify-center items-center shadow-xs">
+                              <span className="text-[9px] text-teal-700 dark:text-teal-400 uppercase font-bold block">
+                                {isAr ? 'المدة' : 'Durée'}
+                              </span>
+                              <span className="font-mono text-xs font-black text-teal-800 dark:text-teal-200">
+                                {formatDurationLabel(modalDurationMinutes)}
+                              </span>
+                            </div>
+
+                            <div className="p-2 rounded-xl bg-white dark:bg-[#111827] border border-slate-200/60 dark:border-white/5">
+                              <span className="text-[9px] text-slate-400 dark:text-slate-500 uppercase font-bold block">
+                                {isAr ? 'النهاية' : 'Fin'}
+                              </span>
+                              <span className="font-mono text-xs font-bold text-slate-900 dark:text-white">
+                                {minutesToTime(modalStartMinutes + modalDurationMinutes)}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Custom Hours and Minutes Direct Number Inputs */}
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 flex items-center gap-1.5 bg-white dark:bg-[#111827] p-1.5 rounded-xl border border-slate-200 dark:border-white/10">
+                              <span className="text-xs font-bold text-slate-500 dark:text-slate-400 px-1">
+                                {isAr ? 'ساعات:' : 'Heures:'}
+                              </span>
+                              <input
+                                type="number"
+                                min={0}
+                                max={12}
+                                value={Math.floor(modalDurationMinutes / 60)}
+                                onChange={(e) => {
+                                  const h = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                  const m = modalDurationMinutes % 60;
+                                  setModalDurationMinutes(Math.max(5, h * 60 + m));
+                                }}
+                                className="w-full px-2 py-1 rounded-lg bg-slate-50 dark:bg-[#182030] text-center font-mono font-bold text-teal-700 dark:text-teal-300 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
+                              />
+                            </div>
+
+                            <div className="flex-1 flex items-center gap-1.5 bg-white dark:bg-[#111827] p-1.5 rounded-xl border border-slate-200 dark:border-white/10">
+                              <span className="text-xs font-bold text-slate-500 dark:text-slate-400 px-1">
+                                {isAr ? 'دقائق:' : 'Minutes:'}
+                              </span>
+                              <input
+                                type="number"
+                                min={0}
+                                max={59}
+                                step={5}
+                                value={modalDurationMinutes % 60}
+                                onChange={(e) => {
+                                  const m = Math.max(0, Math.min(59, parseInt(e.target.value, 10) || 0));
+                                  const h = Math.floor(modalDurationMinutes / 60);
+                                  setModalDurationMinutes(Math.max(5, h * 60 + m));
+                                }}
+                                className="w-full px-2 py-1 rounded-lg bg-slate-50 dark:bg-[#182030] text-center font-mono font-bold text-teal-700 dark:text-teal-300 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Interactive Duration Slider */}
+                          <div className="space-y-1 pt-1">
+                            <input
+                              type="range"
+                              min={5}
+                              max={360}
+                              step={5}
+                              value={modalDurationMinutes}
+                              onChange={(e) => setModalDurationMinutes(parseInt(e.target.value, 10))}
+                              className="w-full accent-teal-600 cursor-pointer h-2 bg-slate-200 dark:bg-slate-800 rounded-lg"
+                            />
+                            <div className="flex items-center justify-between text-[9px] font-mono text-slate-400 dark:text-slate-500 px-1">
+                              <span>5m</span>
+                              <span>1h</span>
+                              <span>2h</span>
+                              <span>3h</span>
+                              <span>4h</span>
+                              <span>6h</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 4. Optional Details Expandable Section (Title & Notes) */}
+                  <div className="pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setIsDetailsExpanded(!isDetailsExpanded)}
+                      className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-slate-100/80 dark:bg-[#182030]/60 hover:bg-slate-200/60 dark:hover:bg-[#182030] text-slate-700 dark:text-slate-300 transition-colors text-xs font-semibold cursor-pointer border border-slate-200/60 dark:border-white/5"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Pencil className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                        <span>{isAr ? 'العنوان والملاحظات (اختياري)' : 'Titre & notes (optionnel)'}</span>
+                        {(taskTitle || taskNotes) && (
+                          <span className="w-2 h-2 rounded-full bg-teal-500" />
+                        )}
+                      </div>
+                      <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isDetailsExpanded ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {isDetailsExpanded && (
+                      <div className="mt-2.5 p-3.5 rounded-2xl bg-slate-50 dark:bg-[#182030] border border-slate-200/80 dark:border-white/10 space-y-3 animate-scale-in">
+                        {/* Title Field */}
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                              {isAr ? 'العنوان المخصص' : 'Titre personnalisé'}
+                            </label>
+                            <span className="text-[10px] text-slate-400 font-medium">
+                              {isAr ? 'اختياري' : 'Facultatif'}
+                            </span>
+                          </div>
+                          <input
+                            type="text"
+                            placeholder={
+                              isAr
+                                ? 'مثال: حل مسائل الدوران، حفظ النص...'
+                                : 'Ex: Résolution exercices nombres complexes...'
+                            }
+                            value={taskTitle}
+                            onChange={(e) => setTaskTitle(e.target.value)}
+                            className="w-full px-3.5 py-2 rounded-xl bg-white dark:bg-[#111827] border border-slate-200 dark:border-white/10 text-slate-900 dark:text-slate-100 font-medium text-xs placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-teal-500 transition-colors"
+                          />
+                          <p className="mt-1 text-[10px] text-slate-400 dark:text-slate-500">
+                            {isAr
+                              ? '💡 إذا تُرك فارغاً، يُعتمد اسم المادة كعنوان تلقائياً.'
+                              : '💡 Si vide, le nom de la matière sera utilisé automatiquement.'}
+                          </p>
+                        </div>
+
+                        {/* Notes Field */}
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+                            {isAr ? 'ملاحظات وأهداف الحصة' : 'Notes & objectifs de la séance'}
+                          </label>
+                          <textarea
+                            rows={2}
+                            value={taskNotes}
+                            onChange={(e) => setTaskNotes(e.target.value)}
+                            placeholder={
+                              isAr
+                                ? 'أي تفاصيل، روابط تمارين، أهداف إنجاز...'
+                                : 'Objectifs, pages à réviser, exercices ciblés...'
+                            }
+                            className="w-full px-3.5 py-2 rounded-xl bg-white dark:bg-[#111827] border border-slate-200 dark:border-white/10 text-slate-900 dark:text-slate-100 font-medium text-xs placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-teal-500 transition-colors resize-none"
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
-
-                {/* Quick Duration Presets Chips */}
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5">
-                    {isAr ? 'خيارات سريعة للمدة' : 'Raccourcis de durée'}
-                  </label>
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {[
-                      { mins: 15, label: '15m' },
-                      { mins: 25, label: '25m (Pomodoro)' },
-                      { mins: 30, label: '30m' },
-                      { mins: 45, label: '45m' },
-                      { mins: 60, label: '1h' },
-                      { mins: 75, label: '1h15' },
-                      { mins: 90, label: '1h30' },
-                      { mins: 120, label: '2h' },
-                      { mins: 150, label: '2h30' },
-                      { mins: 180, label: '3h' },
-                      { mins: 240, label: '4h' },
-                    ].map((p) => {
-                      const isSelected = modalDurationMinutes === p.mins;
-                      return (
-                        <button
-                          key={p.mins}
-                          type="button"
-                          onClick={() => handleDurationPresetClick(p.mins)}
-                          className={`px-2.5 py-1 rounded-xl font-mono text-[11px] font-bold transition-all ${isSelected
-                            ? 'bg-teal-600 text-white shadow-sm shadow-teal-500/30 ring-1 ring-teal-400'
-                            : 'bg-[#211a1a] border border-white/5 text-slate-400 hover:text-slate-200 hover:border-white/20'
-                            }`}
-                        >
-                          {p.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
+              )}
 
               {/* Modal Footer Actions */}
-              <div className="flex items-center justify-between pt-4 border-t border-white/10">
+              <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-white/10">
                 {editingBlockId ? (
                   <button
                     type="button"
@@ -1677,8 +2559,9 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                       onDeleteTimeBlock(editingBlockId);
                       setIsModalOpen(false);
                       setEditingBlockId(null);
+                      setIsSubjectDropdownOpen(false);
                     }}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-red-400 hover:bg-red-500/10 font-semibold transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 font-semibold transition-colors cursor-pointer"
                   >
                     <Trash2 className="w-4 h-4" />
                     <span>{isAr ? 'حذف' : 'Supprimer'}</span>
@@ -1693,24 +2576,25 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                     onClick={() => {
                       setIsModalOpen(false);
                       setEditingBlockId(null);
+                      setIsSubjectDropdownOpen(false);
                     }}
-                    className="px-4 py-2 rounded-xl text-slate-400 hover:text-white font-semibold transition-colors"
+                    className="px-4 py-2 rounded-xl text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white font-semibold transition-colors cursor-pointer"
                   >
                     {isAr ? 'إلغاء' : 'Annuler'}
                   </button>
 
                   <button
                     type="submit"
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-teal-600 hover:bg-teal-500 text-white font-bold transition-transform active:scale-95 shadow-lg shadow-teal-900/50"
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-700 hover:from-teal-500 hover:to-emerald-500 text-white font-bold transition-transform active:scale-95 shadow-md shadow-teal-600/25 cursor-pointer"
                   >
                     <Check className="w-4 h-4" />
                     <span>
                       {editingBlockId
                         ? isAr
-                          ? 'تحديث المهمة'
+                          ? 'تحديث الحصة'
                           : 'Mettre à jour'
                         : isAr
-                          ? 'حفظ المهمة'
+                          ? 'حفظ الحصة'
                           : 'Enregistrer'}
                     </span>
                   </button>

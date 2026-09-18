@@ -18,6 +18,7 @@ import {
 import { PriorityLevel, QuizItem } from '../types';
 import { PriorityBadge } from './PriorityBadge';
 import { BAC_SUBJECTS } from '../utils/constants';
+import { chimePlayer } from '../utils/audio';
 
 interface QuizzesTabProps {
   quizzes: QuizItem[];
@@ -55,6 +56,7 @@ export const QuizzesTab: React.FC<QuizzesTabProps> = ({
   const [formNotes, setFormNotes] = useState('');
 
   const openNewQuizModal = () => {
+    chimePlayer.playChime('modal_open');
     setEditingQuiz(null);
     setFormTitle('');
     setFormSubject(BAC_SUBJECTS[0].name);
@@ -71,6 +73,7 @@ export const QuizzesTab: React.FC<QuizzesTabProps> = ({
   };
 
   const openEditModal = (quiz: QuizItem) => {
+    chimePlayer.playChime('modal_open');
     setEditingQuiz(quiz);
     setFormTitle(quiz.title);
     setFormSubject(quiz.subject);
@@ -127,6 +130,7 @@ export const QuizzesTab: React.FC<QuizzesTabProps> = ({
       });
     }
 
+    chimePlayer.playChime('add');
     setIsAddModalOpen(false);
   };
 
@@ -358,7 +362,9 @@ export const QuizzesTab: React.FC<QuizzesTabProps> = ({
                       onClick={() => {
                         onToggleStatus(quiz.id);
                         if (!isDone) {
-
+                          chimePlayer.playChime('complete');
+                        } else {
+                          chimePlayer.playChime('uncheck');
                         }
                       }}
                       className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors ${isDone
@@ -378,7 +384,10 @@ export const QuizzesTab: React.FC<QuizzesTabProps> = ({
                     </button>
 
                     <button
-                      onClick={() => onDeleteQuiz(quiz.id)}
+                      onClick={() => {
+                        chimePlayer.playChime('delete');
+                        onDeleteQuiz(quiz.id);
+                      }}
                       className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -402,7 +411,7 @@ export const QuizzesTab: React.FC<QuizzesTabProps> = ({
               </h2>
               <button
                 type="button"
-                onClick={() => setIsAddModalOpen(false)}
+                onClick={() => { chimePlayer.playChime('modal_close'); setIsAddModalOpen(false); }}
                 className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-700/50 text-sm font-bold transition-colors cursor-pointer"
               >
                 ✕
@@ -560,7 +569,7 @@ export const QuizzesTab: React.FC<QuizzesTabProps> = ({
               <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-slate-200 dark:border-slate-800 shrink-0 bg-slate-50/60 dark:bg-slate-800/40">
                 <button
                   type="button"
-                  onClick={() => setIsAddModalOpen(false)}
+                  onClick={() => { chimePlayer.playChime('modal_close'); setIsAddModalOpen(false); }}
                   className="px-4 py-1.5 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold cursor-pointer text-xs sm:text-sm"
                 >
                   Cancel

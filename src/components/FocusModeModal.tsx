@@ -74,7 +74,7 @@ export const FocusModeModal: React.FC<FocusModeModalProps> = ({
       setSecondsRemaining((prev) => {
         if (prev <= 1) {
           clearInterval(interval);
-          
+          chimePlayer.playChime('focus_finish');
           return 0;
         }
         return prev - 1;
@@ -94,6 +94,7 @@ export const FocusModeModal: React.FC<FocusModeModalProps> = ({
   const subjectInfo = BAC_SUBJECTS.find((s) => s.name === currentSubjectName);
 
   const handleCompleteAndLog = () => {
+    chimePlayer.playChime('complete');
     if (activeBlock) {
       onCompleteBlock(activeBlock.id);
     } else if (onLogCustomSession) {
@@ -186,7 +187,7 @@ export const FocusModeModal: React.FC<FocusModeModalProps> = ({
               <Minimize2 className="w-4 h-4" />
             </button>
             <button
-              onClick={onClose}
+              onClick={() => { chimePlayer.playChime('modal_close'); onClose(); }}
               className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
               title={t('cancel')}
             >
@@ -284,7 +285,10 @@ export const FocusModeModal: React.FC<FocusModeModalProps> = ({
         {/* Interactive Controls */}
         <div className="flex items-center gap-3 flex-wrap justify-center">
           <button
-            onClick={() => setIsRunning(!isRunning)}
+            onClick={() => {
+              chimePlayer.playChime('timer_tick');
+              setIsRunning(!isRunning);
+            }}
             className="px-5 py-2.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center gap-2 transition-transform active:scale-95 border border-slate-700"
           >
             {isRunning ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
@@ -301,7 +305,7 @@ export const FocusModeModal: React.FC<FocusModeModalProps> = ({
         </div>
 
         <button
-          onClick={onClose}
+          onClick={() => { chimePlayer.playChime('modal_close'); onClose(); }}
           className="text-xs text-slate-400 hover:text-white transition-colors"
         >
           {t('fm_exit')}

@@ -22,6 +22,8 @@ export interface TaskItem {
   checklist?: { id: string; text: string; completed: boolean }[];
   createdAt: string;
   completedAt?: string;
+  /** Item-level change stamp: makes deliberate toggles/edits beat stale whole-blob writers. */
+  updatedAt?: string;
 }
 
 export interface QuizItem {
@@ -117,6 +119,8 @@ export interface TimeBlock {
   color?: string;
   createdAt?: string;
   completedAt?: string;
+  /** Item-level change stamp: makes deliberate toggles/edits beat stale whole-blob writers. */
+  updatedAt?: string;
 }
 
 export interface GradeItem {
@@ -194,6 +198,13 @@ export interface AchievementDef {
 }
 
 export type ThemeMode = 'light' | 'dark' | 'system';
+/**
+ * Visual skin of the whole interface.
+ * - 'classic' : the original Linear/Bento look (default)
+ * - 'mybac'   : the cream + zellige skin imported from the MyBac Tracker app
+ * The user switches between them from Settings ▸ Style de l'interface.
+ */
+export type UiStyleMode = 'classic' | 'mybac';
 export type FontSizeOption = 'sm' | 'base' | 'lg' | 'xl';
 
 export type MainTabType =
@@ -210,9 +221,42 @@ export type MainTabType =
   | 'review'
   | 'settings';
 
+export type NotificationModule = 'tasks' | 'quizzes' | 'homework' | 'lessons' | 'goals' | 'habits';
+
+export interface NotificationPreferences {
+  enabled: boolean;
+  modules: {
+    tasks: boolean;
+    quizzes: boolean;
+    homework: boolean;
+    lessons: boolean;
+    goals: boolean;
+    habits: boolean;
+  };
+  leadTimeMinutes: number; // e.g. 15, 30, 60, 120
+  habitReminderTime: string; // HH:mm e.g. "20:00"
+  quietHours: {
+    enabled: boolean;
+    start: string; // HH:mm e.g. "23:00"
+    end: string; // HH:mm e.g. "07:00"
+  };
+}
+
+export interface InAppNotification {
+  id: string;
+  type: 'tasks' | 'quizzes' | 'homework' | 'lessons' | 'goals' | 'habits' | 'system';
+  title: string;
+  message: string;
+  timestamp: string;
+  tab: MainTabType;
+  itemId?: string;
+  read: boolean;
+}
+
 export interface AppSettings {
   language: AppLanguage;
   theme: ThemeMode;
+  uiStyle: UiStyleMode;
   fontSize: FontSizeOption;
   baccalaureateDate: string; // ISO format e.g. "2026-06-10T08:00:00"
   academicYearStartDate: string; // e.g. "2026-09-01T08:00:00"
@@ -224,6 +268,8 @@ export interface AppSettings {
   soundVolume: number; // 0 to 1
   autoSave: boolean;
   favorites: string[];
+  customCoefficients?: Record<string, number>;
+  notifications?: NotificationPreferences;
 }
 
 export interface FullAppData {

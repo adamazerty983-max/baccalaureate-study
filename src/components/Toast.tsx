@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useCallback, useRef, useState } from "react";
 import { CheckCircle, XCircle, AlertTriangle, Info, X } from "lucide-react";
+import { chimePlayer } from "../utils/audio";
 
 export type ToastType = "success" | "error" | "warning" | "info";
 
@@ -108,6 +109,16 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const push = useCallback((type: ToastType, title: string, message?: string, duration?: number) => {
     const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     setToasts((p) => [{ id, type, title, message, duration }, ...p].slice(0, 5));
+
+    if (type === 'success') {
+      chimePlayer.playChime('toast_success');
+    } else if (type === 'warning') {
+      chimePlayer.playChime('toast_warning');
+    } else if (type === 'error') {
+      chimePlayer.playChime('toast_error');
+    } else {
+      chimePlayer.playChime('tab_switch');
+    }
   }, []);
 
   const ctx: ToastContextValue = {

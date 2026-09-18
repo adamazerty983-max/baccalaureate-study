@@ -24,9 +24,17 @@ import {
   Brain,
   Compass,
   ChevronRight,
+  Zap,
+  Dna,
+  ScrollText,
+  Quote,
+  GraduationCap,
+  Languages,
+  AlertTriangle,
 } from 'lucide-react';
-import { AppLanguage, FullAppData, HomeworkItem, QuizItem, TaskItem } from '../types';
-import { BAC_SUBJECTS } from '../utils/constants';
+import { AppLanguage, FullAppData, HomeworkItem, QuizItem, TaskItem, TaskType } from '../types';
+import { BAC_SUBJECTS, getSubjectCoefficient } from '../utils/constants';
+import { TASK_TYPES_VISUAL, evaluateTaskUrgency } from '../utils/taskVisualConfig';
 import { StreakFlameCanvas } from './StreakFlameCanvas';
 import { DuolingoStreakFlame } from './DuolingoStreakFlame';
 import { ProgressRing } from './ProgressRing';
@@ -43,6 +51,7 @@ interface DashboardProps {
   onToggleTaskComplete?: (id: string) => void;
   onAddTask?: (task: Omit<TaskItem, 'id' | 'createdAt'>) => void;
   onDeleteTask?: (id: string) => void;
+  onOpenFocusMode?: () => void;
   onUpdateBacDate: (newDate: string, newStartDate?: string) => void;
 }
 
@@ -65,6 +74,71 @@ const QUOTES_POOL = {
   ],
 };
 
+const SUBJECT_THEMES: Record<string, {
+  cardBg: string;
+  borderColor: string;
+  hoverBorder: string;
+  progressGradient: string;
+  accentText: string;
+  badgeBg: string;
+  dotBg: string;
+}> = {
+  math: {
+    cardBg: 'bg-teal-50/50 dark:bg-teal-950/20',
+    borderColor: 'border-teal-200/70 dark:border-teal-900/40',
+    hoverBorder: 'hover:border-teal-500/60 hover:shadow-teal-500/5',
+    progressGradient: 'from-teal-500 to-emerald-500',
+    accentText: 'text-teal-700 dark:text-teal-300',
+    badgeBg: 'bg-teal-500/10 text-teal-700 dark:text-teal-300 border-teal-500/25',
+    dotBg: 'bg-teal-500',
+  },
+  physics: {
+    cardBg: 'bg-sky-50/50 dark:bg-sky-950/20',
+    borderColor: 'border-sky-200/70 dark:border-sky-900/40',
+    hoverBorder: 'hover:border-sky-500/60 hover:shadow-sky-500/5',
+    progressGradient: 'from-sky-500 to-blue-600',
+    accentText: 'text-sky-700 dark:text-sky-300',
+    badgeBg: 'bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/25',
+    dotBg: 'bg-sky-500',
+  },
+  biology: {
+    cardBg: 'bg-emerald-50/50 dark:bg-emerald-950/20',
+    borderColor: 'border-emerald-200/70 dark:border-emerald-900/40',
+    hoverBorder: 'hover:border-emerald-500/60 hover:shadow-emerald-500/5',
+    progressGradient: 'from-emerald-500 to-green-600',
+    accentText: 'text-emerald-700 dark:text-emerald-300',
+    badgeBg: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/25',
+    dotBg: 'bg-emerald-500',
+  },
+  philosophy: {
+    cardBg: 'bg-purple-50/50 dark:bg-purple-950/20',
+    borderColor: 'border-purple-200/70 dark:border-purple-900/40',
+    hoverBorder: 'hover:border-purple-500/60 hover:shadow-purple-500/5',
+    progressGradient: 'from-purple-500 to-indigo-600',
+    accentText: 'text-purple-700 dark:text-purple-300',
+    badgeBg: 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/25',
+    dotBg: 'bg-purple-500',
+  },
+  french: {
+    cardBg: 'bg-amber-50/50 dark:bg-amber-950/20',
+    borderColor: 'border-amber-200/70 dark:border-amber-900/40',
+    hoverBorder: 'hover:border-amber-500/60 hover:shadow-amber-500/5',
+    progressGradient: 'from-amber-500 to-orange-500',
+    accentText: 'text-amber-700 dark:text-amber-300',
+    badgeBg: 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/25',
+    dotBg: 'bg-amber-500',
+  },
+  english: {
+    cardBg: 'bg-indigo-50/50 dark:bg-indigo-950/20',
+    borderColor: 'border-indigo-200/70 dark:border-indigo-900/40',
+    hoverBorder: 'hover:border-indigo-500/60 hover:shadow-indigo-500/5',
+    progressGradient: 'from-indigo-500 to-blue-600',
+    accentText: 'text-indigo-700 dark:text-indigo-300',
+    badgeBg: 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/25',
+    dotBg: 'bg-indigo-500',
+  },
+};
+
 function getPeriod(): 'morning' | 'afternoon' | 'evening' {
   const hr = new Date().getHours();
   if (hr < 12) return 'morning';
@@ -80,6 +154,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onToggleTaskComplete,
   onAddTask,
   onDeleteTask,
+  onOpenFocusMode,
   onUpdateBacDate,
 }) => {
   const t = getT(language);
@@ -89,8 +164,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
   // Inline Quick Add Task on Dashboard
   const [quickTaskTitle, setQuickTaskTitle] = useState('');
   const [quickTaskSubject, setQuickTaskSubject] = useState(BAC_SUBJECTS[0].name);
-  const [quickTaskPriority, setQuickTaskPriority] = useState<'high' | 'medium' | 'low'>('high');
+  const [quickTaskPriority, setQuickTaskPriority] = useState<'urgent' | 'high' | 'medium' | 'low'>('high');
+  const [quickTaskType, setQuickTaskType] = useState<TaskType>('homework');
   const [taskFilter, setTaskFilter] = useState<'all' | 'todo' | 'completed'>('all');
+
+  // Identify Urgent & Overdue Attention Tasks for Exam / Focus Period
+  const urgentAttentionTasks = useMemo(() => {
+    return (appData.tasks || []).filter((task) => {
+      if (task.status === 'completed') return false;
+      const urgency = evaluateTaskUrgency(task.dueDate, task.dueTime, task.priority, language);
+      return urgency.isUrgentAttention || task.priority === 'urgent' || task.priority === 'high';
+    });
+  }, [appData.tasks, language]);
 
   // Countdown timer state
   const [timeLeft, setTimeLeft] = useState<{
@@ -203,29 +288,37 @@ export const Dashboard: React.FC<DashboardProps> = ({
       subject: quickTaskSubject,
       priority: quickTaskPriority,
       status: 'todo',
-      type: 'revision',
+      type: quickTaskType,
       dueDate: todayStr,
       progressPercentage: 0,
     });
 
+    chimePlayer.playChime('add');
     setQuickTaskTitle('');
   };
 
-  const handleAddPresetTask = (title: string, subject: string, priority: 'high' | 'medium' | 'low' = 'high') => {
+  const handleAddPresetTask = (
+    title: string,
+    subject: string,
+    priority: 'urgent' | 'high' | 'medium' | 'low' = 'high',
+    type: TaskType = 'revision'
+  ) => {
     if (!onAddTask) return;
     onAddTask({
       title,
       subject,
       priority,
       status: 'todo',
-      type: 'revision',
+      type,
       dueDate: todayStr,
       progressPercentage: 0,
     });
+    chimePlayer.playChime('add');
   };
 
   const handleSaveDate = (e: React.FormEvent) => {
     e.preventDefault();
+    chimePlayer.playChime('add');
     onUpdateBacDate(newBacDate, newStartDate);
     setIsEditDateOpen(false);
   };
@@ -271,34 +364,152 @@ export const Dashboard: React.FC<DashboardProps> = ({
     return { bacTrajectoryPercent: percent, isBeforeStart: false };
   }, [appData.settings.academicYearStartDate, appData.settings.baccalaureateDate]);
 
+  // Executive Greeting & Date calculation
+  const { greetingText, periodBadge, formattedCurrentDate } = useMemo(() => {
+    const d = new Date();
+    const formatted = d.toLocaleDateString(
+      isAr ? 'ar-MA' : language === 'fr' ? 'fr-FR' : 'en-US',
+      { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }
+    );
+
+    let greet = '';
+    let badge = '';
+    if (period === 'morning') {
+      greet = isAr ? 'صباح العزيمة والتركيز' : language === 'fr' ? 'Bonjour, préparez votre excellence' : 'Good morning, pursue excellence';
+      badge = isAr ? 'فترة الصباح' : language === 'fr' ? 'Matinée Focus' : 'Morning Focus';
+    } else if (period === 'afternoon') {
+      greet = isAr ? 'مساء الجد والاجتهاد' : language === 'fr' ? 'Bel après-midi de révision' : 'Productive afternoon';
+      badge = isAr ? 'فترة الظهيرة' : language === 'fr' ? 'Après-midi Actif' : 'Afternoon Study';
+    } else {
+      greet = isAr ? 'أمسية مراجعة هادئة' : language === 'fr' ? 'Soirée de consolidation & calme' : 'Quiet evening review';
+      badge = isAr ? 'فترة المساء' : language === 'fr' ? 'Session Soirée' : 'Evening Review';
+    }
+
+    return {
+      greetingText: greet,
+      periodBadge: badge,
+      formattedCurrentDate: formatted,
+    };
+  }, [isAr, language, period]);
+
+  // Core Bac Subjects summary for the Mastery Grid
+  const coreSubjectsData = useMemo(() => {
+    const mainIds = ['math', 'physics', 'biology', 'philosophy', 'french', 'english'];
+    const selected = BAC_SUBJECTS.filter((s) => mainIds.includes(s.id));
+
+    return selected.map((subj) => {
+      const subjectGrades = (appData.grades || []).filter(
+        (g) => g.subject.toLowerCase() === subj.name.toLowerCase() || subj.name.toLowerCase().includes(g.subject.toLowerCase())
+      );
+      const avg = subjectGrades.length > 0
+        ? subjectGrades.reduce((sum, g) => sum + g.grade, 0) / subjectGrades.length
+        : null;
+
+      const subjectTasks = (appData.tasks || []).filter((t) => t.subject === subj.name);
+      const doneTasks = subjectTasks.filter((t) => t.status === 'completed').length;
+      const totalTasks = subjectTasks.length;
+      const taskProgress = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
+      const subjectLessons = (appData.lessons || []).filter((l) => l.subject === subj.name);
+      const coefficient = getSubjectCoefficient(subj.name, appData.settings.customCoefficients);
+      const theme = SUBJECT_THEMES[subj.id] || {
+        cardBg: 'bg-slate-50/70 dark:bg-slate-900/40',
+        borderColor: 'border-slate-200/80 dark:border-slate-800',
+        hoverBorder: 'hover:border-teal-500/50',
+        progressGradient: 'from-teal-500 to-indigo-500',
+        accentText: 'text-teal-600 dark:text-teal-400',
+        badgeBg: 'bg-slate-200/60 dark:bg-slate-800 text-slate-600 dark:text-slate-300',
+        dotBg: subj.dotColor,
+      };
+
+      return {
+        ...subj,
+        theme,
+        coefficient,
+        averageGrade: avg,
+        doneTasks,
+        totalTasks,
+        taskProgress,
+        lessonsCount: subjectLessons.length,
+      };
+    });
+  }, [appData.grades, appData.tasks, appData.lessons, appData.settings.customCoefficients]);
+
   return (
-    <div className="space-y-4 sm:space-y-5 pb-16">
+    <div className="space-y-5 sm:space-y-6 pb-20">
+      {/* =========================================================
+          EXECUTIVE GREETING & STATUS BANNER
+          ========================================================= */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 sm:p-6 rounded-3xl bg-gradient-to-r from-white via-slate-50/90 to-teal-50/30 dark:from-[#0D1525]/95 dark:via-[#101A2E]/95 dark:to-[#152238]/95 border border-slate-200/80 dark:border-white/[0.08] shadow-xs backdrop-blur-md">
+        <div className="flex items-center gap-3.5 min-w-0">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-teal-600 via-emerald-600 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-teal-600/20 shrink-0">
+            <GraduationCap className="w-6 h-6" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-base sm:text-xl font-black font-['Outfit'] text-slate-900 dark:text-white tracking-tight truncate">
+                {greetingText}
+              </h2>
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-teal-500/10 text-teal-700 dark:text-teal-300 border border-teal-500/20 shrink-0">
+                <Sparkles className="w-3 h-3 text-teal-500" />
+                <span>{periodBadge}</span>
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-2 flex-wrap">
+              <span className="capitalize font-medium">{formattedCurrentDate}</span>
+              <span>•</span>
+              <span className="text-teal-600 dark:text-teal-400 font-bold">
+                {isAr ? 'برنامج التفوق للبكالوريا الوطنية' : 'Objectif Mention Très Bien'}
+              </span>
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2.5 self-end sm:self-center shrink-0">
+          {onOpenFocusMode && (
+            <button
+              onClick={onOpenFocusMode}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-700 hover:from-teal-500 hover:to-emerald-500 text-white text-xs font-bold shadow-md shadow-teal-600/20 active:scale-95 transition-all cursor-pointer"
+            >
+              <Zap className="w-4 h-4 fill-amber-300 text-amber-300" />
+              <span>{isAr ? 'جلسة تركيز فوري' : 'Session Focus'}</span>
+            </button>
+          )}
+          <button
+            onClick={() => onNavigateTab('timeblocking')}
+            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-white/90 hover:bg-slate-100 dark:bg-slate-800/90 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 text-xs font-bold border border-slate-200/80 dark:border-slate-700/80 transition-all cursor-pointer shadow-2xs"
+          >
+            <CalendarClock className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+            <span className="hidden sm:inline">{isAr ? 'المخطط' : 'Planning'}</span>
+          </button>
+        </div>
+      </div>
+
       {/* =========================================================
           BENTO ROW 1: HERO COUNTDOWN (7 COLS) & STREAK FLAME (5 COLS)
           ========================================================= */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-5">
         {/* Bento Box 1: Hero Exam Countdown & Trajectory (7 cols) */}
-        <div className="lg:col-span-7 bento-card relative overflow-hidden bg-gradient-to-br from-[#0c1424] via-[#0f172a] to-[#161c30] text-white p-6 sm:p-7 border border-teal-500/20 shadow-xl flex flex-col justify-between group">
-          {/* Subtle Ambient Glows */}
-          <div className="absolute top-0 right-0 w-72 h-72 bg-teal-500/10 rounded-full blur-3xl pointer-events-none" />
-          <div className="absolute bottom-0 left-0 w-72 h-72 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="lg:col-span-7 bento-card relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#091120] via-[#0E182A] to-[#14233D] text-white p-6 sm:p-7 border border-teal-500/25 shadow-2xl flex flex-col justify-between group">
+          {/* Subtle Ambient Radial Glows */}
+          <div className="absolute -top-12 -right-12 w-80 h-80 bg-teal-500/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-12 -left-12 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
 
           {/* Header Bar */}
           <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="space-y-1.5 min-w-0">
-              <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-teal-500/15 border border-teal-400/30 text-teal-300 text-[11px] font-bold uppercase tracking-wider">
-                <span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-ping" />
-                <Sparkles className="w-3.5 h-3.5" />
+            <div className="space-y-2 min-w-0">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-500/15 border border-teal-400/30 text-teal-300 text-[11px] font-bold uppercase tracking-wider backdrop-blur-md shadow-xs">
+                <span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse" />
+                <Sparkles className="w-3.5 h-3.5 text-teal-400" />
                 <span>{t('cd_eyebrow')}</span>
               </div>
-              <h1 className="text-xl sm:text-2xl font-black font-['Outfit'] text-white tracking-tight">
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-black font-['Outfit'] text-white tracking-tight leading-snug">
                 {t('cd_title')}
               </h1>
-              <p className="text-xs text-slate-300 flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+              <p className="text-xs sm:text-sm text-slate-300 flex items-center gap-2 flex-wrap">
+                <Calendar className="w-4 h-4 text-teal-400 shrink-0" />
                 <span>
                   {isAr ? 'الموعد الرسمي المستهدف: ' : 'Date officielle ciblée : '}
-                  <strong className="text-teal-300 font-semibold">
+                  <strong className="text-teal-200 font-semibold px-2 py-0.5 rounded-lg bg-white/[0.06] border border-white/10 ml-1 inline-block">
                     {new Date(appData.settings.baccalaureateDate || '2026-06-10').toLocaleDateString(
                       isAr ? 'ar-MA' : 'fr-FR',
                       { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }
@@ -310,69 +521,80 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
             <button
               onClick={() => setIsEditDateOpen(true)}
-              className="self-start sm:self-center flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-teal-200 text-xs font-bold transition-all border border-white/10 cursor-pointer shrink-0"
-              title="Modifier la date"
+              className="self-start sm:self-center flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-teal-200 text-xs font-bold transition-all duration-200 border border-white/15 cursor-pointer backdrop-blur-md hover:border-teal-400/40 shadow-xs active:scale-95 shrink-0"
+              title={isAr ? 'تعديل موعد الامتحان' : 'Modifier la date de l\'examen'}
             >
               <Edit2 className="w-3.5 h-3.5" />
               <span>{t('edit')}</span>
             </button>
           </div>
 
-          {/* 4 Digital Countdown Counters */}
-          <div className="relative z-10 grid grid-cols-4 gap-2 sm:gap-3 my-6 text-center">
-            <div className="p-3 sm:p-3.5 rounded-2xl bg-white/[0.04] border border-white/10 backdrop-blur-xs">
-              <div className="text-2xl sm:text-4xl font-black font-['Outfit'] font-mono text-teal-400 tracking-tight">
+          {/* 4 Precision Digital Countdown Pods */}
+          <div className="relative z-10 grid grid-cols-4 gap-2 sm:gap-3.5 my-6 text-center">
+            {/* Days Pod */}
+            <div className="relative rounded-2xl bg-teal-950/25 dark:bg-black/35 border border-teal-500/25 p-3 sm:p-4 backdrop-blur-md shadow-inner group/pod hover:border-teal-400/50 transition-all duration-200">
+              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-teal-400/40 to-transparent" />
+              <div className="text-2xl sm:text-4xl lg:text-5xl font-black font-['Outfit'] font-mono text-teal-400 tracking-tight">
                 {timeLeft.days}
               </div>
-              <div className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-teal-300/80 mt-1">
+              <div className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-teal-300/80 mt-1">
                 {t('days')}
               </div>
             </div>
 
-            <div className="p-3 sm:p-3.5 rounded-2xl bg-white/[0.04] border border-white/10 backdrop-blur-xs">
-              <div className="text-2xl sm:text-4xl font-black font-['Outfit'] font-mono text-white tracking-tight">
+            {/* Hours Pod */}
+            <div className="relative rounded-2xl bg-sky-950/25 dark:bg-black/35 border border-sky-500/25 p-3 sm:p-4 backdrop-blur-md shadow-inner group/pod hover:border-sky-400/50 transition-all duration-200">
+              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-sky-400/40 to-transparent" />
+              <div className="text-2xl sm:text-4xl lg:text-5xl font-black font-['Outfit'] font-mono text-sky-300 tracking-tight">
                 {timeLeft.hours < 10 ? `0${timeLeft.hours}` : timeLeft.hours}
               </div>
-              <div className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-teal-300/80 mt-1">
+              <div className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-sky-300/80 mt-1">
                 {t('hours')}
               </div>
             </div>
 
-            <div className="p-3 sm:p-3.5 rounded-2xl bg-white/[0.04] border border-white/10 backdrop-blur-xs">
-              <div className="text-2xl sm:text-4xl font-black font-['Outfit'] font-mono text-white tracking-tight">
+            {/* Minutes Pod */}
+            <div className="relative rounded-2xl bg-indigo-950/25 dark:bg-black/35 border border-indigo-500/25 p-3 sm:p-4 backdrop-blur-md shadow-inner group/pod hover:border-indigo-400/50 transition-all duration-200">
+              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-indigo-400/40 to-transparent" />
+              <div className="text-2xl sm:text-4xl lg:text-5xl font-black font-['Outfit'] font-mono text-indigo-300 tracking-tight">
                 {timeLeft.minutes < 10 ? `0${timeLeft.minutes}` : timeLeft.minutes}
               </div>
-              <div className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-teal-300/80 mt-1">
+              <div className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-indigo-300/80 mt-1">
                 {t('minutes')}
               </div>
             </div>
 
-            <div className="p-3 sm:p-3.5 rounded-2xl bg-white/[0.04] border border-white/10 backdrop-blur-xs">
-              <div className="text-2xl sm:text-4xl font-black font-['Outfit'] font-mono text-amber-400 tracking-tight animate-pulse">
+            {/* Seconds Pod */}
+            <div className="relative rounded-2xl bg-amber-950/25 dark:bg-black/35 border border-amber-500/25 p-3 sm:p-4 backdrop-blur-md shadow-inner group/pod hover:border-amber-400/50 transition-all duration-200">
+              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-400/40 to-transparent" />
+              <div className="text-2xl sm:text-4xl lg:text-5xl font-black font-['Outfit'] font-mono text-amber-400 tracking-tight animate-pulse">
                 {timeLeft.seconds < 10 ? `0${timeLeft.seconds}` : timeLeft.seconds}
               </div>
-              <div className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-amber-300/80 mt-1">
+              <div className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-amber-300/80 mt-1">
                 {t('seconds')}
               </div>
             </div>
           </div>
 
-          {/* Bac Trajectory Mini Progress Strip */}
-          <div className="relative z-10 pt-3 border-t border-white/10 space-y-1.5">
-            <div className="flex items-center justify-between text-[11px]">
-              <span className="text-slate-400 font-medium">
-                {isAr ? 'مسار التحضير للامتحان الوطني' : 'Trajectoire vers l\'examen national'}
+          {/* Bac Trajectory Progress Rail */}
+          <div className="relative z-10 pt-4 border-t border-white/10 space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-300 font-medium flex items-center gap-1.5">
+                <Target className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                <span>
+                  {isAr ? 'مسار التحضير للامتحان الوطني' : 'Trajectoire vers l\'examen national'}
+                </span>
               </span>
-              <span className="text-teal-300 font-bold font-mono">
+              <span className="text-teal-300 font-bold font-mono text-xs bg-white/[0.06] px-2.5 py-0.5 rounded-full border border-white/10">
                 {timeLeft.days} {isAr ? 'يوم متبقٍ' : 'jours restants'}{' '}
                 <span className="text-slate-300 font-normal">
                   ({bacTrajectoryPercent}%{isBeforeStart ? (isAr ? ' - يبدأ الإثنين' : ' - Démarre lundi') : ''})
                 </span>
               </span>
             </div>
-            <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
+            <div className="w-full h-2 rounded-full bg-black/40 border border-white/10 p-0.5 overflow-hidden">
               <div
-                className="h-full bg-gradient-to-r from-teal-400 via-emerald-400 to-indigo-400 rounded-full transition-all duration-700"
+                className="h-full bg-gradient-to-r from-teal-400 via-emerald-400 to-indigo-400 rounded-full transition-all duration-700 shadow-[0_0_12px_rgba(20,184,166,0.5)]"
                 style={{ width: `${bacTrajectoryPercent}%` }}
               />
             </div>
@@ -380,102 +602,123 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
 
         {/* Bento Box 2: Duolingo Daily Streak Flame (5 cols) */}
-        <div className="lg:col-span-5 bento-card relative overflow-hidden bg-[#131F24] border border-[#2B3842] shadow-xl p-6 sm:p-7 flex flex-col justify-between text-white group">
+        <div className={`lg:col-span-5 bento-card relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#091120] via-[#0E182A] to-[#14233D] text-white p-6 sm:p-7 flex flex-col justify-between shadow-2xl transition-all duration-500 group ${streakData.isTodayCompleted
+          ? 'border border-amber-500/30 hover:border-amber-500/50 shadow-[0_0_25px_rgba(245,158,11,0.12)]'
+          : 'border border-sky-500/30 hover:border-sky-500/50 shadow-[0_0_25px_rgba(14,165,233,0.12)]'
+          }`}>
+          {/* Subtle Ambient Ember Glow */}
+          <div
+            className={`absolute top-10 left-1/2 -translate-x-1/2 w-56 h-56 rounded-full blur-3xl pointer-events-none transition-all duration-700 ${streakData.isTodayCompleted
+              ? 'bg-amber-500/15'
+              : 'bg-sky-500/15'
+              }`}
+          />
+
           {/* Flame + Streak Count */}
-          <div className="flex flex-col items-center text-center w-full">
+          <div className="relative z-10 flex flex-col items-center text-center w-full">
             <div>
-              <DuolingoStreakFlame size={120} />
+              <DuolingoStreakFlame size={120} isFrozen={!streakData.isTodayCompleted} />
             </div>
 
-            <div className="text-5xl sm:text-6xl font-black font-['Outfit'] text-white tracking-tight leading-none mt-1">
+            <div className="text-5xl sm:text-6xl font-black font-['Outfit'] text-white tracking-tight leading-none mt-2 drop-shadow-md">
               {streakData.currentStreak}
             </div>
 
-            <div className="text-lg sm:text-xl font-black text-[#FF9600] tracking-wide mt-1.5">
-              {streakData.currentStreak > 0
-                ? isAr
-                  ? `${streakData.currentStreak} أيام متتالية!`
-                  : language === 'fr'
-                    ? `${streakData.currentStreak} jours de série !`
-                    : `${streakData.currentStreak} day streak!`
-                : isAr
-                  ? '0 أيام متتالية'
-                  : language === 'fr'
-                    ? '0 jour de série'
-                    : '0 day streak'}
+            <div className={`text-base sm:text-lg font-black tracking-wide mt-1.5 flex items-center justify-center gap-1.5 ${streakData.isTodayCompleted ? 'text-amber-400' : 'text-sky-400'
+              }`}>
+              <Flame className={`w-4 h-4 shrink-0 ${streakData.isTodayCompleted ? 'fill-amber-400 text-amber-400' : 'fill-sky-400 text-sky-400'
+                }`} />
+              <span>
+                {streakData.currentStreak > 0
+                  ? isAr
+                    ? `${streakData.currentStreak} أيام متتالية!`
+                    : language === 'fr'
+                      ? `${streakData.currentStreak} jours de série !`
+                      : `${streakData.currentStreak} day streak!`
+                  : isAr
+                    ? '0 أيام متتالية'
+                    : language === 'fr'
+                      ? '0 jour de série'
+                      : '0 day streak'}
+              </span>
             </div>
 
             {/* Today logged hours & status pill */}
-            <div className="flex items-center gap-2 mt-2">
+            <div className="flex items-center gap-2 mt-2.5">
               {streakData.todayStudyHours > 0 ? (
-                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-500/15 border border-teal-500/30 text-teal-300 text-xs font-bold shadow-xs">
-                  <span>⏱️ {streakData.todayStudyHours}h {isAr ? 'ساعات اليوم' : 'étudiées'}</span>
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-bold shadow-xs">
+                  <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <span>{streakData.todayStudyHours}h {isAr ? 'ساعات اليوم' : 'étudiées'}</span>
                 </div>
               ) : (
-                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#182229] border border-[#2B3842] text-[#8495A0] text-xs font-semibold">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-500/15 border border-sky-500/30 text-sky-300 text-xs font-medium">
+                  <Zap className="w-3.5 h-3.5 text-sky-400 shrink-0" />
                   <span>{isAr ? 'في انتظار إنجاز أول مهمة اليوم' : 'En attente d\'activité aujourd\'hui'}</span>
                 </div>
               )}
             </div>
           </div>
 
-          {/* 7-Days Row */}
-          <div className="w-full bg-[#182229] border border-[#2B3842] rounded-2xl p-3 sm:p-4 mt-5 space-y-3">
+          {/* 7-Days Progression Matrix */}
+          <div className="relative z-10 w-full bg-black/30 border border-white/10 rounded-2xl p-3.5 sm:p-4 mt-5 space-y-3 backdrop-blur-md">
             <div className="grid grid-cols-7 gap-1 sm:gap-1.5 text-center">
               {weekDays.map((day, idx) => (
                 <div key={idx} className="flex flex-col items-center gap-1.5">
                   <span
                     className={`text-[11px] font-bold ${day.isToday
-                      ? 'text-[#FF9600]'
+                      ? streakData.isTodayCompleted ? 'text-amber-400' : 'text-sky-400'
                       : day.status === 'done' || day.status === 'flame'
                         ? 'text-slate-200'
-                        : 'text-[#8495A0]'
+                        : 'text-slate-500'
                       }`}
                   >
                     {day.name}
                   </span>
 
                   {day.status === 'done' && (
-                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[#FF9600] text-[#131F24] flex items-center justify-center font-black text-xs shadow-md">
-                      <CheckCircle className="w-4 h-4 text-[#131F24] stroke-[3]" />
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-amber-500 text-slate-950 flex items-center justify-center font-black text-xs shadow-md shadow-amber-500/20">
+                      <CheckCircle2 className="w-4 h-4 text-slate-950 stroke-[3]" />
                     </div>
                   )}
 
                   {day.status === 'flame' && (
-                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[#FF9600] text-[#131F24] flex items-center justify-center font-black text-xs shadow-md ring-2 ring-[#FF9600]/40">
-                      <Flame className="w-3.5 h-3.5 text-[#131F24] fill-current stroke-[2.5]" />
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-tr from-amber-500 to-orange-500 text-white flex items-center justify-center font-black text-xs shadow-md shadow-amber-500/30 ring-2 ring-amber-400/40">
+                      <Flame className="w-4 h-4 fill-white stroke-[2]" />
                     </div>
                   )}
 
                   {day.status === 'empty' && (
                     <div
                       className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full border flex items-center justify-center transition-all ${day.isToday
-                        ? 'border-[#FF9600]/60 bg-[#FF9600]/10 text-[#FF9600]'
-                        : 'border-[#2B3842] bg-[#131F24]'
+                        ? streakData.isTodayCompleted
+                          ? 'border-2 border-amber-500 bg-amber-500/15 text-amber-400 shadow-xs'
+                          : 'border-2 border-sky-500 bg-sky-500/15 text-sky-400 shadow-xs'
+                        : 'border-white/10 bg-white/5'
                         }`}
                     >
-                      {day.isToday && <span className="w-2 h-2 rounded-full bg-[#FF9600] animate-ping" />}
+                      {day.isToday && <span className={`w-2 h-2 rounded-full animate-ping ${streakData.isTodayCompleted ? 'bg-amber-400' : 'bg-sky-400'}`} />}
                     </div>
                   )}
 
                   {day.status === 'future' && (
-                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[#2A3840]/60 border border-[#384852]/60 flex items-center justify-center" />
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white/[0.04] border border-white/10 flex items-center justify-center" />
                   )}
                 </div>
               ))}
             </div>
 
             {/* Streak Status Tip */}
-            <div className="pt-2 border-t border-[#2B3842] text-center text-xs font-medium">
+            <div className="pt-2.5 border-t border-white/10 text-center text-xs font-medium">
               {streakData.isTodayCompleted ? (
-                <span className="text-emerald-400 font-bold flex items-center justify-center gap-1">
-                  <span>✓</span>
-                  <span>{isAr ? 'تم إنجاز وتأكيد مهمة اليوم! الشعلة مشتعلة 🔥' : 'Tâche validée ! Série active aujourd\'hui 🔥'}</span>
+                <span className="text-emerald-400 font-bold flex items-center justify-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>{isAr ? 'تم إنجاز وتأكيد مهمة اليوم! الشعلة مشتعلة' : 'Tâche validée ! Série active aujourd\'hui'}</span>
+                  <Flame className="w-3.5 h-3.5 fill-current" />
                 </span>
               ) : (
-                <span className="text-[#FF9600] font-semibold flex items-center justify-center gap-1">
-                  <span>⚡</span>
-                  <span>{isAr ? 'أنجز مهمة لتأكيد شعلة اليوم!' : 'Validez une tâche pour allumer la flamme !'}</span>
+                <span className="text-sky-300 font-semibold flex items-center justify-center gap-1.5">
+                  <Flame className="w-3.5 h-3.5 fill-sky-400 text-sky-400 shrink-0" />
+                  <span>{isAr ? 'أكمل أي مهمة في الـ Planner لإشعال النار الذهبية!' : 'Complétez une tâche dans le Planner pour allumer la flamme dorée !'}</span>
                 </span>
               )}
             </div>
@@ -484,24 +727,34 @@ export const Dashboard: React.FC<DashboardProps> = ({
       </div>
 
       {/* =========================================================
-          BENTO ROW 2: 4 CORE METRICS (3 COLS EACH)
+          BENTO ROW 2: 4 CORE KPI METRIC CARDS (3 COLS EACH)
           ========================================================= */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
         {/* Metric 1: Weighted Average */}
         <div
           onClick={() => onNavigateTab('average')}
-          className="bento-card p-5 bg-white dark:bg-[#111726]/90 border border-slate-200/90 dark:border-white/[0.08] shadow-xs hover:border-teal-500/50 hover:shadow-md cursor-pointer flex flex-col justify-between group"
+          className="bento-card p-5 sm:p-5.5 rounded-3xl bg-gradient-to-br from-white via-white to-teal-50/25 dark:from-[#0E1726]/95 dark:via-[#10192A]/95 dark:to-[#122432]/95 border border-slate-200/80 dark:border-white/[0.08] shadow-xs hover:border-teal-500/50 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer flex flex-col justify-between group relative overflow-hidden"
         >
-          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider">
-            <span>{t('tile_avg')}</span>
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-teal-500 via-teal-400 to-emerald-400" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-teal-500/10 text-teal-600 dark:text-teal-400 flex items-center justify-center font-bold">
+                <Calculator className="w-4 h-4" />
+              </div>
+              <span className="text-slate-600 dark:text-slate-400 text-xs font-bold uppercase tracking-wider">
+                {t('tile_avg')}
+              </span>
+            </div>
+            <ChevronRight className="w-4 h-4 text-slate-300 dark:text-slate-600 group-hover:text-teal-500 group-hover:translate-x-1 rtl:group-hover:-translate-x-1 transition-all" />
           </div>
-          <div className="my-3 flex items-center gap-3">
+
+          <div className="my-3.5 flex items-center gap-3.5">
             <ProgressRing
               progress={weightedAverage !== null ? Math.round((weightedAverage / 20) * 100) : 0}
               size={56}
               strokeWidth={5}
               gradientId="dash-avg-ring"
-              gradientColors={{ from: '#0D9488', to: '#6366F1' }}
+              gradientColors={{ from: '#0D9488', to: '#14B8A6' }}
               centerContent={
                 <span className="text-[10px] font-black font-['Outfit'] text-teal-600 dark:text-teal-400">
                   {weightedAverage !== null ? `${Math.round((weightedAverage / 20) * 100)}%` : '—'}
@@ -510,13 +763,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
             />
             <div>
               <div className="flex items-baseline gap-1">
-                <span className="text-2xl sm:text-3xl font-black font-['Outfit'] text-teal-600 dark:text-teal-400 tracking-tight">
+                <span className="text-2xl sm:text-3xl font-black font-['Outfit'] text-teal-700 dark:text-teal-300 tracking-tight">
                   {weightedAverage !== null ? weightedAverage.toFixed(2) : '—'}
                 </span>
                 <span className="text-xs text-slate-400 font-bold">/ 20</span>
               </div>
             </div>
           </div>
+
           <div>
             {mentionText ? (
               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-black border ${mentionText.color}`}>
@@ -533,12 +787,22 @@ export const Dashboard: React.FC<DashboardProps> = ({
         {/* Metric 2: Goals Progress */}
         <div
           onClick={() => onNavigateTab('goals')}
-          className="bento-card p-5 bg-white dark:bg-[#111726]/90 border border-slate-200/90 dark:border-white/[0.08] shadow-xs hover:border-emerald-500/50 hover:shadow-md cursor-pointer flex flex-col justify-between group"
+          className="bento-card p-5 sm:p-5.5 rounded-3xl bg-gradient-to-br from-white via-white to-emerald-50/25 dark:from-[#0E1726]/95 dark:via-[#10192A]/95 dark:to-[#102422]/95 border border-slate-200/80 dark:border-white/[0.08] shadow-xs hover:border-emerald-500/50 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer flex flex-col justify-between group relative overflow-hidden"
         >
-          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider">
-            <span>{t('tile_goals')}</span>
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-emerald-500 via-emerald-400 to-teal-400" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
+                <Target className="w-4 h-4" />
+              </div>
+              <span className="text-slate-600 dark:text-slate-400 text-xs font-bold uppercase tracking-wider">
+                {t('tile_goals')}
+              </span>
+            </div>
+            <ChevronRight className="w-4 h-4 text-slate-300 dark:text-slate-600 group-hover:text-emerald-500 group-hover:translate-x-1 rtl:group-hover:-translate-x-1 transition-all" />
           </div>
-          <div className="my-3 flex items-center gap-3">
+
+          <div className="my-3.5 flex items-center gap-3.5">
             <ProgressRing
               progress={goalsCompletion}
               size={56}
@@ -551,10 +815,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 </span>
               }
             />
-            <div className="text-2xl sm:text-3xl font-black font-['Outfit'] text-emerald-600 dark:text-emerald-400 tracking-tight">
+            <div className="text-2xl sm:text-3xl font-black font-['Outfit'] text-emerald-700 dark:text-emerald-300 tracking-tight">
               {goalsCompletion}%
             </div>
           </div>
+
           <span className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">
             {appData.goals?.filter((g) => g.done).length || 0} / {appData.goals?.length || 0} {t('tile_goals_sub')}
           </span>
@@ -563,12 +828,22 @@ export const Dashboard: React.FC<DashboardProps> = ({
         {/* Metric 3: Upcoming Exams */}
         <div
           onClick={() => onNavigateTab('quizzes')}
-          className="bento-card p-5 bg-white dark:bg-[#111726]/90 border border-slate-200/90 dark:border-white/[0.08] shadow-xs hover:border-indigo-500/50 hover:shadow-md cursor-pointer flex flex-col justify-between group"
+          className="bento-card p-5 sm:p-5.5 rounded-3xl bg-gradient-to-br from-white via-white to-indigo-50/25 dark:from-[#0E1726]/95 dark:via-[#10192A]/95 dark:to-[#181938]/95 border border-slate-200/80 dark:border-white/[0.08] shadow-xs hover:border-indigo-500/50 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer flex flex-col justify-between group relative overflow-hidden"
         >
-          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider">
-            <span>{t('tile_exams')}</span>
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-indigo-500 via-indigo-400 to-purple-500" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold">
+                <Award className="w-4 h-4" />
+              </div>
+              <span className="text-slate-600 dark:text-slate-400 text-xs font-bold uppercase tracking-wider">
+                {t('tile_exams')}
+              </span>
+            </div>
+            <ChevronRight className="w-4 h-4 text-slate-300 dark:text-slate-600 group-hover:text-indigo-500 group-hover:translate-x-1 rtl:group-hover:-translate-x-1 transition-all" />
           </div>
-          <div className="my-3 flex items-center gap-3">
+
+          <div className="my-3.5 flex items-center gap-3.5">
             <ProgressRing
               progress={Math.min(100, upcomingExams.length * 20)}
               size={56}
@@ -581,11 +856,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 </span>
               }
             />
-            <div className="text-2xl sm:text-3xl font-black font-['Outfit'] text-indigo-600 dark:text-indigo-400 tracking-tight">
+            <div className="text-2xl sm:text-3xl font-black font-['Outfit'] text-indigo-700 dark:text-indigo-300 tracking-tight">
               {upcomingExams.length}
             </div>
           </div>
-          <span className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">
+
+          <span className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold truncate">
             {upcomingExams.length > 0
               ? isAr
                 ? `أقرب فرض: ${upcomingExams[0]?.subject || ''}`
@@ -599,12 +875,22 @@ export const Dashboard: React.FC<DashboardProps> = ({
         {/* Metric 4: Pending Homework */}
         <div
           onClick={() => onNavigateTab('homework')}
-          className="bento-card p-5 bg-white dark:bg-[#111726]/90 border border-slate-200/90 dark:border-white/[0.08] shadow-xs hover:border-amber-500/50 hover:shadow-md cursor-pointer flex flex-col justify-between group"
+          className="bento-card p-5 sm:p-5.5 rounded-3xl bg-gradient-to-br from-white via-white to-amber-50/25 dark:from-[#0E1726]/95 dark:via-[#10192A]/95 dark:to-[#221c1f]/95 border border-slate-200/80 dark:border-white/[0.08] shadow-xs hover:border-amber-500/50 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer flex flex-col justify-between group relative overflow-hidden"
         >
-          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider">
-            <span>{t('tile_hw')}</span>
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-amber-500 via-amber-400 to-rose-500" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold">
+                <BookOpen className="w-4 h-4" />
+              </div>
+              <span className="text-slate-600 dark:text-slate-400 text-xs font-bold uppercase tracking-wider">
+                {t('tile_hw')}
+              </span>
+            </div>
+            <ChevronRight className="w-4 h-4 text-slate-300 dark:text-slate-600 group-hover:text-amber-500 group-hover:translate-x-1 rtl:group-hover:-translate-x-1 transition-all" />
           </div>
-          <div className="my-3 flex items-center gap-3">
+
+          <div className="my-3.5 flex items-center gap-3.5">
             <ProgressRing
               progress={pendingHw.length > 0 ? Math.min(100, Math.round((pendingHw.filter((h) => h.priority === 'high').length / Math.max(1, pendingHw.length)) * 100)) : 0}
               size={56}
@@ -617,11 +903,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 </span>
               }
             />
-            <div className="text-2xl sm:text-3xl font-black font-['Outfit'] text-amber-600 dark:text-amber-400 tracking-tight">
+            <div className="text-2xl sm:text-3xl font-black font-['Outfit'] text-amber-700 dark:text-amber-300 tracking-tight">
               {pendingHw.length}
             </div>
           </div>
-          <span className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">
+
+          <span className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold truncate">
             {pendingHw.filter((h) => h.priority === 'high').length > 0
               ? isAr
                 ? `${pendingHw.filter((h) => h.priority === 'high').length} ذات أولوية قصوى`
@@ -632,15 +919,106 @@ export const Dashboard: React.FC<DashboardProps> = ({
       </div>
 
       {/* =========================================================
+          BENTO ROW 2.5: CORE BACCALAUREATE SUBJECTS MASTERY RADAR
+          ========================================================= */}
+      <div className="bento-card rounded-3xl bg-white/90 dark:bg-[#111726]/95 border border-slate-200/80 dark:border-white/[0.08] p-5 sm:p-6 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800/80 pb-3.5">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 shadow-xs">
+              <GraduationCap className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <span>{isAr ? 'مواد البكالوريا ومستوى الجاهزية' : 'Matières du Baccalauréat & Préparation'}</span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
+                  {coreSubjectsData.length} {isAr ? 'مواد أساسية' : 'matières clés'}
+                </span>
+              </h3>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                {isAr
+                  ? 'انقر على أي مادة لاختيارها فوراً في شريط المهام أو متابعة تقدمها'
+                  : 'Cliquez sur une matière pour la sélectionner dans vos tâches ou réviser'}
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => onNavigateTab('average')}
+            className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 flex items-center gap-1 shrink-0 self-end sm:self-center cursor-pointer transition-colors"
+          >
+            <span>{isAr ? 'سجل النقط والمعاملات' : 'Toutes les matières'}</span>
+            <ChevronRight className="w-3.5 h-3.5 rtl:rotate-180" />
+          </button>
+        </div>
+
+        {/* Subjects Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          {coreSubjectsData.map((subj) => (
+            <div
+              key={subj.id}
+              onClick={() => {
+                setQuickTaskSubject(subj.name);
+                setTaskFilter('all');
+              }}
+              className={`p-3.5 rounded-2xl border transition-all duration-200 cursor-pointer flex flex-col justify-between group shadow-xs ${subj.theme.cardBg} ${subj.theme.borderColor} ${subj.theme.hoverBorder} hover:shadow-md hover:-translate-y-0.5`}
+            >
+              <div className="flex items-center justify-between">
+                <div className={`w-2.5 h-2.5 rounded-full ${subj.theme.dotBg} ring-2 ring-white dark:ring-slate-900 shadow-xs`} />
+                <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${subj.theme.badgeBg}`}>
+                  Coeff {subj.coefficient}
+                </span>
+              </div>
+
+              <div className="my-2.5">
+                <div className="text-xs font-bold text-slate-900 dark:text-white truncate group-hover:underline">
+                  {subj.name}
+                </div>
+                <div className="flex items-baseline gap-1 mt-0.5">
+                  {subj.averageGrade !== null ? (
+                    <>
+                      <span className={`text-sm font-black font-['Outfit'] ${subj.theme.accentText}`}>
+                        {subj.averageGrade.toFixed(1)}
+                      </span>
+                      <span className="text-[10px] text-slate-400">/ 20</span>
+                    </>
+                  ) : (
+                    <span className="text-[10px] text-slate-400 font-medium">
+                      {subj.lessonsCount > 0
+                        ? `${subj.lessonsCount} ${isAr ? 'دروس' : 'leçons'}`
+                        : isAr ? 'قيد الإعداد' : 'En cours'}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-[10px] text-slate-400 font-medium">
+                  <span>{subj.doneTasks}/{subj.totalTasks} {isAr ? 'مهام' : 'tâches'}</span>
+                  <span>{subj.taskProgress}%</span>
+                </div>
+                <div className="w-full h-1.5 rounded-full bg-slate-200/70 dark:bg-slate-800/80 overflow-hidden">
+                  <div
+                    className={`h-full bg-gradient-to-r ${subj.theme.progressGradient} rounded-full transition-all duration-300`}
+                    style={{ width: `${subj.taskProgress}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* =========================================================
           BENTO ROW 3: DAILY EXECUTION (8 COLS) & DEADLINES RADAR (4 COLS)
           ========================================================= */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-5">
         {/* Bento Box 5: Daily Tasks & Interactive Streak Confirmation (8 cols) */}
-        <div className="lg:col-span-8 bento-card bg-white dark:bg-[#111726]/90 border border-slate-200/90 dark:border-white/[0.08] p-5 sm:p-6 shadow-sm space-y-4">
+        <div className="lg:col-span-8 bento-card relative overflow-hidden rounded-3xl bg-white dark:bg-[#111726]/95 border border-slate-200/80 dark:border-white/[0.08] p-5 sm:p-6 shadow-sm space-y-4">
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-teal-500 via-emerald-400 to-teal-600" />
           {/* Section Header */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800/80 pb-4">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-2xl bg-teal-500/10 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0 shadow-xs">
+              <div className="w-10 h-10 rounded-2xl bg-teal-500/10 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0 shadow-xs">
                 <CheckSquare className="w-5 h-5" />
               </div>
               <div>
@@ -652,18 +1030,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 </h3>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400">
                   {isAr
-                    ? 'اضغط على زر الدائرة لتأكيد إنجاز المهمة وإشعال شعلة الانضباط 🔥'
-                    : 'Cochez une tâche pour la valider et faire grimper votre série de révision 🔥'}
+                    ? 'اضغط على زر الدائرة لتأكيد إنجاز المهمة وإشعال شعلة الانضباط'
+                    : 'Cochez une tâche pour la valider et faire grimper votre série de révision'}
                 </p>
               </div>
             </div>
 
             <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
-              <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-900/80 p-1 rounded-xl text-xs font-semibold">
+              <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-900/90 p-1 rounded-xl text-xs font-semibold border border-slate-200/60 dark:border-slate-800">
                 <button
                   type="button"
                   onClick={() => setTaskFilter('all')}
-                  className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${taskFilter === 'all'
+                  className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${taskFilter === 'all'
                     ? 'bg-white dark:bg-slate-800 text-teal-600 dark:text-teal-400 shadow-xs'
                     : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
                     }`}
@@ -673,7 +1051,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <button
                   type="button"
                   onClick={() => setTaskFilter('todo')}
-                  className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${taskFilter === 'todo'
+                  className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${taskFilter === 'todo'
                     ? 'bg-white dark:bg-slate-800 text-teal-600 dark:text-teal-400 shadow-xs'
                     : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
                     }`}
@@ -683,7 +1061,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <button
                   type="button"
                   onClick={() => setTaskFilter('completed')}
-                  className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${taskFilter === 'completed'
+                  className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${taskFilter === 'completed'
                     ? 'bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-xs'
                     : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
                     }`}
@@ -694,17 +1072,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
               <button
                 onClick={() => onNavigateTab('tasks')}
-                className="text-xs font-bold text-teal-600 dark:text-teal-400 hover:underline flex items-center gap-1 shrink-0 ml-1 cursor-pointer"
+                className="text-xs font-bold text-teal-600 dark:text-teal-400 hover:text-teal-500 flex items-center gap-1 shrink-0 ml-1 cursor-pointer transition-colors"
               >
                 <span>{isAr ? 'عرض الكل' : 'Voir tout'}</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+                <ArrowRight className="w-3.5 h-3.5 rtl:rotate-180" />
               </button>
             </div>
           </div>
 
           {/* Daily Completion Progress Bar */}
           {(appData.tasks || []).length > 0 && (
-            <div className="space-y-1.5 bg-slate-50 dark:bg-slate-900/50 p-3 rounded-2xl border border-slate-100 dark:border-slate-800/80">
+            <div className="space-y-1.5 bg-slate-50/80 dark:bg-slate-900/50 p-3 rounded-2xl border border-slate-100 dark:border-slate-800/80">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-semibold text-slate-700 dark:text-slate-300">
                   {isAr ? 'نسبة إنجاز مهام اليوم:' : 'Progression des tâches :'}
@@ -732,26 +1110,40 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
           )}
 
-          {/* Quick Add Task Input Form on Dashboard */}
+          {/* Quick Add Task Input Form on Dashboard with Type Differentiation */}
           {onAddTask && (
-            <form onSubmit={handleQuickSubmitTask} className="flex flex-col sm:flex-row gap-2">
+            <form onSubmit={handleQuickSubmitTask} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 bg-slate-50 dark:bg-slate-900/60 p-2 sm:p-2.5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80">
               <input
                 type="text"
                 placeholder={
                   isAr
-                    ? 'أضف مهمة لليوم (مثال: تلخيص درس الإعداد العقدية)...'
-                    : 'Ajouter une tâche pour aujourd’hui (ex: Révision Mathématiques)...'
+                    ? 'أضف مهمة، واجب، أو فرض (مثال: واجب الأعداد العقدية ص 45)...'
+                    : 'Ajouter une tâche, devoir ou contrôle (ex: Devoir Maths p.45)...'
                 }
                 value={quickTaskTitle}
                 onChange={(e) => setQuickTaskTitle(e.target.value)}
-                className="flex-1 px-3.5 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
+                className="flex-1 px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 text-slate-900 dark:text-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all placeholder:text-slate-400"
               />
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {/* Task Type Selector */}
+                <select
+                  value={quickTaskType}
+                  onChange={(e) => setQuickTaskType(e.target.value as any)}
+                  className="px-2.5 py-2.5 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 text-slate-900 dark:text-white text-xs font-bold focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer"
+                  title={isAr ? 'نوع المهمة' : 'Type de tâche'}
+                >
+                  <option value="homework">{isAr ? '📚 واجب منزلي' : '📚 Devoir'}</option>
+                  <option value="quiz">{isAr ? '⚡ فرض محروس' : '⚡ Contrôle'}</option>
+                  <option value="exam">{isAr ? '🎯 إمتحان' : '🎯 Examen'}</option>
+                  <option value="project">{isAr ? '🎓 مشروع أستاذ' : '🎓 Projet'}</option>
+                  <option value="revision">{isAr ? '🧠 مراجعة' : '🧠 Révision'}</option>
+                </select>
+
                 <select
                   value={quickTaskSubject}
                   onChange={(e) => setQuickTaskSubject(e.target.value)}
-                  className="px-3 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white text-xs font-medium focus:outline-none"
+                  className="px-2.5 py-2.5 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 text-slate-900 dark:text-white text-xs font-medium focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer max-w-[130px] truncate"
                 >
                   {BAC_SUBJECTS.map((s) => (
                     <option key={s.id} value={s.name}>
@@ -763,17 +1155,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <select
                   value={quickTaskPriority}
                   onChange={(e) => setQuickTaskPriority(e.target.value as any)}
-                  className="px-3 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white text-xs font-medium focus:outline-none"
+                  className="px-2.5 py-2.5 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 text-slate-900 dark:text-white text-xs font-medium focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer"
                 >
-                  <option value="high">{isAr ? 'أولوية قصوى' : 'Priorité Haute'}</option>
-                  <option value="medium">{isAr ? 'أولوية متوسطة' : 'Priorité Moyenne'}</option>
-                  <option value="low">{isAr ? 'أولوية عادية' : 'Priorité Normale'}</option>
+                  <option value="urgent">{isAr ? '🚨 قصوى' : '🚨 Urgent'}</option>
+                  <option value="high">{isAr ? '🔴 مرتفعة' : '🔴 Haute'}</option>
+                  <option value="medium">{isAr ? '🟡 متوسطة' : '🟡 Moyenne'}</option>
+                  <option value="low">{isAr ? '🟢 عادية' : '🟢 Normale'}</option>
                 </select>
 
                 <button
                   type="submit"
                   disabled={!quickTaskTitle.trim()}
-                  className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-2xl bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white text-xs font-bold shadow-md shadow-teal-500/20 transition-all shrink-0 cursor-pointer"
+                  className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 disabled:opacity-50 text-white text-xs font-bold shadow-md shadow-teal-500/20 transition-all shrink-0 cursor-pointer active:scale-95"
                 >
                   <Plus className="w-4 h-4" />
                   <span>{isAr ? 'إضافة' : 'Ajouter'}</span>
@@ -782,43 +1175,89 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </form>
           )}
 
-          {/* Preset Quick Chips */}
+          {/* Preset Quick Chips (Distinct Types: Homework, Exam, Project, Revision) */}
           <div className="flex flex-wrap items-center gap-1.5 pt-1">
             <span className="text-[11px] font-bold text-slate-400">
-              {isAr ? 'أفكار سريعة:' : 'Suggestions :'}
+              {isAr ? 'إضافة سريعة مسبقة:' : 'Modèles rapides :'}
             </span>
             <button
               type="button"
-              onClick={() => handleAddPresetTask('Exercices Nombres Complexes', 'Mathématiques', 'high')}
-              className="text-[11px] px-2.5 py-1 rounded-xl bg-teal-500/10 hover:bg-teal-500/20 text-teal-700 dark:text-teal-300 font-semibold border border-teal-500/20 transition-all cursor-pointer"
+              onClick={() => handleAddPresetTask('Devoir Nombres Complexes', 'Mathématiques', 'high', 'homework')}
+              className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-xl bg-teal-500/10 hover:bg-teal-500/20 text-teal-700 dark:text-teal-300 font-semibold border border-teal-500/25 transition-all cursor-pointer"
             >
-              + 📐 Maths
+              <BookOpen className="w-3 h-3 text-teal-600 dark:text-teal-400" />
+              <span>{isAr ? 'واجب رياضيات' : 'Devoir Maths'}</span>
             </button>
             <button
               type="button"
-              onClick={() => handleAddPresetTask('Synthèse Physique-Chimie', 'Physique-Chimie', 'high')}
-              className="text-[11px] px-2.5 py-1 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 font-semibold border border-indigo-500/20 transition-all cursor-pointer"
+              onClick={() => handleAddPresetTask('Contrôle Continu Physique', 'Physique-Chimie', 'urgent', 'quiz')}
+              className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-700 dark:text-rose-300 font-semibold border border-rose-500/25 transition-all cursor-pointer"
             >
-              + ⚡ Physique
+              <Zap className="w-3 h-3 text-rose-600 dark:text-rose-400" />
+              <span>{isAr ? 'فرض فيزياء' : 'Contrôle PC'}</span>
             </button>
             <button
               type="button"
-              onClick={() => handleAddPresetTask('Schéma Bilan SVT', 'SVT', 'medium')}
-              className="text-[11px] px-2.5 py-1 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-semibold border border-emerald-500/20 transition-all cursor-pointer"
+              onClick={() => handleAddPresetTask('Projet Recherche Philosophie', 'Philosophie', 'medium', 'project')}
+              className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 font-semibold border border-amber-500/25 transition-all cursor-pointer"
             >
-              + 🧬 SVT
+              <GraduationCap className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+              <span>{isAr ? 'مشروع أستاذ' : 'Projet Philo'}</span>
             </button>
             <button
               type="button"
-              onClick={() => handleAddPresetTask('Concepts Clés Philosophie', 'Philosophie', 'medium')}
-              className="text-[11px] px-2.5 py-1 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-700 dark:text-purple-300 font-semibold border border-purple-500/20 transition-all cursor-pointer"
+              onClick={() => handleAddPresetTask('Schéma Bilan SVT', 'SVT', 'medium', 'revision')}
+              className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-xl bg-sky-500/10 hover:bg-sky-500/20 text-sky-700 dark:text-sky-300 font-semibold border border-sky-500/25 transition-all cursor-pointer"
             >
-              + 📚 Philo
+              <Brain className="w-3 h-3 text-sky-600 dark:text-sky-400" />
+              <span>{isAr ? 'تلخيص SVT' : 'Bilan SVT'}</span>
             </button>
           </div>
 
-          {/* Tasks List with Interactive Confirmation Check */}
-          <div className="space-y-2 pt-2 max-h-[360px] overflow-y-auto no-scrollbar">
+          {/* Urgent Spotlight Banner (When Overdue or Urgent tasks exist) */}
+          {urgentAttentionTasks.length > 0 && taskFilter !== 'completed' && (
+            <div className="p-3 sm:p-3.5 rounded-2xl bg-gradient-to-r from-rose-500/10 via-amber-500/10 to-transparent border-2 border-rose-500/30 dark:border-rose-500/40 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in duration-300">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-xl bg-rose-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-rose-500/30 animate-pulse">
+                  <AlertTriangle className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-black text-rose-700 dark:text-rose-300 flex items-center gap-1.5">
+                    <span>
+                      {isAr
+                        ? `تنبيه: لديك ${urgentAttentionTasks.length} مهام أو واجبات عاجلة تتطلب تركيزك!`
+                        : `Attention : ${urgentAttentionTasks.length} tâches/devoirs urgents requièrent votre attention !`}
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-slate-600 dark:text-slate-400 truncate">
+                    {isAr
+                      ? 'مهمة مستعجلة، انقر للانتقال إليها والبدء فوراً لضمان عدم التراكم:'
+                      : 'Priorités immédiates pour votre examen :'}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+                {urgentAttentionTasks.slice(0, 3).map((uTask) => (
+                  <button
+                    key={uTask.id}
+                    type="button"
+                    onClick={() => {
+                      chimePlayer.playChime('click');
+                      onNavigateTab('tasks');
+                    }}
+                    className="inline-flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-xl bg-white dark:bg-slate-900 border border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 font-bold hover:bg-rose-50 dark:hover:bg-rose-950/40 shadow-xs cursor-pointer transition-all active:scale-95"
+                  >
+                    <Flame className="w-2.5 h-2.5 text-rose-500 fill-rose-500" />
+                    <span className="max-w-[110px] truncate">{uTask.title}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Tasks List with Visual Differentiation System */}
+          <div className="space-y-2 pt-1 max-h-[380px] overflow-y-auto no-scrollbar">
             {(appData.tasks || [])
               .filter((task) => {
                 if (taskFilter === 'todo') return task.status !== 'completed';
@@ -828,20 +1267,28 @@ export const Dashboard: React.FC<DashboardProps> = ({
               .map((task) => {
                 const isCompleted = task.status === 'completed';
                 const subjectInfo = BAC_SUBJECTS.find((s) => s.name === task.subject);
+                const typeVisual = TASK_TYPES_VISUAL[task.type || 'revision'] || TASK_TYPES_VISUAL.revision;
+                const TypeIcon = typeVisual.icon;
+                const urgency = evaluateTaskUrgency(task.dueDate, task.dueTime, task.priority, language);
 
                 return (
                   <div
                     key={task.id}
-                    className={`p-3 sm:p-3.5 rounded-2xl border flex items-center justify-between gap-3 transition-all ${isCompleted
-                      ? 'bg-emerald-500/5 dark:bg-emerald-950/20 border-emerald-500/20 opacity-90'
-                      : 'bg-slate-50/70 dark:bg-slate-900/40 border-slate-200/80 dark:border-slate-800 hover:border-teal-500/40 hover:shadow-xs'
+                    className={`group p-3 sm:p-3.5 rounded-2xl border transition-all duration-200 flex items-center justify-between gap-3 ${isCompleted
+                      ? 'bg-emerald-500/5 dark:bg-emerald-950/20 border-emerald-500/20 opacity-80'
+                      : `${urgency.cardBgClass} ${urgency.borderLeftClass} hover:border-teal-500/60 hover:shadow-md`
                       }`}
                   >
-                    {/* Confirmation Button & Task Info */}
+                    {/* Confirmation Button & Task Visual Details */}
                     <div className="flex items-center gap-3 min-w-0 flex-1">
                       <button
                         type="button"
                         onClick={() => {
+                          if (isCompleted) {
+                            chimePlayer.playChime('uncheck');
+                          } else {
+                            chimePlayer.playChime('complete');
+                          }
                           if (onToggleTaskComplete) {
                             onToggleTaskComplete(task.id);
                           }
@@ -855,7 +1302,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                               ? 'تأكيد إنجاز المهمة وزيادة الشعلة'
                               : 'Confirmer la tâche pour allumer la flamme'
                         }
-                        className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-transform active:scale-90 cursor-pointer ${isCompleted
+                        className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform active:scale-90 cursor-pointer ${isCompleted
                           ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30'
                           : 'border-2 border-slate-300 dark:border-slate-600 hover:border-teal-500 hover:bg-teal-50 dark:hover:bg-teal-950/40 text-slate-400 hover:text-teal-600'
                           }`}
@@ -867,75 +1314,132 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         )}
                       </button>
 
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
+                      {/* Clickable Card Body: Navigates to Tasks Tab */}
+                      <div
+                        onClick={() => {
+                          chimePlayer.playChime('click');
+                          onNavigateTab('tasks');
+                        }}
+                        className="min-w-0 flex-1 cursor-pointer"
+                        title={isAr ? 'انقر للانتقال وتفاصيل المهمة' : 'Cliquez pour ouvrir la tâche'}
+                      >
+                        {/* Top Meta Row: Type Badge + Subject + Urgency Tag + Priority */}
+                        <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                          {/* 1. Distinct Task Type Badge */}
                           <span
-                            className={`text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate ${isCompleted ? 'line-through text-slate-400 dark:text-slate-500' : ''
-                              }`}
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border text-[10px] font-bold ${typeVisual.badgeClass}`}
                           >
-                            {task.title}
+                            <TypeIcon className="w-2.5 h-2.5" />
+                            <span>{isAr ? typeVisual.labelAr : typeVisual.labelFr}</span>
                           </span>
-                          {isCompleted && (
-                            <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[10px] font-black shrink-0">
-                              {isAr ? 'تم التأكيد 🔥' : 'Validée 🔥'}
-                            </span>
-                          )}
-                        </div>
 
-                        <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                          <span className="flex items-center gap-1">
+                          {/* 2. Subject Badge with Subject Dot */}
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 dark:text-slate-400">
                             <span
                               className={`w-2 h-2 rounded-full ${subjectInfo?.dotColor || 'bg-teal-500'}`}
                             />
                             <span>{task.subject}</span>
                           </span>
-                          <span>•</span>
-                          <span
-                            className={`font-semibold ${task.priority === 'high'
-                              ? 'text-rose-500'
-                              : task.priority === 'medium'
-                                ? 'text-amber-500'
-                                : 'text-slate-400'
+
+                          {/* 3. Urgency Tag (Overdue, Due Today, Soon) */}
+                          {!isCompleted && (
+                            <span
+                              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[10px] font-bold ${urgency.badgeClass}`}
+                            >
+                              <Clock className="w-2.5 h-2.5" />
+                              <span>{urgency.label}</span>
+                            </span>
+                          )}
+
+                          {/* 4. Urgent Priority Tag */}
+                          {(task.priority === 'urgent' || task.priority === 'high') && !isCompleted && (
+                            <span
+                              className={`inline-flex items-center gap-0.5 text-[10px] font-black px-1.5 py-0.5 rounded-md border ${
+                                task.priority === 'urgent'
+                                  ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30'
+                                  : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30'
                               }`}
-                          >
-                            {task.priority === 'high'
-                              ? isAr
-                                ? 'أولوية قصوى'
-                                : 'Haute'
-                              : task.priority === 'medium'
-                                ? isAr
-                                  ? 'أولوية متوسطة'
-                                  : 'Moyenne'
-                                : isAr
-                                  ? 'عادية'
-                                  : 'Basse'}
-                          </span>
-                          {task.estimatedHours && (
-                            <>
-                              <span>•</span>
-                              <span className="font-mono text-teal-600 dark:text-teal-400 font-semibold">
-                                ⏱️ {task.estimatedHours}h
+                            >
+                              <Flame className="w-2.5 h-2.5 fill-current" />
+                              <span>
+                                {task.priority === 'urgent'
+                                  ? (isAr ? 'عاجلة جداً' : 'Urgente')
+                                  : (isAr ? 'أولوية قصوى' : 'Haute')}
                               </span>
-                            </>
+                            </span>
                           )}
                         </div>
+
+                        {/* Task Title with Conditional Strikethrough & Hover Transition */}
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors ${isCompleted ? 'line-through text-slate-400 dark:text-slate-500' : ''
+                              }`}
+                          >
+                            {task.title}
+                          </span>
+                          {isCompleted && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[10px] font-black shrink-0">
+                              <Flame className="w-3 h-3 fill-emerald-500 text-emerald-500 shrink-0" />
+                              <span>{isAr ? 'تم التأكيد' : 'Validée'}</span>
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Subtasks Progress mini-bar if checklist exists */}
+                        {task.checklist && task.checklist.length > 0 && (
+                          <div className="flex items-center gap-2 mt-1.5">
+                            <div className="w-24 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-teal-500 rounded-full transition-all"
+                                style={{
+                                  width: `${
+                                    (task.checklist.filter((c) => c.completed).length /
+                                      task.checklist.length) *
+                                    100
+                                  }%`,
+                                }}
+                              />
+                            </div>
+                            <span className="text-[10px] font-medium text-slate-400">
+                              {task.checklist.filter((c) => c.completed).length}/{task.checklist.length}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
 
-                    {/* Delete button */}
-                    {onDeleteTask && (
+                    {/* Right: Quick Actions (Direct Open + Delete) */}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {/* Direct Open Button */}
                       <button
                         type="button"
                         onClick={() => {
-                          chimePlayer.playChime('delete');
-                          onDeleteTask(task.id);
+                          chimePlayer.playChime('click');
+                          onNavigateTab('tasks');
                         }}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors shrink-0 cursor-pointer"
-                        title="Supprimer"
+                        title={isAr ? 'فتح تفاصيل المهمة' : 'Ouvrir les détails'}
+                        className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-teal-50 dark:bg-slate-800/80 dark:hover:bg-teal-950/40 text-slate-600 hover:text-teal-600 dark:text-slate-400 dark:hover:text-teal-300 text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>{isAr ? 'فتح' : 'Ouvrir'}</span>
+                        <ArrowRight className="w-3 h-3 rtl:rotate-180" />
                       </button>
-                    )}
+
+                      {/* Delete button */}
+                      {onDeleteTask && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            chimePlayer.playChime('delete');
+                            onDeleteTask(task.id);
+                          }}
+                          className="w-8 h-8 flex items-center justify-center rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors shrink-0 cursor-pointer"
+                          title={isAr ? 'حذف' : 'Supprimer'}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -947,8 +1451,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 if (taskFilter === 'completed') return t.status === 'completed';
                 return true;
               }).length === 0) && (
-                <div className="text-center py-7 text-slate-400 text-xs font-medium border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl space-y-1.5">
-                  <Sparkles className="w-5 h-5 mx-auto text-teal-500/60" />
+                <div className="text-center py-8 text-slate-400 text-xs font-medium border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl space-y-2">
+                  <Sparkles className="w-6 h-6 mx-auto text-teal-500/60" />
                   <p>
                     {taskFilter === 'completed'
                       ? isAr
@@ -968,7 +1472,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
 
         {/* Bento Box 6: Deadlines & Next Up Radar (4 cols) */}
-        <div className="lg:col-span-4 bento-card bg-white dark:bg-[#111726]/90 border border-slate-200/90 dark:border-white/[0.08] p-5 sm:p-6 shadow-sm flex flex-col justify-between space-y-4">
+        <div className="lg:col-span-4 bento-card relative overflow-hidden rounded-3xl bg-white dark:bg-[#111726]/95 border border-slate-200/80 dark:border-white/[0.08] p-5 sm:p-6 shadow-sm flex flex-col justify-between space-y-4">
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-indigo-500 via-purple-400 to-amber-500" />
           <div className="space-y-4">
             {/* Header */}
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 pb-3">
@@ -996,24 +1501,24 @@ export const Dashboard: React.FC<DashboardProps> = ({
             {/* Upcoming Exams (Max 2) */}
             <div className="space-y-2">
               <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                <Award className="w-3 h-3 text-indigo-500" />
+                <Award className="w-3.5 h-3.5 text-indigo-500" />
                 <span>{isAr ? 'أقرب الفروض' : 'Prochaines Épreuves'}</span>
               </div>
               {upcomingExams.slice(0, 2).map((exam) => (
                 <div
                   key={exam.id}
                   onClick={() => onNavigateTab('quizzes')}
-                  className="p-3 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200/60 dark:border-indigo-800/40 flex items-center justify-between gap-2.5 cursor-pointer hover:border-indigo-400/60 transition-all"
+                  className="p-3 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/20 border border-indigo-200/60 dark:border-indigo-800/40 flex items-center justify-between gap-2.5 cursor-pointer hover:border-indigo-400/60 hover:shadow-xs transition-all duration-200 group"
                 >
                   <div className="min-w-0">
-                    <div className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                    <div className="text-xs font-bold text-slate-900 dark:text-white truncate group-hover:underline">
                       {exam.title}
                     </div>
                     <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
                       {exam.subject} • {exam.date}
                     </div>
                   </div>
-                  <span className="text-[11px] font-black font-['Outfit'] text-indigo-600 dark:text-indigo-400 shrink-0">
+                  <span className="text-[11px] font-black font-['Outfit'] text-indigo-600 dark:text-indigo-400 shrink-0 bg-white dark:bg-indigo-900/40 px-2 py-0.5 rounded-md border border-indigo-200 dark:border-indigo-700/60">
                     {exam.targetScore}/20
                   </span>
                 </div>
@@ -1028,20 +1533,27 @@ export const Dashboard: React.FC<DashboardProps> = ({
             {/* Pending Homework (Max 2) */}
             <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800/60">
               <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                <BookOpen className="w-3 h-3 text-amber-500" />
+                <BookOpen className="w-3.5 h-3.5 text-amber-500" />
                 <span>{isAr ? 'أقرب الواجبات' : 'Devoirs Urgents'}</span>
               </div>
               {pendingHw.slice(0, 2).map((hw) => (
                 <div
                   key={hw.id}
-                  className="p-3 rounded-2xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-800/40 flex items-center justify-between gap-2.5"
+                  className="p-3 rounded-2xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-800/40 flex items-center justify-between gap-2.5"
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
                     <button
-                      onClick={() => onToggleHomework(hw.id)}
-                      className="w-4 h-4 rounded-md border-2 border-slate-300 dark:border-slate-600 flex items-center justify-center shrink-0 hover:border-amber-500 transition-colors cursor-pointer"
+                      onClick={() => {
+                        if (hw.status === 'submitted') {
+                          chimePlayer.playChime('uncheck');
+                        } else {
+                          chimePlayer.playChime('complete');
+                        }
+                        onToggleHomework(hw.id);
+                      }}
+                      className="w-7 h-7 rounded-lg border-2 border-slate-300 dark:border-slate-600 flex items-center justify-center shrink-0 hover:border-amber-500 transition-colors cursor-pointer"
                     >
-                      {hw.status === 'submitted' && <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />}
+                      {hw.status === 'submitted' && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
                     </button>
                     <div className="min-w-0">
                       <div className="text-xs font-bold text-slate-900 dark:text-white truncate">
@@ -1052,7 +1564,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       </div>
                     </div>
                   </div>
-                  <span className="px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-600 dark:text-amber-400 shrink-0">
+                  <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/20 shrink-0">
                     {hw.priority}
                   </span>
                 </div>
@@ -1072,10 +1584,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </span>
             <button
               onClick={() => onNavigateTab('timeblocking')}
-              className="text-teal-600 dark:text-teal-400 font-bold hover:underline flex items-center gap-1 cursor-pointer"
+              className="text-teal-600 dark:text-teal-400 font-bold hover:text-teal-500 flex items-center gap-1 cursor-pointer transition-colors"
             >
               <span>{isAr ? 'فتح المخطط' : 'Ouvrir'}</span>
-              <ArrowRight className="w-3 h-3" />
+              <ArrowRight className="w-3.5 h-3.5 rtl:rotate-180" />
             </button>
           </div>
         </div>
@@ -1096,20 +1608,21 @@ export const Dashboard: React.FC<DashboardProps> = ({
         {/* Launchpad 1: Time Blocking Planner */}
         <div
           onClick={() => onNavigateTab('timeblocking')}
-          className="bento-card p-4 sm:p-5 bg-white dark:bg-[#111726]/90 border border-slate-200/90 dark:border-white/[0.08] shadow-xs hover:border-teal-500/50 hover:shadow-md cursor-pointer flex flex-col justify-between group"
+          className="bento-card p-4 sm:p-5 rounded-3xl bg-gradient-to-br from-white via-white to-teal-50/30 dark:from-[#0E1726]/95 dark:via-[#10192A]/95 dark:to-[#122432]/95 border border-slate-200/80 dark:border-white/[0.08] shadow-xs hover:border-teal-500/50 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer flex flex-col justify-between group relative overflow-hidden"
         >
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-teal-500 to-emerald-500" />
           <div className="flex items-center justify-between">
-            <div className="w-8 h-8 rounded-xl bg-teal-500/10 text-teal-600 dark:text-teal-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+            <div className="w-9 h-9 rounded-xl bg-teal-500/10 text-teal-600 dark:text-teal-400 flex items-center justify-center group-hover:scale-110 transition-transform">
               <CalendarClock className="w-4 h-4" />
             </div>
-            <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-1 rtl:group-hover:-translate-x-1 transition-transform" />
+            <ChevronRight className="w-4 h-4 text-slate-300 dark:text-slate-600 group-hover:text-teal-500 group-hover:translate-x-1 rtl:group-hover:-translate-x-1 transition-transform" />
           </div>
-          <div className="mt-3">
+          <div className="mt-3.5">
             <div className="text-sm font-bold text-slate-900 dark:text-white">
               {isAr ? 'جدول الحصص والتخطيط' : 'Time Blocking Planner'}
             </div>
             <div className="text-[11px] text-slate-400 mt-0.5">
-              {isAr ? 'سحب الملصقات والجدولة' : 'Glisser-déposer stickers & blocs'}
+              {isAr ? 'تنظيم الوقت ومخطط الحصص' : 'Glisser-déposer stickers & blocs'}
             </div>
           </div>
         </div>
@@ -1117,15 +1630,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
         {/* Launchpad 2: Leitner Smart Revision */}
         <div
           onClick={() => onNavigateTab('revision')}
-          className="bento-card p-4 sm:p-5 bg-white dark:bg-[#111726]/90 border border-slate-200/90 dark:border-white/[0.08] shadow-xs hover:border-purple-500/50 hover:shadow-md cursor-pointer flex flex-col justify-between group"
+          className="bento-card p-4 sm:p-5 rounded-3xl bg-gradient-to-br from-white via-white to-purple-50/30 dark:from-[#0E1726]/95 dark:via-[#10192A]/95 dark:to-[#1f1936]/95 border border-slate-200/80 dark:border-white/[0.08] shadow-xs hover:border-purple-500/50 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer flex flex-col justify-between group relative overflow-hidden"
         >
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-purple-500 to-indigo-500" />
           <div className="flex items-center justify-between">
-            <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+            <div className="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center group-hover:scale-110 transition-transform">
               <Brain className="w-4 h-4" />
             </div>
-            <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-1 rtl:group-hover:-translate-x-1 transition-transform" />
+            <ChevronRight className="w-4 h-4 text-slate-300 dark:text-slate-600 group-hover:text-purple-500 group-hover:translate-x-1 rtl:group-hover:-translate-x-1 transition-transform" />
           </div>
-          <div className="mt-3">
+          <div className="mt-3.5">
             <div className="text-sm font-bold text-slate-900 dark:text-white">
               {isAr ? 'المراجعة التكرارية الذكية' : 'Révision Leitner'}
             </div>
@@ -1138,15 +1652,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
         {/* Launchpad 3: Habits & Rituals */}
         <div
           onClick={() => onNavigateTab('habits')}
-          className="bento-card p-4 sm:p-5 bg-white dark:bg-[#111726]/90 border border-slate-200/90 dark:border-white/[0.08] shadow-xs hover:border-amber-500/50 hover:shadow-md cursor-pointer flex flex-col justify-between group"
+          className="bento-card p-4 sm:p-5 rounded-3xl bg-gradient-to-br from-white via-white to-amber-50/30 dark:from-[#0E1726]/95 dark:via-[#10192A]/95 dark:to-[#261e1b]/95 border border-slate-200/80 dark:border-white/[0.08] shadow-xs hover:border-amber-500/50 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer flex flex-col justify-between group relative overflow-hidden"
         >
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-amber-500 to-orange-500" />
           <div className="flex items-center justify-between">
-            <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+            <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center group-hover:scale-110 transition-transform">
               <Flame className="w-4 h-4" />
             </div>
-            <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-1 rtl:group-hover:-translate-x-1 transition-transform" />
+            <ChevronRight className="w-4 h-4 text-slate-300 dark:text-slate-600 group-hover:text-amber-500 group-hover:translate-x-1 rtl:group-hover:-translate-x-1 transition-transform" />
           </div>
-          <div className="mt-3">
+          <div className="mt-3.5">
             <div className="text-sm font-bold text-slate-900 dark:text-white">
               {isAr ? 'عادات الانضباط' : 'Rituels & Habitudes'}
             </div>
@@ -1157,16 +1672,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
 
         {/* Launchpad 4: Motivational Quote Bento Tile */}
-        <div className="bento-card p-4 sm:p-5 bg-gradient-to-br from-teal-500/10 via-indigo-500/10 to-purple-500/10 dark:from-teal-950/30 dark:via-indigo-950/30 dark:to-purple-950/30 border border-teal-500/30 shadow-xs flex flex-col justify-between group">
+        <div className="bento-card p-4 sm:p-5 rounded-3xl bg-gradient-to-br from-teal-500/10 via-indigo-500/10 to-purple-500/10 dark:from-teal-950/40 dark:via-indigo-950/35 dark:to-purple-950/35 border border-teal-500/30 shadow-xs hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between group relative overflow-hidden">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5 text-teal-600 dark:text-teal-400 text-xs font-bold uppercase tracking-wider">
-              <Sparkles className="w-3.5 h-3.5" />
+              <Quote className="w-3.5 h-3.5 text-teal-500 shrink-0" />
               <span>{isAr ? 'جرعة تحفيز' : 'Inspiration'}</span>
             </div>
             <button
               onClick={() => setQuoteIndex((prev) => prev + 1)}
-              className="p-1 rounded-lg text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors cursor-pointer"
-              title="Changer"
+              className="p-1.5 rounded-xl text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-white/40 dark:hover:bg-slate-800/60 transition-colors cursor-pointer"
+              title={isAr ? 'تغيير الحكمة' : 'Changer'}
             >
               <RefreshCw className="w-3.5 h-3.5" />
             </button>
@@ -1182,15 +1697,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
       {/* Modal: Edit Baccalaureate Date */}
       {isEditDateOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <div className="bg-white dark:bg-[#1E293B] text-slate-900 dark:text-white rounded-3xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4 animate-scale-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md">
+          <div className="bg-white dark:bg-[#111726] text-slate-900 dark:text-white rounded-3xl max-w-md w-full p-6 sm:p-7 border border-slate-200 dark:border-white/10 shadow-2xl space-y-5 animate-scale-in">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
               <h3 className="text-base font-bold font-['Outfit']">
                 {isAr ? 'تعديل موعد الامتحان' : 'Modifier la date de l\'examen'}
               </h3>
               <button
                 onClick={() => setIsEditDateOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer"
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1206,7 +1721,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   required
                   value={newStartDate}
                   onChange={(e) => setNewStartDate(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white font-bold text-sm focus:outline-none focus:border-teal-500"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white font-bold text-sm focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all"
                 />
                 <p className="text-[10px] text-slate-400 mt-1">
                   {isAr
@@ -1224,7 +1739,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   required
                   value={newBacDate}
                   onChange={(e) => setNewBacDate(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white font-bold text-sm focus:outline-none focus:border-teal-500"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white font-bold text-sm focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all"
                 />
               </div>
 
@@ -1232,13 +1747,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsEditDateOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold transition-all cursor-pointer"
                 >
                   {t('cancel')}
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold shadow-md shadow-teal-500/20 cursor-pointer"
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 text-white font-bold shadow-md shadow-teal-500/20 active:scale-95 transition-all cursor-pointer"
                 >
                   {t('save')}
                 </button>

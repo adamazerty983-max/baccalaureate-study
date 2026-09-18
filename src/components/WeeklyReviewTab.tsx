@@ -5,6 +5,8 @@ import {
   Award,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   TrendingUp,
   Save,
   CheckCircle,
@@ -226,6 +228,11 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
 
   // Selected Day in Bar chart (0..6, where 0=Monday)
   const [selectedDayIdx, setSelectedDayIdx] = useState<number | null>(null);
+
+  // Show More / Show Less for Subject Breakdown Tables (default 3 subjects visible)
+  const [isSubjectsExpanded, setIsSubjectsExpanded] = useState<boolean>(false);
+  const [isMonthlySubjectsExpanded, setIsMonthlySubjectsExpanded] = useState<boolean>(false);
+  const DEFAULT_VISIBLE_SUBJECTS = 3;
 
   // Dynamic achievements
   const achievements = useMemo(() => calculateAchievements(appData), [appData]);
@@ -799,6 +806,7 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
       prioritySubj,
       savedAt: Date.now(),
     };
+    chimePlayer.playChime('complete');
     onSaveWeeklyReview(weekMondayKey, data);
   };
 
@@ -814,6 +822,7 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
       prioritySubj: monthlyPrioritySubj,
       savedAt: Date.now(),
     };
+    chimePlayer.playChime('complete');
     onSaveMonthlyReview(selectedMonthKey, data);
   };
 
@@ -1319,6 +1328,9 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
                   <h4 className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2">
                     <ListOrdered className="w-4 h-4 text-teal-500" />
                     <span>{t('wr_subject_table_title') || (isAr ? 'جدول التفاصيل لكل مادة' : 'Détail complet par matière')}</span>
+                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-teal-500/10 text-teal-600 dark:text-teal-400">
+                      {isSubjectsExpanded ? BAC_SUBJECTS.length : Math.min(DEFAULT_VISIBLE_SUBJECTS, BAC_SUBJECTS.length)} / {BAC_SUBJECTS.length}
+                    </span>
                   </h4>
                   <span className="text-[11px] text-slate-400">
                     {isAr ? 'انقر على المادة للخيارات السريعة' : 'Cliquez pour voir les actions'}
@@ -1337,7 +1349,7 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
                       </tr>
                     </thead>
                     <tbody>
-                      {BAC_SUBJECTS.map((s) => {
+                      {(isSubjectsExpanded ? BAC_SUBJECTS : BAC_SUBJECTS.slice(0, DEFAULT_VISIBLE_SUBJECTS)).map((s) => {
                         const hrs = weeklyStats.subjectHoursMap[s.name] || 0;
                         const sess = weeklyStats.subjectSessionsMap[s.name] || 0;
                         const pct = weeklyStats.totalCompletedHours > 0 ? Math.round((hrs / weeklyStats.totalCompletedHours) * 100) : 0;
@@ -1391,6 +1403,30 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
                     </tbody>
                   </table>
                 </div>
+
+                {BAC_SUBJECTS.length > DEFAULT_VISIBLE_SUBJECTS && (
+                  <button
+                    type="button"
+                    onClick={() => setIsSubjectsExpanded(!isSubjectsExpanded)}
+                    className="w-full mt-2 py-2 px-4 rounded-xl border border-dashed border-teal-500/30 hover:border-teal-500/60 bg-teal-500/5 hover:bg-teal-500/10 text-teal-600 dark:text-teal-400 font-bold text-xs flex items-center justify-center gap-2 transition-all duration-200 group cursor-pointer shadow-xs"
+                  >
+                    {isSubjectsExpanded ? (
+                      <>
+                        <ChevronUp className="w-4 h-4 transition-transform group-hover:-translate-y-0.5" />
+                        <span>{isAr ? 'عرض أقل — Show Less' : 'Afficher moins — Show Less'}</span>
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="w-4 h-4 transition-transform group-hover:translate-y-0.5" />
+                        <span>
+                          {isAr
+                            ? `عرض المزيد (+${BAC_SUBJECTS.length - DEFAULT_VISIBLE_SUBJECTS} مواد متبقية) — Show More`
+                            : `Afficher plus (+${BAC_SUBJECTS.length - DEFAULT_VISIBLE_SUBJECTS} autres) — Show More`}
+                        </span>
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -1794,10 +1830,15 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
 
               {/* Detailed Monthly Subject Table */}
               <div className="space-y-2 pt-2">
-                <h4 className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                  <ListOrdered className="w-4 h-4 text-teal-500" />
-                  <span>{isAr ? 'تفاصيل كل مادة على حدة خلال الشهر' : 'Récapitulatif mensuel par matière'}</span>
-                </h4>
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <ListOrdered className="w-4 h-4 text-teal-500" />
+                    <span>{isAr ? 'تفاصيل كل مادة على حدة خلال الشهر' : 'Récapitulatif mensuel par matière'}</span>
+                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-teal-500/10 text-teal-600 dark:text-teal-400">
+                      {isMonthlySubjectsExpanded ? BAC_SUBJECTS.length : Math.min(DEFAULT_VISIBLE_SUBJECTS, BAC_SUBJECTS.length)} / {BAC_SUBJECTS.length}
+                    </span>
+                  </h4>
+                </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs text-left border-collapse">
                     <thead>
@@ -1809,7 +1850,7 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
                       </tr>
                     </thead>
                     <tbody>
-                      {BAC_SUBJECTS.map((s) => {
+                      {(isMonthlySubjectsExpanded ? BAC_SUBJECTS : BAC_SUBJECTS.slice(0, DEFAULT_VISIBLE_SUBJECTS)).map((s) => {
                         const hrs = monthlyStats.subjectHoursMap[s.name] || 0;
                         const sess = monthlyStats.subjectSessionsMap[s.name] || 0;
                         const pct = monthlyStats.totalMonthlyHours > 0 ? Math.round((hrs / monthlyStats.totalMonthlyHours) * 100) : 0;
@@ -1830,6 +1871,30 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
                     </tbody>
                   </table>
                 </div>
+
+                {BAC_SUBJECTS.length > DEFAULT_VISIBLE_SUBJECTS && (
+                  <button
+                    type="button"
+                    onClick={() => setIsMonthlySubjectsExpanded(!isMonthlySubjectsExpanded)}
+                    className="w-full mt-2 py-2 px-4 rounded-xl border border-dashed border-teal-500/30 hover:border-teal-500/60 bg-teal-500/5 hover:bg-teal-500/10 text-teal-600 dark:text-teal-400 font-bold text-xs flex items-center justify-center gap-2 transition-all duration-200 group cursor-pointer shadow-xs"
+                  >
+                    {isMonthlySubjectsExpanded ? (
+                      <>
+                        <ChevronUp className="w-4 h-4 transition-transform group-hover:-translate-y-0.5" />
+                        <span>{isAr ? 'عرض أقل — Show Less' : 'Afficher moins — Show Less'}</span>
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="w-4 h-4 transition-transform group-hover:translate-y-0.5" />
+                        <span>
+                          {isAr
+                            ? `عرض المزيد (+${BAC_SUBJECTS.length - DEFAULT_VISIBLE_SUBJECTS} مواد متبقية) — Show More`
+                            : `Afficher plus (+${BAC_SUBJECTS.length - DEFAULT_VISIBLE_SUBJECTS} autres) — Show More`}
+                        </span>
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             </div>
           </div>

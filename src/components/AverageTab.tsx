@@ -1,13 +1,15 @@
 import React, { useState, useMemo } from 'react';
-import { Calculator, Plus, Trash2, TrendingUp, Award, CheckCircle, X } from 'lucide-react';
+import { Calculator, Plus, Trash2, TrendingUp, Award, CheckCircle, X, Sparkles } from 'lucide-react';
+import { BacPcWhatIfSimulator } from './BacPcWhatIfSimulator';
 import { AppLanguage, GradeItem } from '../types';
-import { BAC_SUBJECTS } from '../utils/constants';
+import { BAC_SUBJECTS, getSubjectCoefficient } from '../utils/constants';
 import { chimePlayer } from '../utils/audio';
 import { getT } from '../utils/i18n';
 
 interface AverageTabProps {
   grades: GradeItem[];
   language: AppLanguage;
+  customCoefficients?: Record<string, number>;
   onAddGrade: (grade: Omit<GradeItem, 'id'>) => void;
   onDeleteGrade: (id: string) => void;
 }
@@ -15,6 +17,7 @@ interface AverageTabProps {
 export const AverageTab: React.FC<AverageTabProps> = ({
   grades,
   language,
+  customCoefficients,
   onAddGrade,
   onDeleteGrade,
 }) => {
@@ -22,9 +25,12 @@ export const AverageTab: React.FC<AverageTabProps> = ({
   const isAr = language === 'ar';
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [activeMode, setActiveMode] = useState<'grades' | 'simulator'>('grades');
   const [subject, setSubject] = useState(BAC_SUBJECTS[0].name);
   const [gradeValue, setGradeValue] = useState('17.5');
-  const [coeffValue, setCoeffValue] = useState('7');
+  const [coeffValue, setCoeffValue] = useState(() =>
+    String(getSubjectCoefficient(BAC_SUBJECTS[0].name, customCoefficients))
+  );
   const [dateValue, setDateValue] = useState(() => new Date().toISOString().slice(0, 10));
   const [notesValue, setNotesValue] = useState('');
 
@@ -81,13 +87,48 @@ export const AverageTab: React.FC<AverageTabProps> = ({
       notes: notesValue.trim() || undefined,
     });
 
-    
+    chimePlayer.playChime('add');
     setIsModalOpen(false);
     setNotesValue('');
   };
 
   return (
     <div className="space-y-6 pb-16">
+      {/* Mode Tab Switcher */}
+      <div className="flex items-center gap-2 p-1 bg-slate-100 dark:bg-[#0E182A] rounded-2xl border border-slate-200 dark:border-slate-700/60">
+        <button
+          onClick={() => setActiveMode('grades')}
+          className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 ${
+            activeMode === 'grades'
+              ? 'bg-white dark:bg-[#1A2535] text-teal-600 dark:text-teal-400 shadow-md'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+          }`}
+        >
+          <Calculator className="w-4 h-4" />
+          <span>{isAr ? 'سجل الفروض والنقط' : 'Saisie des notes'}</span>
+        </button>
+        <button
+          onClick={() => setActiveMode('simulator')}
+          className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 ${
+            activeMode === 'simulator'
+              ? 'bg-white dark:bg-[#1A2535] text-violet-600 dark:text-violet-400 shadow-md'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+          }`}
+        >
+          <Sparkles className="w-4 h-4" />
+          <span>{isAr ? 'محاكي ميزة الباك — علوم فيزيائية' : 'Simulateur Mention Bac (PC)'}</span>
+          <span className="px-1.5 py-0.5 rounded-md bg-violet-500/15 text-violet-500 dark:text-violet-400 text-[10px] font-black">PC</span>
+        </button>
+      </div>
+
+      {/* Simulator View */}
+      {activeMode === 'simulator' && (
+        <BacPcWhatIfSimulator language={language} />
+      )}
+
+      {/* Grades View */}
+      {activeMode === 'grades' && (<>
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-[#1A2535] p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
         <div>
@@ -103,7 +144,10 @@ export const AverageTab: React.FC<AverageTabProps> = ({
         </div>
 
         <button
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => {
+            setCoeffValue(String(getSubjectCoefficient(subject, customCoefficients)));
+            setIsModalOpen(true);
+          }}
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold shadow-md shadow-teal-500/20 transition-all active:scale-95"
         >
           <Plus className="w-4 h-4" />
@@ -116,7 +160,7 @@ export const AverageTab: React.FC<AverageTabProps> = ({
         {/* Large Score Card */}
         <div className="md:col-span-2 bg-gradient-to-br from-teal-900 via-slate-900 to-indigo-950 text-white p-6 rounded-3xl border border-teal-500/30 shadow-xl relative overflow-hidden flex flex-col justify-between">
           <div className="absolute top-0 right-0 w-48 h-48 bg-teal-500/10 rounded-full blur-3xl pointer-events-none" />
-          
+
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-teal-300">
               {t('weighted_avg')}
@@ -197,9 +241,8 @@ export const AverageTab: React.FC<AverageTabProps> = ({
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <span
-                    className={`w-3 h-3 rounded-full shrink-0 ${
-                      subjectInfo?.dotColor || 'bg-teal-500'
-                    }`}
+                    className={`w-3 h-3 rounded-full shrink-0 ${subjectInfo?.dotColor || 'bg-teal-500'
+                      }`}
                   />
                   <div className="min-w-0">
                     <div className="text-xs font-bold text-slate-900 dark:text-white truncate">
@@ -228,7 +271,10 @@ export const AverageTab: React.FC<AverageTabProps> = ({
                   </div>
 
                   <button
-                    onClick={() => onDeleteGrade(item.id)}
+                    onClick={() => {
+                      chimePlayer.playChime('delete');
+                      onDeleteGrade(item.id);
+                    }}
                     className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
                     title={t('delete')}
                   >
@@ -254,7 +300,10 @@ export const AverageTab: React.FC<AverageTabProps> = ({
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
               <h3 className="text-base font-bold font-['Outfit']">{t('add_grade')}</h3>
               <button
-                onClick={() => setIsModalOpen(false)}
+                onClick={() => {
+                  chimePlayer.playChime('modal_close');
+                  setIsModalOpen(false);
+                }}
                 className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white"
               >
                 <X className="w-5 h-5" />
@@ -268,7 +317,11 @@ export const AverageTab: React.FC<AverageTabProps> = ({
                 </label>
                 <select
                   value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
+                  onChange={(e) => {
+                    const newSubj = e.target.value;
+                    setSubject(newSubj);
+                    setCoeffValue(String(getSubjectCoefficient(newSubj, customCoefficients)));
+                  }}
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white font-medium focus:outline-none focus:border-teal-500"
                 >
                   {BAC_SUBJECTS.map((s) => (
@@ -357,6 +410,7 @@ export const AverageTab: React.FC<AverageTabProps> = ({
           </div>
         </div>
       )}
+    </>)}
     </div>
   );
 };

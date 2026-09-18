@@ -17,6 +17,8 @@ yarn-error.log*
 # Build outputs
 dist/
 build/
+release/
+dist-electron/
 *.log
 
 # Environment files
@@ -50,4 +52,14 @@ dev.log
 dist
 install.log
 node_modules
+
+# Local tool state. Tailwind v4's automatic source detection scans every
+# non-ignored file in the project for class names, so a notes file that merely
+# mentions a utility class silently injects that rule into the built CSS.
+# (Confirmed: these notes were the source of a stray rule in the bundle.)
+.workbuddy-ai/
+
+# Extra git worktrees live here. Git does not honour an ignore rule for a
+# registered worktree path, but Tailwind skips the nested repo anyway.
+.kilo/
 

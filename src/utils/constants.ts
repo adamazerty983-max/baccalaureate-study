@@ -8,6 +8,7 @@ import {
   HomeworkItem,
   LectureNote,
   LessonRevisionItem,
+  NotificationPreferences,
   QuizItem,
   TaskItem,
   TimeBlock,
@@ -29,6 +30,165 @@ export const BAC_SUBJECTS = [
   { id: 'computer_science', name: 'Informatique', color: 'from-indigo-500 to-violet-700', dotColor: 'bg-indigo-500', hexColor: '#0277BD', badgeColor: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/80 dark:text-indigo-300 border-indigo-300 dark:border-indigo-700', coefficient: 3 },
   { id: 'general', name: 'Révision Générale', color: 'from-slate-500 to-gray-700', dotColor: 'bg-slate-400', hexColor: '#C4622D', badgeColor: 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-300 dark:border-slate-700', coefficient: 2 },
 ];
+
+export interface BacTrackPreset {
+  id: string;
+  name: { fr: string; ar: string; en: string };
+  shortName: { fr: string; ar: string; en: string };
+  badge: string;
+  coefficients: Record<string, number>;
+}
+
+export const BAC_TRACK_PRESETS: BacTrackPreset[] = [
+  {
+    id: 'sm',
+    name: {
+      fr: 'Sciences Mathématiques (SM)',
+      ar: 'علوم رياضية (أ / ب)',
+      en: 'Mathematical Sciences',
+    },
+    shortName: { fr: 'Sciences Maths', ar: 'علوم رياضية', en: 'Math Sciences' },
+    badge: 'SM-A/B',
+    coefficients: {
+      'Mathématiques': 9,
+      'Physique Chimie': 7,
+      'Sciences de la Vie et de la Terre': 3,
+      'Français': 4,
+      'Philosophie': 2,
+      'Anglais': 2,
+      'Arabe': 2,
+      'Éducation Islamique': 2,
+      'Histoire & Géographie': 2,
+      'Informatique': 2,
+      'Économie & Sociologie': 1,
+      'Révision Générale': 1,
+    },
+  },
+  {
+    id: 'pc',
+    name: {
+      fr: 'Sciences Physiques (PC)',
+      ar: 'مسلك العلوم الفيزيائية (PC)',
+      en: 'Physical Sciences (PC)',
+    },
+    shortName: { fr: 'Sciences Physiques', ar: 'علوم فيزيائية', en: 'Physics/Chem' },
+    badge: 'PC',
+    coefficients: {
+      'Physique Chimie': 7,
+      'Mathématiques': 7,
+      'Sciences de la Vie et de la Terre': 5,
+      'Français': 4,
+      'Philosophie': 2,
+      'Anglais': 2,
+      'Arabe': 2,
+      'Éducation Islamique': 2,
+      'Histoire & Géographie': 2,
+      'Informatique': 2,
+      'Économie & Sociologie': 1,
+      'Révision Générale': 1,
+    },
+  },
+  {
+    id: 'svt',
+    name: {
+      fr: 'Sciences de la Vie et de la Terre (SVT)',
+      ar: 'مسلك علوم الحياة والأرض (SVT)',
+      en: 'Life & Earth Sciences (SVT)',
+    },
+    shortName: { fr: 'SVT', ar: 'علوم الحياة والأرض', en: 'SVT' },
+    badge: 'SVT',
+    coefficients: {
+      'Sciences de la Vie et de la Terre': 7,
+      'Mathématiques': 7,
+      'Physique Chimie': 5,
+      'Français': 4,
+      'Philosophie': 2,
+      'Anglais': 2,
+      'Arabe': 2,
+      'Éducation Islamique': 2,
+      'Histoire & Géographie': 2,
+      'Informatique': 2,
+      'Économie & Sociologie': 1,
+      'Révision Générale': 1,
+    },
+  },
+  {
+    id: 'eco',
+    name: {
+      fr: 'Sciences Économiques & Gestion',
+      ar: 'مسلك العلوم الاقتصادية والتدبير',
+      en: 'Economics & Management Sciences',
+    },
+    shortName: { fr: 'Sciences Éco', ar: 'علوم اقتصادية', en: 'Economics' },
+    badge: 'ÉCO',
+    coefficients: {
+      'Économie & Sociologie': 6,
+      'Mathématiques': 4,
+      'Français': 4,
+      'Histoire & Géographie': 3,
+      'Philosophie': 2,
+      'Anglais': 2,
+      'Arabe': 2,
+      'Éducation Islamique': 2,
+      'Informatique': 3,
+      'Physique Chimie': 2,
+      'Sciences de la Vie et de la Terre': 1,
+      'Révision Générale': 1,
+    },
+  },
+  {
+    id: 'lettres',
+    name: {
+      fr: 'Lettres & Sciences Humaines',
+      ar: 'مسلك الآداب والعلوم الإنسانية',
+      en: 'Literature & Humanities',
+    },
+    shortName: { fr: 'Lettres & Humaines', ar: 'آداب وإنسانية', en: 'Literature' },
+    badge: 'LETTRES',
+    coefficients: {
+      'Arabe': 5,
+      'Histoire & Géographie': 4,
+      'Philosophie': 4,
+      'Français': 4,
+      'Anglais': 3,
+      'Éducation Islamique': 2,
+      'Mathématiques': 1,
+      'Informatique': 2,
+      'Physique Chimie': 1,
+      'Sciences de la Vie et de la Terre': 1,
+      'Économie & Sociologie': 1,
+      'Révision Générale': 1,
+    },
+  },
+];
+
+/**
+ * Returns the effective coefficient for a given subject name or ID,
+ * prioritizing user custom coefficients, then presets/defaults in BAC_SUBJECTS.
+ */
+export function getSubjectCoefficient(
+  subjectNameOrId: string,
+  customCoefficients?: Record<string, number>
+): number {
+  if (customCoefficients) {
+    if (customCoefficients[subjectNameOrId] !== undefined) {
+      return customCoefficients[subjectNameOrId];
+    }
+    const foundEntry = Object.entries(customCoefficients).find(
+      ([k]) => k.toLowerCase() === subjectNameOrId.toLowerCase()
+    );
+    if (foundEntry && foundEntry[1] !== undefined) {
+      return foundEntry[1];
+    }
+  }
+
+  const foundSubject = BAC_SUBJECTS.find(
+    (s) =>
+      s.name.toLowerCase() === subjectNameOrId.toLowerCase() ||
+      s.id.toLowerCase() === subjectNameOrId.toLowerCase()
+  );
+  return foundSubject ? foundSubject.coefficient : 2;
+}
 
 export const ACTIVITY_STICKERS: ActivitySticker[] = [
   {
@@ -153,9 +313,29 @@ export const ACTIVITY_STICKERS: ActivitySticker[] = [
   },
 ];
 
+export const INITIAL_NOTIFICATIONS_PREFERENCES: NotificationPreferences = {
+  enabled: true,
+  modules: {
+    tasks: true,
+    quizzes: true,
+    homework: true,
+    lessons: true,
+    goals: true,
+    habits: true,
+  },
+  leadTimeMinutes: 30,
+  habitReminderTime: '20:00',
+  quietHours: {
+    enabled: true,
+    start: '23:00',
+    end: '07:00',
+  },
+};
+
 export const INITIAL_SETTINGS: AppSettings = {
   language: 'fr',
   theme: 'light',
+  uiStyle: 'classic',
   fontSize: 'base',
   baccalaureateDate: '2027-06-10T08:00:00',
   academicYearStartDate: '2026-09-07T08:00:00',
@@ -167,6 +347,7 @@ export const INITIAL_SETTINGS: AppSettings = {
   soundVolume: 0.65,
   autoSave: true,
   favorites: ['quizzes', 'homework', 'planner'],
+  notifications: INITIAL_NOTIFICATIONS_PREFERENCES,
 };
 
 export const INITIAL_TASKS: TaskItem[] = [];

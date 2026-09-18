@@ -11,10 +11,10 @@ const GIF_SRC = '/campfire-streak.gif';
 const POSTER_SRC = '/campfire-streak-poster.png';
 
 /**
- * Daily streak campfire — geometric motion-design loop.
- * Primary: transparent WebM. If the browser cannot decode/autoplay it within a
- * short grace period, we swap to the animated transparent GIF so the fire
- * always moves.
+ * Original Baccalaureate Study Hub Campfire Animation
+ * Powered by high-definition motion loop (WebM VP9 + transparent GIF fallback).
+ * When pending (isFrozen = true), turns mystical blue via hue rotation.
+ * When completed (isFrozen = false), burns in original golden-amber campfire flame.
  */
 export const DuolingoStreakFlame: React.FC<DuolingoStreakFlameProps> = ({
   size = 140,
@@ -51,7 +51,7 @@ export const DuolingoStreakFlame: React.FC<DuolingoStreakFlameProps> = ({
       attempt.catch(fallback);
     }
 
-    // Autoplay-policy or codec problems: if nothing is moving soon, use the GIF.
+    // Fallback if video takes too long to play
     const timer = window.setTimeout(() => {
       if (video.paused || video.readyState < 3) fallback();
     }, 2000);
@@ -64,32 +64,38 @@ export const DuolingoStreakFlame: React.FC<DuolingoStreakFlameProps> = ({
   }, [useGif]);
 
   const mediaStyle: React.CSSProperties = {
-    transform: 'scale(1.18)',
-    filter: isFrozen ? 'hue-rotate(185deg) saturate(1.2) brightness(1.1)' : undefined,
+    transform: 'scale(1.15)',
+    filter: isFrozen
+      ? 'hue-rotate(185deg) saturate(1.35) brightness(1.08) drop-shadow(0 8px 20px rgba(14, 165, 233, 0.4))'
+      : 'drop-shadow(0 8px 20px rgba(249, 115, 22, 0.4))',
+    transition: 'filter 0.6s ease-in-out, transform 0.3s ease',
   };
+
   const mediaClass =
-    'relative z-10 w-full h-full object-contain pointer-events-none drop-shadow-[0_8px_18px_rgba(249,115,22,0.35)] transition-all duration-500 group-hover:scale-105';
+    'relative z-10 w-full h-full object-contain pointer-events-none transition-all duration-500 group-hover:scale-105';
 
   return (
     <div
       className={`relative flex items-center justify-center select-none ${className}`}
       style={{ width: size, height: size }}
+      aria-hidden="true"
     >
       <style>{`
         @keyframes campfire-glow-breathe {
-          0%, 100% { opacity: 0.75; transform: scale(1); }
-          50% { opacity: 1; transform: scale(1.12) translateY(-3px); }
+          0%, 100% { opacity: 0.65; transform: scale(1); }
+          50% { opacity: 0.95; transform: scale(1.12) translateY(-2px); }
         }
       `}</style>
 
-      {/* Ambient glow that breathes with the fire */}
+      {/* Ambient glow that breathes with the campfire */}
       <div
-        className={`absolute rounded-full blur-2xl pointer-events-none transition-colors duration-700 ${isFrozen
-            ? 'bg-cyan-400/25'
-            : 'bg-gradient-to-t from-orange-500/40 via-amber-400/25 to-transparent'
-          }`}
+        className={`absolute rounded-full blur-2xl pointer-events-none transition-all duration-700 ${
+          isFrozen
+            ? 'bg-sky-400/25 shadow-[0_0_35px_rgba(14,165,233,0.35)]'
+            : 'bg-gradient-to-t from-orange-500/40 via-amber-400/25 to-transparent shadow-[0_0_35px_rgba(245,158,11,0.35)]'
+        }`}
         style={{
-          inset: size * 0.18,
+          inset: size * 0.15,
           animation: 'campfire-glow-breathe 2.4s ease-in-out infinite',
         }}
       />
@@ -97,7 +103,7 @@ export const DuolingoStreakFlame: React.FC<DuolingoStreakFlameProps> = ({
       {useGif ? (
         <img
           src={GIF_SRC}
-          alt=""
+          alt="Campfire Streak"
           aria-hidden="true"
           draggable={false}
           className={mediaClass}

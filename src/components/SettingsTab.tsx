@@ -25,13 +25,32 @@ import {
   FileJson,
   Check,
   Copy,
+  Sliders,
+  Minus,
+  Plus,
+  GraduationCap,
+  Sparkles,
+  Bell,
+  BellRing,
+  BellOff,
+  Clock,
+  Flame,
+  BookOpen,
+  CheckSquare,
+  Brain,
+  Award,
+  Target,
+  Info,
+  Palette,
 } from 'lucide-react';
-import { AppLanguage, AppSettings, FontSizeOption, FullAppData, ThemeMode } from '../types';
+import { AppLanguage, AppSettings, FontSizeOption, FullAppData, ThemeMode, UiStyleMode } from '../types';
+import { BAC_SUBJECTS, BAC_TRACK_PRESETS, BacTrackPreset, getSubjectCoefficient, INITIAL_NOTIFICATIONS_PREFERENCES } from '../utils/constants';
 import { exportAppDataToFile } from '../utils/storage';
 import { chimePlayer } from '../utils/audio';
 import { getT } from '../utils/i18n';
 import { DatabaseSyncState, logoutUser } from '../services/firestoreService';
 import { GoogleAuthButton } from './GoogleAuthButton';
+import { notificationService } from '../services/notificationService';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 interface SettingsTabProps {
@@ -62,6 +81,10 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
   const [importError, setImportError] = useState<string | null>(null);
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [downloadedBackupInfo, setDownloadedBackupInfo] = useState<{ filename: string; timestamp: string } | null>(null);
+  const [browserPerm, setBrowserPerm] = useState<NotificationPermission>(() =>
+    notificationService.getPermission()
+  );
+  const [testSent, setTestSent] = useState(false);
 
   const totalTasks = fullData.tasks.length;
   const totalQuizzes = fullData.quizzes.length;
@@ -82,6 +105,45 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
     totalTimeBlocks;
   const estimatedSizeKb = (new Blob([JSON.stringify(fullData)]).size / 1024).toFixed(1);
 
+  const handleSelectTrackPreset = (preset: BacTrackPreset) => {
+    const trackLabel = preset.name[language] || preset.name.fr;
+    onUpdateSettings({
+      baccalaureateTrack: trackLabel,
+      customCoefficients: { ...preset.coefficients },
+    });
+    if (settings.chimeSoundEnabled) {
+      chimePlayer.playChime('click');
+    }
+  };
+
+  const handleUpdateSubjectCoeff = (subjectName: string, delta: number) => {
+    const currentCoeff = getSubjectCoefficient(subjectName, settings.customCoefficients);
+    const newCoeff = Math.max(1, Math.min(15, currentCoeff + delta));
+    const newMap: Record<string, number> = {
+      ...(settings.customCoefficients || {}),
+      [subjectName]: newCoeff,
+    };
+    onUpdateSettings({ customCoefficients: newMap });
+    if (settings.chimeSoundEnabled) {
+      chimePlayer.playChime('click');
+    }
+  };
+
+  const handleResetCoefficients = () => {
+    const defaultMap: Record<string, number> = {};
+    BAC_SUBJECTS.forEach((s) => {
+      defaultMap[s.name] = s.coefficient;
+    });
+    onUpdateSettings({ customCoefficients: defaultMap });
+    if (settings.chimeSoundEnabled) {
+      chimePlayer.playChime();
+    }
+  };
+
+  const totalCoefficientsSum = BAC_SUBJECTS.reduce((sum, subj) => {
+    return sum + getSubjectCoefficient(subj.name, settings.customCoefficients);
+  }, 0);
+
   const handleDownloadBackup = () => {
     const filename = exportAppDataToFile(fullData);
     setDownloadedBackupInfo({
@@ -89,6 +151,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
       timestamp: new Date().toLocaleTimeString(),
     });
     setImportError(null);
+    chimePlayer.playChime('complete');
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -103,12 +166,14 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
         if (parsed.tasks && parsed.quizzes) {
           onImportData(parsed);
           setImportError(null);
-
+          chimePlayer.playChime('complete');
         } else {
           setImportError('Format de données JSON invalide.');
+          chimePlayer.playChime('error');
         }
       } catch (err) {
         setImportError('Impossible de lire le fichier JSON.');
+        chimePlayer.playChime('error');
       }
     };
     reader.readAsText(file);
@@ -122,6 +187,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
     a.download = `mybac-studyhub-offline.html`;
     document.body.appendChild(a);
     a.click();
+    chimePlayer.playChime('complete');
     setTimeout(() => {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
@@ -350,6 +416,69 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
         </div>
       </section>
 
+      {/* 2b. Interface Style — Classic vs MyBac Tracker skin */}
+      <section className="bg-white dark:bg-[#1A2535] p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+          <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <Palette className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+            <span>{t('settings_style')}</span>
+          </h2>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {[
+            {
+              id: 'classic' as UiStyleMode,
+              label: t('settings_style_classic'),
+              sub: t('settings_style_classic_sub'),
+              swatch: ['#0F172A', '#14B8A6', '#E2E8F0'],
+            },
+            {
+              id: 'mybac' as UiStyleMode,
+              label: t('settings_style_mybac'),
+              sub: t('settings_style_mybac_sub'),
+              swatch: ['#134848', '#C89B3C', '#F2EDE4'],
+            },
+          ].map((item) => {
+            const isSelected = (settings.uiStyle ?? 'classic') === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => onUpdateSettings({ uiStyle: item.id })}
+                className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${isSelected
+                  ? 'border-teal-500 bg-teal-50/50 dark:bg-teal-950/40 shadow-xs'
+                  : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/40'
+                  }`}
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  {item.swatch.map((color) => (
+                    <span
+                      key={color}
+                      className="w-4 h-4 rounded-full border border-black/10"
+                      style={{ backgroundColor: color }}
+                    />
+                  ))}
+                  {isSelected && (
+                    <CheckCircle2 className="w-4 h-4 text-teal-600 dark:text-teal-400 ml-auto" />
+                  )}
+                </div>
+                <div className="text-xs font-bold text-slate-900 dark:text-white">{item.label}</div>
+                <div className="text-[11px] text-slate-400 mt-1">{item.sub}</div>
+              </button>
+            );
+          })}
+        </div>
+
+        <p className="text-[11px] text-slate-400">
+          {language === 'ar'
+            ? 'يمكنك الرجوع إلى النمط الكلاسيكي في أي وقت من هنا.'
+            : language === 'en'
+              ? 'You can switch back to the classic look at any time from here.'
+              : 'Vous pouvez revenir au style classique à tout moment depuis ici.'}
+        </p>
+      </section>
+
       {/* 3. Exam Date Cooldown */}
       <section className="bg-white dark:bg-[#1A2535] p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
         <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
@@ -397,6 +526,193 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
       </section>
 
       {/* 4. Sound Effects */}
+      {/* 4. Baccalaureate Track & Subject Coefficients Customization */}
+      <section className="bg-white dark:bg-[#1A2535] p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3.5 border-b border-slate-100 dark:border-slate-800">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-teal-500/10 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0">
+              <Sliders className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <span>
+                  {isAr
+                    ? 'شعبة البكالوريا وتخصيص معاملات المواد'
+                    : language === 'fr'
+                    ? 'Filière & Personnalisation des Coefficients'
+                    : 'Baccalaureate Track & Subject Coefficients'}
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20">
+                  {settings.baccalaureateTrack || (isAr ? 'مسلك مخصص' : 'Personnalisé')}
+                </span>
+              </h2>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                {isAr
+                  ? 'اختر مسلك البكالوريا لتطبيق المعاملات الرسمية بنقرة واحدة، أو اضبط معامل كل مادة يدوياً.'
+                  : language === 'fr'
+                  ? 'Sélectionnez votre filière officielle ou ajustez les coefficients manuellement selon vos besoins.'
+                  : 'Select your official track to apply standard coefficients or customize each subject manually.'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
+            <span className="px-3 py-1.5 rounded-xl bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800/60 text-teal-700 dark:text-teal-300 text-xs font-bold flex items-center gap-1.5">
+              <GraduationCap className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+              <span>
+                {isAr ? 'مجموع المعاملات: ' : 'Total: '}
+                <strong className="font-mono text-sm">{totalCoefficientsSum}</strong>
+              </span>
+            </span>
+          </div>
+        </div>
+
+        {/* Track Preset Selector Buttons */}
+        <div className="space-y-2">
+          <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            {isAr ? 'نماذج الشعب الرسمية (تطبيق فوري)' : 'Filières officielles du Baccalauréat'}
+          </label>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
+            {BAC_TRACK_PRESETS.map((preset) => {
+              const currentTrackName = settings.baccalaureateTrack || '';
+              const isSelected =
+                currentTrackName.includes(preset.shortName[language]) ||
+                currentTrackName.includes(preset.shortName.fr) ||
+                currentTrackName.includes(preset.badge);
+
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => handleSelectTrackPreset(preset)}
+                  className={`p-3 rounded-xl border text-left rtl:text-right transition-all flex flex-col justify-between min-h-[64px] cursor-pointer active:scale-95 ${
+                    isSelected
+                      ? 'border-teal-500 bg-teal-500/10 dark:bg-teal-950/40 text-teal-900 dark:text-teal-100 shadow-xs ring-1 ring-teal-500/40'
+                      : 'border-slate-200 dark:border-slate-800 hover:border-teal-500/40 hover:bg-slate-50 dark:hover:bg-slate-900/40 text-slate-700 dark:text-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span className="text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-slate-200/70 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                      {preset.badge}
+                    </span>
+                    {isSelected && (
+                      <span className="w-4 h-4 rounded-full bg-teal-600 text-white flex items-center justify-center text-[10px]">
+                        <Check className="w-2.5 h-2.5 stroke-[3]" />
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-xs font-bold leading-tight mt-1.5 line-clamp-1">
+                    {preset.shortName[language] || preset.shortName.fr}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Subjects Custom Coefficients Grid */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              {isAr ? 'تخصيص معامل كل مادة بالتفصيل' : 'Coefficients individuels par matière'}
+            </label>
+            <span className="text-[10px] text-slate-400">
+              {isAr ? 'نطاق المعامل من 1 إلى 15' : 'Échelle de 1 à 15'}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {BAC_SUBJECTS.map((subj) => {
+              const currentCoeff = getSubjectCoefficient(subj.name, settings.customCoefficients);
+              const isModified =
+                settings.customCoefficients?.[subj.name] !== undefined &&
+                settings.customCoefficients[subj.name] !== subj.coefficient;
+
+              return (
+                <div
+                  key={subj.id}
+                  className={`p-3.5 rounded-xl border transition-all flex items-center justify-between gap-3 ${
+                    isModified
+                      ? 'border-teal-500/40 bg-teal-50/30 dark:bg-teal-950/20'
+                      : 'border-slate-200 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/40 hover:border-slate-300 dark:hover:border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span
+                      className={`w-3 h-3 rounded-full ${subj.dotColor} ring-2 ring-white dark:ring-slate-900 shrink-0 shadow-xs`}
+                    />
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                        {subj.name}
+                      </div>
+                      <div className="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5">
+                        <span>
+                          {isAr ? 'الافتراضي:' : 'Défaut:'} {subj.coefficient}
+                        </span>
+                        {isModified && (
+                          <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-teal-500/10 text-teal-600 dark:text-teal-400">
+                            {isAr ? 'معدل' : 'Modifié'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Stepper with 44x44px minimum touch targets */}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateSubjectCoeff(subj.name, -1)}
+                      disabled={currentCoeff <= 1}
+                      aria-label={`${subj.name} - 1`}
+                      className="w-11 h-11 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-90 disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center transition-all cursor-pointer shadow-2xs"
+                    >
+                      <Minus className="w-4 h-4 stroke-[2.5]" />
+                    </button>
+
+                    <div className="w-11 h-11 rounded-xl bg-teal-500/10 dark:bg-teal-500/15 border border-teal-500/30 text-teal-700 dark:text-teal-300 font-bold font-mono text-base flex items-center justify-center shrink-0">
+                      {currentCoeff}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateSubjectCoeff(subj.name, 1)}
+                      disabled={currentCoeff >= 15}
+                      aria-label={`${subj.name} + 1`}
+                      className="w-11 h-11 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-90 disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center transition-all cursor-pointer shadow-2xs"
+                    >
+                      <Plus className="w-4 h-4 stroke-[2.5]" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Bottom Actions: Total & Reset to Defaults */}
+        <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-teal-500 shrink-0" />
+            <span>
+              {isAr
+                ? 'يتم تطبيق المعاملات تلقائياً في حساب المعدل وبطاقات المواد في لوحة التحكم.'
+                : 'Les coefficients sont appliqués instantanément au calcul de la moyenne et sur le tableau de bord.'}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleResetCoefficients}
+            className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition-all active:scale-95 flex items-center justify-center gap-1.5 shrink-0 self-start sm:self-auto cursor-pointer"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>{isAr ? 'استعادة المعاملات القياسية' : 'Rétablir par défaut'}</span>
+          </button>
+        </div>
+      </section>
+
+      {/* 5. Sound Effects */}
       <section className="bg-white dark:bg-[#1A2535] p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
         <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
           <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -404,41 +720,413 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
             <span>{t('settings_sound')}</span>
           </h2>
           <button
-            onClick={() =>
-              onUpdateSettings({ chimeSoundEnabled: !settings.chimeSoundEnabled })
-            }
+            onClick={() => {
+              const nextVal = !settings.chimeSoundEnabled;
+              onUpdateSettings({ chimeSoundEnabled: nextVal });
+              if (nextVal) {
+                chimePlayer.setEnabled(true);
+                chimePlayer.playChime('complete');
+              } else {
+                chimePlayer.playChime('click');
+                chimePlayer.setEnabled(false);
+              }
+            }}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${settings.chimeSoundEnabled
               ? 'bg-teal-600 text-white'
               : 'bg-slate-200 dark:bg-slate-800 text-slate-500'
               }`}
           >
-            {settings.chimeSoundEnabled ? 'Activé ✓' : 'Désactivé'}
+            {settings.chimeSoundEnabled ? (isAr ? 'مفعل ✓' : 'Activé ✓') : (isAr ? 'معطل' : 'Désactivé')}
           </button>
         </div>
 
         {settings.chimeSoundEnabled && (
-          <div className="flex items-center gap-4 max-w-sm">
-            <span className="text-xs text-slate-500">{t('settings_volume')}</span>
-            <input
-              type="range"
-              min="0.1"
-              max="1"
-              step="0.05"
-              value={settings.soundVolume ?? 0.65}
-              onChange={(e) => {
-                const vol = parseFloat(e.target.value);
-                onUpdateSettings({ soundVolume: vol });
-              }}
-              className="flex-1 accent-teal-600"
-            />
-            <span className="text-xs font-mono font-bold text-slate-700 dark:text-slate-300">
-              {Math.round((settings.soundVolume ?? 0.65) * 100)}%
-            </span>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-1">
+            <div className="flex items-center gap-4 flex-1 max-w-sm">
+              <span className="text-xs text-slate-500">{t('settings_volume')}</span>
+              <input
+                type="range"
+                min="0.1"
+                max="1"
+                step="0.05"
+                value={settings.soundVolume ?? 0.65}
+                onChange={(e) => {
+                  const vol = parseFloat(e.target.value);
+                  onUpdateSettings({ soundVolume: vol });
+                  chimePlayer.setVolume(vol);
+                }}
+                className="flex-1 accent-teal-600 cursor-pointer"
+              />
+              <span className="text-xs font-mono font-bold text-slate-700 dark:text-slate-300 w-10 text-right">
+                {Math.round((settings.soundVolume ?? 0.65) * 100)}%
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => chimePlayer.playChime('complete')}
+              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-teal-200 dark:border-teal-800 text-teal-700 dark:text-teal-300 hover:bg-teal-50 dark:hover:bg-teal-950/40 text-xs font-semibold transition-colors"
+            >
+              <Volume2 className="w-3.5 h-3.5" />
+              <span>{isAr ? 'تجربة النغمة الهادئة' : 'Tester la mélodie'}</span>
+            </button>
           </div>
         )}
       </section>
 
-      {/* 5. Data Backup & Export (JSON Download) */}
+      {/* 6. Notifications & Smart Reminders Section */}
+      <section className="bg-white dark:bg-[#1A2535] p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-teal-500/10 text-teal-600 dark:text-teal-400 flex items-center justify-center">
+              <Bell className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <span>{t('notif_title')}</span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20">
+                  PWA & System
+                </span>
+              </h2>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                {t('notif_subtitle')}
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              const currentNotifs = settings.notifications || INITIAL_NOTIFICATIONS_PREFERENCES;
+              const nextEnabled = !currentNotifs.enabled;
+              onUpdateSettings({
+                notifications: {
+                  ...currentNotifs,
+                  enabled: nextEnabled,
+                },
+              });
+              chimePlayer.playChime(nextEnabled ? 'complete' : 'click');
+            }}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
+              (settings.notifications?.enabled ?? true)
+                ? 'bg-teal-600 text-white shadow-xs'
+                : 'bg-slate-200 dark:bg-slate-800 text-slate-500'
+            }`}
+          >
+            {(settings.notifications?.enabled ?? true) ? (
+              <>
+                <BellRing className="w-3.5 h-3.5" />
+                <span>{isAr ? 'مفعل ✓' : 'Activé ✓'}</span>
+              </>
+            ) : (
+              <>
+                <BellOff className="w-3.5 h-3.5" />
+                <span>{isAr ? 'معطل' : 'Désactivé'}</span>
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* Browser Permission Status Bar */}
+        <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+              {t('notif_perm_label')} :
+            </span>
+            <span
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold border flex items-center gap-1.5 ${
+                browserPerm === 'granted'
+                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                  : browserPerm === 'denied'
+                    ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30'
+                    : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
+              }`}
+            >
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  browserPerm === 'granted'
+                    ? 'bg-emerald-500'
+                    : browserPerm === 'denied'
+                      ? 'bg-rose-500'
+                      : 'bg-amber-500 animate-pulse'
+                }`}
+              />
+              <span>
+                {browserPerm === 'granted'
+                  ? t('notif_perm_granted')
+                  : browserPerm === 'denied'
+                    ? t('notif_perm_denied')
+                    : t('notif_perm_default')}
+              </span>
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {browserPerm !== 'granted' && notificationService.isSupported() && (
+              <button
+                type="button"
+                onClick={async () => {
+                  const perm = await notificationService.requestPermission();
+                  setBrowserPerm(perm);
+                  if (perm === 'granted') {
+                    chimePlayer.playChime('toast_success');
+                  }
+                }}
+                className="px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>{t('notif_request_perm')}</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={async () => {
+                await notificationService.sendTestNotification(fullData);
+                setTestSent(true);
+                setTimeout(() => setTestSent(false), 3000);
+              }}
+              className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
+            >
+              <Bell className="w-3.5 h-3.5 text-teal-500" />
+              <span>{testSent ? t('notif_test_sent') : t('notif_test_btn')}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Per-Module Notification Toggles */}
+        <div className="space-y-3">
+          <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            {t('notif_modules_title')}
+          </label>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+            {[
+              { id: 'tasks', label: t('notif_module_tasks'), icon: CheckSquare, color: 'text-teal-500' },
+              { id: 'quizzes', label: t('notif_module_quizzes'), icon: Award, color: 'text-amber-500' },
+              { id: 'homework', label: t('notif_module_homework'), icon: BookOpen, color: 'text-indigo-500' },
+              { id: 'lessons', label: t('notif_module_lessons'), icon: Brain, color: 'text-purple-500' },
+              { id: 'goals', label: t('notif_module_goals'), icon: Target, color: 'text-emerald-500' },
+              { id: 'habits', label: t('notif_module_habits'), icon: Flame, color: 'text-orange-500' },
+            ].map((mod) => {
+              const currentNotifs = settings.notifications || INITIAL_NOTIFICATIONS_PREFERENCES;
+              const isChecked = currentNotifs.modules[mod.id as keyof typeof currentNotifs.modules] !== false;
+              const Icon = mod.icon;
+
+              return (
+                <button
+                  key={mod.id}
+                  type="button"
+                  onClick={() => {
+                    const nextModules = {
+                      ...currentNotifs.modules,
+                      [mod.id]: !isChecked,
+                    };
+                    onUpdateSettings({
+                      notifications: {
+                        ...currentNotifs,
+                        modules: nextModules,
+                      },
+                    });
+                    chimePlayer.playChime('click');
+                  }}
+                  className={`p-3 rounded-xl border flex items-center justify-between gap-2.5 transition-all text-left rtl:text-right cursor-pointer ${
+                    isChecked
+                      ? 'border-teal-500/40 bg-teal-50/40 dark:bg-teal-950/20'
+                      : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30 opacity-70 hover:opacity-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Icon className={`w-4 h-4 ${mod.color} shrink-0`} />
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
+                      {mod.label}
+                    </span>
+                  </div>
+
+                  <span
+                    className={`w-5 h-5 rounded-md flex items-center justify-center border text-[11px] font-black transition-all shrink-0 ${
+                      isChecked
+                        ? 'bg-teal-600 border-teal-600 text-white'
+                        : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-transparent'
+                    }`}
+                  >
+                    ✓
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Lead Time and Habit Daily Reminder Time */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+          {/* Advance Reminder Lead Time */}
+          <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 space-y-2">
+            <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+              <span>{t('notif_lead_time')}</span>
+            </label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+              {[
+                { min: 15, label: t('notif_lead_15m') },
+                { min: 30, label: t('notif_lead_30m') },
+                { min: 60, label: t('notif_lead_1h') },
+                { min: 120, label: t('notif_lead_2h') },
+              ].map((item) => {
+                const currentNotifs = settings.notifications || INITIAL_NOTIFICATIONS_PREFERENCES;
+                const isSelected = (currentNotifs.leadTimeMinutes ?? 30) === item.min;
+
+                return (
+                  <button
+                    key={item.min}
+                    type="button"
+                    onClick={() => {
+                      onUpdateSettings({
+                        notifications: {
+                          ...currentNotifs,
+                          leadTimeMinutes: item.min,
+                        },
+                      });
+                      chimePlayer.playChime('click');
+                    }}
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border text-center transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-teal-600 text-white border-teal-600 shadow-xs'
+                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    {item.min} min
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Evening Habit Reminder Time */}
+          <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 space-y-2">
+            <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+              <Flame className="w-3.5 h-3.5 text-orange-500" />
+              <span>{t('notif_habit_time')}</span>
+            </label>
+            <input
+              type="time"
+              value={settings.notifications?.habitReminderTime || '20:00'}
+              onChange={(e) => {
+                const currentNotifs = settings.notifications || INITIAL_NOTIFICATIONS_PREFERENCES;
+                onUpdateSettings({
+                  notifications: {
+                    ...currentNotifs,
+                    habitReminderTime: e.target.value || '20:00',
+                  },
+                });
+              }}
+              className="w-full px-3.5 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-bold text-xs focus:outline-none focus:border-teal-500"
+            />
+          </div>
+        </div>
+
+        {/* Quiet Hours Configuration */}
+        <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Moon className="w-4 h-4 text-indigo-500" />
+              <div>
+                <span className="text-xs font-bold text-slate-900 dark:text-white block">
+                  {t('notif_quiet_hours_title')}
+                </span>
+                <span className="text-[10px] text-slate-400">
+                  {t('notif_quiet_hours_desc')}
+                </span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                const currentNotifs = settings.notifications || INITIAL_NOTIFICATIONS_PREFERENCES;
+                const nextQ = !currentNotifs.quietHours?.enabled;
+                onUpdateSettings({
+                  notifications: {
+                    ...currentNotifs,
+                    quietHours: {
+                      ...currentNotifs.quietHours,
+                      enabled: nextQ,
+                    },
+                  },
+                });
+                chimePlayer.playChime('click');
+              }}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                (settings.notifications?.quietHours?.enabled ?? true)
+                  ? 'bg-teal-600 text-white'
+                  : 'bg-slate-200 dark:bg-slate-800 text-slate-500'
+              }`}
+            >
+              {(settings.notifications?.quietHours?.enabled ?? true) ? (isAr ? 'مفعل ✓' : 'Activé ✓') : (isAr ? 'معطل' : 'Désactivé')}
+            </button>
+          </div>
+
+          {(settings.notifications?.quietHours?.enabled ?? true) && (
+            <div className="grid grid-cols-2 gap-3 pt-1">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 mb-1">
+                  {t('notif_quiet_from')}
+                </label>
+                <input
+                  type="time"
+                  value={settings.notifications?.quietHours?.start || '23:00'}
+                  onChange={(e) => {
+                    const currentNotifs = settings.notifications || INITIAL_NOTIFICATIONS_PREFERENCES;
+                    onUpdateSettings({
+                      notifications: {
+                        ...currentNotifs,
+                        quietHours: {
+                          ...currentNotifs.quietHours,
+                          start: e.target.value,
+                        },
+                      },
+                    });
+                  }}
+                  className="w-full px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-mono text-xs focus:outline-none focus:border-teal-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 mb-1">
+                  {t('notif_quiet_to')}
+                </label>
+                <input
+                  type="time"
+                  value={settings.notifications?.quietHours?.end || '07:00'}
+                  onChange={(e) => {
+                    const currentNotifs = settings.notifications || INITIAL_NOTIFICATIONS_PREFERENCES;
+                    onUpdateSettings({
+                      notifications: {
+                        ...currentNotifs,
+                        quietHours: {
+                          ...currentNotifs.quietHours,
+                          end: e.target.value,
+                        },
+                      },
+                    });
+                  }}
+                  className="w-full px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-mono text-xs focus:outline-none focus:border-teal-500"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Platform Limits & PWA Guidance Note */}
+        <div className="p-3.5 rounded-xl bg-amber-500/5 border border-amber-500/20 text-slate-600 dark:text-slate-300 text-xs leading-relaxed flex items-start gap-2.5">
+          <Info className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+            {t('notif_platform_limits')}
+          </p>
+        </div>
+      </section>
+
+      {/* 7. Data Backup & Export (JSON Download) */}
       <section className="bg-white dark:bg-[#1A2535] p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100 dark:border-slate-800">
           <div>
@@ -604,7 +1292,10 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
           </div>
 
           <button
-            onClick={() => setIsResetConfirmOpen(true)}
+            onClick={() => {
+              setIsResetConfirmOpen(true);
+              chimePlayer.playChime('modal_open');
+            }}
             className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-all active:scale-95 shrink-0"
           >
             {t('delete')}
@@ -619,6 +1310,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
             <div className="flex items-center gap-3">
               <button
                 onClick={() => {
+                  chimePlayer.playChime('delete');
                   onResetData();
                   setIsResetConfirmOpen(false);
                 }}
@@ -627,7 +1319,10 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
                 Confirmer l'effacement
               </button>
               <button
-                onClick={() => setIsResetConfirmOpen(false)}
+                onClick={() => {
+                  chimePlayer.playChime('modal_close');
+                  setIsResetConfirmOpen(false);
+                }}
                 className="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold"
               >
                 {t('cancel')}

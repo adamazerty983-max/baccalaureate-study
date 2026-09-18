@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { HomeworkItem, LectureNote, PriorityLevel, QuizItem, TaskItem, TimeBlock } from '../types';
 import { BAC_SUBJECTS } from '../utils/constants';
+import { chimePlayer } from '../utils/audio';
 
 interface QuickAddModalProps {
   isOpen: boolean;
@@ -107,6 +108,7 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
       });
     }
 
+    chimePlayer.playChime('add');
     onClose();
     setTitle('');
     setNotes('');
@@ -125,7 +127,7 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
             </h2>
           </div>
           <button
-            onClick={onClose}
+            onClick={() => { chimePlayer.playChime('modal_close'); onClose(); }}
             className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-sm font-bold"
           >
             ✕

@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { AppLanguage, AppSettings, MainTabType } from '../types';
 import { getT } from '../utils/i18n';
+import { chimePlayer } from '../utils/audio';
 import { DatabaseSyncState } from '../services/firestoreService';
 import { GoogleAuthButton } from './GoogleAuthButton';
 
@@ -71,7 +72,7 @@ interface SidebarProps {
   settings: AppSettings;
   language: AppLanguage;
   onChangeLanguage: (lang: AppLanguage) => void;
-  onToggleTheme: () => void;
+  onToggleTheme: (origin?: { x: number; y: number }) => void;
   onToggleSound: () => void;
   daysRemaining: number;
   counts?: SidebarCounts;
@@ -152,6 +153,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }, [isMobileOpen]);
 
   const handleSelectTab = (tabId: MainTabType) => {
+    if (tabId !== activeTab) {
+      chimePlayer.playChime('tab_switch');
+    }
     setActiveTab(tabId);
     if (isMobileOpen) {
       onCloseMobile();
@@ -408,7 +412,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {/* Quick theme & sound icons */}
           <div className="flex items-center justify-around pt-1">
             <button
-              onClick={onToggleTheme}
+              onClick={(e) => {
+                // Report the button center so the theme change animates as a
+                // circular reveal growing from the button itself
+                const rect = e.currentTarget.getBoundingClientRect();
+                onToggleTheme({
+                  x: rect.left + rect.width / 2,
+                  y: rect.top + rect.height / 2,
+                });
+              }}
               className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors"
               title="Basculer thème sombre / clair"
             >

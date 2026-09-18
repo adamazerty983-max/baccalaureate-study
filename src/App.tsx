@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Sidebar, MainTabType, ALL_NAV_TABS } from './components/Sidebar';
 import { TopHeader } from './components/TopHeader';
 import { Dashboard } from './components/Dashboard';
@@ -17,6 +17,12 @@ import { FocusModeModal } from './components/FocusModeModal';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import { QuickAddModal } from './components/QuickAddModal';
 import { DatabaseModal } from './components/DatabaseModal';
+import { LoadingScreen } from './components/LoadingScreen';
+import { NotificationCenterModal } from './components/NotificationCenterModal';
+import { NotificationPermissionBanner } from './components/NotificationPermissionBanner';
+import { DesktopUpdateBanner } from './components/DesktopUpdateBanner';
+import { PlannerCursor } from './components/PlannerCursor';
+import { notificationService } from './services/notificationService';
 import {
   initAuthListener,
   loadUserDataFromFirestore,
@@ -41,6 +47,7 @@ import {
   TimeBlock,
   WeeklyReviewData,
   MonthlyReviewData,
+  InAppNotification,
 } from './types';
 import {
   getInitialAppData,
@@ -48,11 +55,29 @@ import {
   saveStoredAppData,
   loadFromIndexedDB,
 } from './utils/storage';
+import { mergeAppData, stampNow } from './utils/merge';
 import { chimePlayer } from './utils/audio';
 
 export default function App() {
   const [appData, setAppData] = useState<FullAppData>(() => loadStoredAppData());
   const [activeTab, setActiveTab] = useState<MainTabType>('dashboard');
+  const [showSplash, setShowSplash] = useState(true);
+  const [isSplashFading, setIsSplashFading] = useState(false);
+
+  useEffect(() => {
+    const fadeTimer = setTimeout(() => {
+      setIsSplashFading(true);
+    }, 450);
+
+    const removeTimer = setTimeout(() => {
+      setShowSplash(false);
+    }, 950);
+
+    return () => {
+      clearTimeout(fadeTimer);
+      clearTimeout(removeTimer);
+    };
+  }, []);
 
   // Database and Auth State
   const [syncState, setSyncState] = useState<DatabaseSyncState>({
@@ -88,26 +113,88 @@ export default function App() {
     'task' | 'quiz' | 'homework' | 'note' | 'timeblock'
   >('task');
 
+  // Notification Center State
+  const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false);
+  const [inAppNotifications, setInAppNotifications] = useState<InAppNotification[]>([]);
+
+  // Initialize Notification Service and background scheduler loop
+  useEffect(() => {
+    notificationService.init().catch(console.warn);
+
+    const unsubscribe = notificationService.subscribe((list) => {
+      setInAppNotifications(list);
+    });
+
+    notificationService.startScheduler(appData);
+
+    // Listen to deep-link navigation messages from Service Worker notification clicks
+    const handleSwMessage = (event: MessageEvent) => {
+      if (event.data && event.data.type === 'NAVIGATE_TO_NOTIFICATION') {
+        const tab = event.data.tab as MainTabType;
+        if (tab && ALL_NAV_TABS.some((t) => t.id === tab)) {
+          handleNavigateTab(tab);
+        }
+      }
+    };
+
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', handleSwMessage);
+    }
+
+    return () => {
+      unsubscribe();
+      notificationService.stopScheduler();
+      if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener('message', handleSwMessage);
+      }
+    };
+  }, []);
+
+  // Update Notification Service when appData changes
+  useEffect(() => {
+    notificationService.updateAppData(appData);
+  }, [appData]);
+
   const language = appData.settings.language || 'fr';
 
-  // 0. IndexedDB Dual Hydration: Check if IndexedDB holds newer/larger data
+  // 0. IndexedDB Dual Hydration: merge (not replace) so a stale snapshot
+  // can never erase a completion written by the sync localStorage copy.
   useEffect(() => {
     loadFromIndexedDB()
       .then((idbData) => {
         if (idbData && idbData.updatedAt) {
-          setAppData((prev) => {
-            const idbTime = new Date(idbData.updatedAt || 0).getTime();
-            const localTime = new Date(prev.updatedAt || 0).getTime();
-            if (idbTime > localTime) {
-              return idbData;
-            }
-            return prev;
-          });
+          setAppData((prev) => mergeAppData(prev, idbData));
         }
       })
       .catch((err) => {
         console.warn('IndexedDB initial hydration note:', err);
       });
+  }, []);
+
+  // 0b. Cross-tab protection: if another tab saved while this one was open,
+  // merge its snapshot instead of letting the next local save silently drop
+  // whatever the other tab changed (completions included).
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== 'baccalaureate_study_hub_fresh_v4' || !e.newValue) return;
+      try {
+        const incoming = JSON.parse(e.newValue) as FullAppData;
+        setAppData((prev) => {
+          const merged = mergeAppData(prev, incoming);
+          if (merged === prev) {
+            // Merge rejected the incoming snapshot as stale — re-assert the
+            // winning state so the stale blob cannot win a future boot.
+            saveStoredAppData(prev);
+            return prev;
+          }
+          return merged;
+        });
+      } catch {
+        /* malformed write from an old tab — ignore */
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
   }, []);
 
   // 1. Firebase Auth & Initial Cloud Sync Listener
@@ -127,9 +214,10 @@ export default function App() {
       (remoteData) => {
         if (remoteData) {
           setAppData((prev) => {
-            const localTime = new Date(prev.updatedAt || 0).getTime();
-            const remoteTime = new Date(remoteData.updatedAt || 0).getTime();
-            return remoteTime > localTime ? remoteData : prev;
+            // Merge, don't replace: a stale cloud echo (or our own write re-stamped
+            // by the server) must never delete a completion made since.
+            const merged = mergeAppData(prev, remoteData);
+            return merged === prev ? prev : merged;
           });
         }
       },
@@ -186,19 +274,34 @@ export default function App() {
     }
   }, [appData.settings.theme]);
 
+  // Interface Style Management (Classic / MyBac Tracker skin)
+  // The whole skin lives in src/styles/mybac.css, scoped to this attribute, so
+  // switching back to 'classic' is a one-attribute change with no side effects.
+  useEffect(() => {
+    const style = appData.settings.uiStyle === 'mybac' ? 'mybac' : 'classic';
+    document.documentElement.dataset.uiStyle = style;
+  }, [appData.settings.uiStyle]);
+
   // Audio Engine Sound & Volume Sync
   useEffect(() => {
     chimePlayer.setVolume(appData.settings.soundVolume ?? 0.45);
     chimePlayer.setEnabled(appData.settings.chimeSoundEnabled ?? true);
+    chimePlayer.initGlobalListeners();
   }, [appData.settings.soundVolume, appData.settings.chimeSoundEnabled]);
 
   // Persistent LocalStorage & Cloud Database Auto-Save
+  // lastPushedRef skips Firestore pushes for states that came FROM the cloud
+  // (echoes) — otherwise the echo loop re-stamped the doc and forced every
+  // other device to adopt a potentially stale snapshot.
+  const lastPushedRef = useRef<FullAppData | null>(null);
   useEffect(() => {
     saveStoredAppData(appData);
 
     if (syncState.currentUser) {
+      if (lastPushedRef.current === appData) return;
       const timer = setTimeout(async () => {
         try {
+          lastPushedRef.current = appData;
           await saveUserDataToFirestore(syncState.currentUser!.uid, appData);
           setSyncState((prev) => ({
             ...prev,
@@ -315,7 +418,11 @@ export default function App() {
   );
 
   // Settings & Theme Toggles with View Transitions
-  const handleToggleTheme = () => {
+  // `origin` = center of the clicked toggle button → the new theme expands as a
+  // circular reveal from the button. The old view stays fully visible beneath,
+  // so fixed elements like the mobile drawer never flicker.
+  const handleToggleTheme = (origin?: { x: number; y: number }) => {
+    chimePlayer.playChime('theme_toggle');
     const current = appData.settings.theme;
     const nextTheme: ThemeMode = current === 'dark' ? 'light' : 'dark';
     const updateTheme = () => {
@@ -325,31 +432,62 @@ export default function App() {
       }));
     };
 
-    if (!('startViewTransition' in document)) {
+    const doc = document as any;
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (!('startViewTransition' in doc) || prefersReducedMotion) {
       updateTheme();
       return;
     }
 
     try {
-      (document as any).startViewTransition({
+      const transition = doc.startViewTransition({
         update: updateTheme,
         types: ['theme-toggle'],
       });
-    } catch {
-      try {
-        (document as any).startViewTransition(() => {
-          updateTheme();
+
+      transition.ready
+        ?.then(() => {
+          const x = origin?.x ?? window.innerWidth / 2;
+          const y = origin?.y ?? window.innerHeight / 2;
+          const endRadius = Math.hypot(
+            Math.max(x, window.innerWidth - x),
+            Math.max(y, window.innerHeight - y)
+          );
+          doc.documentElement.animate(
+            {
+              clipPath: [
+                `circle(0px at ${x}px ${y}px)`,
+                `circle(${endRadius}px at ${x}px ${y}px)`,
+              ],
+            },
+            {
+              duration: 500,
+              easing: 'cubic-bezier(0.16, 1, 0.3, 1)',
+              pseudoElement: '::view-transition-new(root)',
+            }
+          );
+        })
+        .catch(() => {
+          // Transition skipped — nothing to animate
         });
-      } catch {
-        updateTheme();
-      }
+    } catch {
+      updateTheme();
     }
   };
 
   const handleToggleSound = () => {
+    const nextVal = !appData.settings.chimeSoundEnabled;
+    if (nextVal) {
+      chimePlayer.setEnabled(true);
+      chimePlayer.playChime('click');
+    } else {
+      chimePlayer.playChime('click');
+      setTimeout(() => chimePlayer.setEnabled(false), 80);
+    }
     setAppData((prev) => ({
       ...prev,
-      settings: { ...prev.settings, chimeSoundEnabled: !prev.settings.chimeSoundEnabled },
+      settings: { ...prev.settings, chimeSoundEnabled: nextVal },
     }));
   };
 
@@ -397,11 +535,14 @@ export default function App() {
       const updated = (prev.tasks || []).map((t) => {
         if (t.id !== taskId) return t;
         const isNowCompleted = t.status !== 'completed';
-        return {
-          ...t,
-          status: (isNowCompleted ? 'completed' : 'todo') as any,
-          completedAt: isNowCompleted ? now : undefined,
-        };
+        return stampNow(
+          {
+            ...t,
+            status: (isNowCompleted ? 'completed' : 'todo') as any,
+            completedAt: isNowCompleted ? now : undefined,
+          },
+          now
+        );
       });
       return {
         ...prev,
@@ -550,7 +691,7 @@ export default function App() {
   const handleUpdateTimeBlock = (updatedBlock: TimeBlock) => {
     setAppData((prev) => ({
       ...prev,
-      timeBlocks: prev.timeBlocks.map((b) => (b.id === updatedBlock.id ? updatedBlock : b)),
+      timeBlocks: prev.timeBlocks.map((b) => (b.id === updatedBlock.id ? stampNow(updatedBlock) : b)),
       updatedAt: new Date().toISOString(),
     }));
   };
@@ -565,20 +706,24 @@ export default function App() {
 
   const handleToggleBlockComplete = (blockId: string) => {
     setAppData((prev) => {
+      const now = new Date().toISOString();
       const today = new Date().toISOString().slice(0, 10);
       return {
         ...prev,
         timeBlocks: prev.timeBlocks.map((b) => {
           if (b.id !== blockId) return b;
           const willBeCompleted = !b.isCompleted;
-          return {
-            ...b,
-            isCompleted: willBeCompleted,
-            completedAt: willBeCompleted ? new Date().toISOString() : undefined,
-            dateKey: b.dateKey || today,
-          };
+          return stampNow(
+            {
+              ...b,
+              isCompleted: willBeCompleted,
+              completedAt: willBeCompleted ? new Date().toISOString() : undefined,
+              dateKey: b.dateKey || today,
+            },
+            now
+          );
         }),
-        updatedAt: new Date().toISOString(),
+        updatedAt: now,
       };
     });
   };
@@ -818,6 +963,7 @@ export default function App() {
     } else {
       setCustomFocusBlock(null);
     }
+    chimePlayer.playChime('modal_open');
     setIsFocusMinimized(false);
     setIsFocusModeOpen(true);
   };
@@ -849,12 +995,17 @@ export default function App() {
   };
 
   const handleRefreshApp = () => {
+    // Merge instead of replace: reads back the persisted copy without letting a
+    // stale snapshot erase anything done since it was written.
     const refreshed = loadStoredAppData();
-    setAppData(refreshed);
+    setAppData((prev) => mergeAppData(prev, refreshed));
   };
 
   return (
     <div className="min-h-screen flex bg-slate-50 text-slate-900 dark:bg-[#0E1522] dark:text-slate-100 transition-colors font-['Inter']">
+      {/* Smooth trailing cursor — only revealed inside the planner task list */}
+      <PlannerCursor />
+
       {/* 1. Left Vertical Sidebar */}
       <Sidebar
         activeTab={activeTab}
@@ -866,7 +1017,7 @@ export default function App() {
         settings={appData.settings}
         language={language}
         onChangeLanguage={handleChangeLanguage}
-        onToggleTheme={handleToggleTheme}
+        onToggleTheme={(origin) => handleToggleTheme(origin)}
         onToggleSound={handleToggleSound}
         daysRemaining={daysRemaining}
         counts={itemCounts}
@@ -883,15 +1034,23 @@ export default function App() {
           onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
           isMobileSidebarOpen={isMobileSidebarOpen}
           onOpenQuickAdd={() => {
+            chimePlayer.playChime('modal_open');
             setQuickAddDefaultType('task');
             setIsQuickAddOpen(true);
           }}
           onOpenFocusMode={() => {
+            chimePlayer.playChime('modal_open');
             setIsFocusMinimized(false);
             setIsFocusModeOpen(true);
           }}
-          onOpenShortcuts={() => setIsShortcutsOpen(true)}
-          onOpenDatabaseModal={() => setIsDatabaseModalOpen(true)}
+          onOpenShortcuts={() => {
+            chimePlayer.playChime('modal_open');
+            setIsShortcutsOpen(true);
+          }}
+          onOpenDatabaseModal={() => {
+            chimePlayer.playChime('modal_open');
+            setIsDatabaseModalOpen(true);
+          }}
           syncState={syncState}
           onRefresh={handleRefreshApp}
           settings={appData.settings}
@@ -899,7 +1058,17 @@ export default function App() {
           onToggleTheme={handleToggleTheme}
           onToggleSound={handleToggleSound}
           daysRemaining={daysRemaining}
+          unreadNotificationCount={inAppNotifications.filter((n) => !n.read).length}
+          onOpenNotifications={() => {
+            setIsNotificationCenterOpen(true);
+          }}
         />
+
+        {/* Desktop Application Auto-Update Banner (Electron only) */}
+        <DesktopUpdateBanner language={language} />
+
+        {/* Proactive Notification Permission Banner (non-blocking, dismissible) */}
+        <NotificationPermissionBanner language={language} />
 
         {/* Tab View Container with View Transitions API isolation */}
         <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 main-tab-content">
@@ -911,6 +1080,12 @@ export default function App() {
               onToggleHomework={handleToggleHomeworkStatus}
               onToggleTaskComplete={handleToggleTaskComplete}
               onAddTask={handleAddTask}
+              onDeleteTask={handleDeleteTask}
+              onOpenFocusMode={() => {
+                chimePlayer.playChime('modal_open');
+                setIsFocusMinimized(false);
+                setIsFocusModeOpen(true);
+              }}
               onUpdateBacDate={(newDate, newStartDate) =>
                 handleUpdateSettings({
                   baccalaureateDate: newDate,
@@ -988,6 +1163,7 @@ export default function App() {
             <AverageTab
               grades={appData.grades || []}
               language={language}
+              customCoefficients={appData.settings.customCoefficients}
               onAddGrade={handleAddGrade}
               onDeleteGrade={handleDeleteGrade}
             />
@@ -1038,7 +1214,10 @@ export default function App() {
               onImportData={handleImportData}
               onResetData={handleResetData}
               syncState={syncState}
-              onOpenDatabaseModal={() => setIsDatabaseModalOpen(true)}
+              onOpenDatabaseModal={() => {
+                chimePlayer.playChime('modal_open');
+                setIsDatabaseModalOpen(true);
+              }}
             />
           )}
         </main>
@@ -1051,6 +1230,7 @@ export default function App() {
         activeBlock={activeFocusBlock}
         language={language}
         onClose={() => {
+          chimePlayer.playChime('modal_close');
           setIsFocusModeOpen(false);
           setCustomFocusBlock(null);
         }}
@@ -1063,13 +1243,19 @@ export default function App() {
       <KeyboardShortcutsModal
         isOpen={isShortcutsOpen}
         language={language}
-        onClose={() => setIsShortcutsOpen(false)}
+        onClose={() => {
+          chimePlayer.playChime('modal_close');
+          setIsShortcutsOpen(false);
+        }}
       />
 
       {/* 5. Universal Quick Add Modal */}
       <QuickAddModal
         isOpen={isQuickAddOpen}
-        onClose={() => setIsQuickAddOpen(false)}
+        onClose={() => {
+          chimePlayer.playChime('modal_close');
+          setIsQuickAddOpen(false);
+        }}
         defaultType={quickAddDefaultType}
         onAddTask={handleAddTask}
         onAddQuiz={handleAddQuiz}
@@ -1081,12 +1267,35 @@ export default function App() {
       {/* 6. Cloud Database & Sync Modal */}
       <DatabaseModal
         isOpen={isDatabaseModalOpen}
-        onClose={() => setIsDatabaseModalOpen(false)}
+        onClose={() => {
+          chimePlayer.playChime('modal_close');
+          setIsDatabaseModalOpen(false);
+        }}
         syncState={syncState}
         appData={appData}
         language={language}
         onDataLoaded={(loadedData) => setAppData(loadedData)}
       />
+
+      {/* 7. In-App Notification Center Modal */}
+      <NotificationCenterModal
+        isOpen={isNotificationCenterOpen}
+        onClose={() => setIsNotificationCenterOpen(false)}
+        notifications={inAppNotifications}
+        language={language}
+        onMarkAsRead={(id) => notificationService.markAsRead(id)}
+        onMarkAllAsRead={() => notificationService.markAllAsRead()}
+        onClearAll={() => notificationService.clearAll()}
+        onNavigateTab={(tab) => handleNavigateTab(tab)}
+      />
+
+      {/* 8. Initial App Boot Splash with TwinOrbit */}
+      {showSplash && (
+        <LoadingScreen
+          isArabic={language === 'ar'}
+          fadeOut={isSplashFading}
+        />
+      )}
     </div>
   );
 }

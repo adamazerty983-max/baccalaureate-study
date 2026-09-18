@@ -1,9 +1,11 @@
-import { FullAppData } from '../types';
+import { FullAppData, InAppNotification } from '../types';
 
 const DB_NAME = 'BaccalaureateStudyHubDB';
 const DB_VERSION = 1;
 const STORE_NAME = 'app_data_store';
 const RECORD_KEY = 'full_app_data';
+const NOTIFIED_IDS_KEY = 'already_notified_reminders_set';
+const IN_APP_NOTIFICATIONS_KEY = 'in_app_notifications_history';
 
 /**
  * Open and initialize IndexedDB with object store
@@ -151,4 +153,108 @@ export async function getStorageEstimate(): Promise<{
       isIndexedDBSupported: isSupported,
     };
   }
+}
+
+/**
+  * Persist the set of reminder IDs that have already triggered
+  */
+export async function saveNotifiedIds(ids: string[]): Promise<void> {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(NOTIFIED_IDS_KEY, JSON.stringify(ids));
+    }
+  } catch {}
+
+  try {
+    const db = await openStudyDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.put(ids, NOTIFIED_IDS_KEY);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+      tx.oncomplete = () => db.close();
+    });
+  } catch (err) {
+    console.warn('Failed to save notified IDs to IndexedDB:', err);
+  }
+}
+
+/**
+  * Load the set of reminder IDs that have already triggered
+  */
+export async function loadNotifiedIds(): Promise<string[]> {
+  try {
+    const db = await openStudyDB();
+    const fromIdb = await new Promise<string[] | null>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.get(NOTIFIED_IDS_KEY);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+      tx.oncomplete = () => db.close();
+    });
+    if (fromIdb && Array.isArray(fromIdb)) return fromIdb;
+  } catch {}
+
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const raw = localStorage.getItem(NOTIFIED_IDS_KEY);
+      if (raw) return JSON.parse(raw);
+    }
+  } catch {}
+
+  return [];
+}
+
+/**
+  * Persist recent in-app notification center items
+  */
+export async function saveInAppNotifications(notifications: InAppNotification[]): Promise<void> {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(IN_APP_NOTIFICATIONS_KEY, JSON.stringify(notifications));
+    }
+  } catch {}
+
+  try {
+    const db = await openStudyDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.put(notifications, IN_APP_NOTIFICATIONS_KEY);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+      tx.oncomplete = () => db.close();
+    });
+  } catch (err) {
+    console.warn('Failed to save in-app notifications to IndexedDB:', err);
+  }
+}
+
+/**
+  * Load recent in-app notification center items
+  */
+export async function loadInAppNotifications(): Promise<InAppNotification[]> {
+  try {
+    const db = await openStudyDB();
+    const fromIdb = await new Promise<InAppNotification[] | null>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.get(IN_APP_NOTIFICATIONS_KEY);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+      tx.oncomplete = () => db.close();
+    });
+    if (fromIdb && Array.isArray(fromIdb)) return fromIdb;
+  } catch {}
+
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const raw = localStorage.getItem(IN_APP_NOTIFICATIONS_KEY);
+      if (raw) return JSON.parse(raw);
+    }
+  } catch {}
+
+  return [];
 }

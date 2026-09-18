@@ -17,8 +17,9 @@ import {
   Filter,
   Search,
 } from 'lucide-react';
-import { AppLanguage, PriorityLevel, TaskItem, TaskStatus, TimeBlock } from '../types';
+import { AppLanguage, PriorityLevel, TaskItem, TaskStatus, TaskType, TimeBlock } from '../types';
 import { BAC_SUBJECTS } from '../utils/constants';
+import { TASK_TYPES_VISUAL, evaluateTaskUrgency } from '../utils/taskVisualConfig';
 import { calculateDailyStreak, getLocalDateStr, getWeekDaysStreakStatus } from '../utils/streak';
 import { chimePlayer } from '../utils/audio';
 import { getT } from '../utils/i18n';
@@ -58,6 +59,7 @@ export const TasksTab: React.FC<TasksTabProps> = ({
   const [newTitle, setNewTitle] = useState('');
   const [newSubject, setNewSubject] = useState(BAC_SUBJECTS[0].name);
   const [newPriority, setNewPriority] = useState<PriorityLevel>('high');
+  const [newType, setNewType] = useState<TaskType>('homework');
   const [newDueDate, setNewDueDate] = useState(todayStr);
   const [newDescription, setNewDescription] = useState('');
   const [newChecklistText, setNewChecklistText] = useState('');
@@ -95,7 +97,7 @@ export const TasksTab: React.FC<TasksTabProps> = ({
       subject: newSubject,
       priority: newPriority,
       status: 'todo',
-      type: 'revision',
+      type: newType,
       dueDate: newDueDate || todayStr,
       description: newDescription.trim() || undefined,
       checklist: checklistItems.length > 0 ? checklistItems : undefined,
@@ -125,6 +127,12 @@ export const TasksTab: React.FC<TasksTabProps> = ({
       checklist: updatedChecklist,
       progressPercentage: progress,
     });
+
+    if (progress === 100) {
+      chimePlayer.playChime('complete');
+    } else {
+      chimePlayer.playChime('click');
+    }
   };
 
   // Filter tasks
@@ -173,7 +181,7 @@ export const TasksTab: React.FC<TasksTabProps> = ({
           {/* Left: Campfire & Counter */}
           <div className="md:col-span-4 flex flex-col items-center text-center">
             <div>
-              <DuolingoStreakFlame size={115} />
+              <DuolingoStreakFlame size={115} isFrozen={!streakData.isTodayCompleted} />
             </div>
 
             <div className="text-5xl sm:text-6xl font-black font-['Outfit'] text-white tracking-tight leading-none mt-1">
@@ -420,7 +428,24 @@ export const TasksTab: React.FC<TasksTabProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                {isAr ? 'نوع المهمة / التصنيف' : 'Type de tâche'}
+              </label>
+              <select
+                value={newType}
+                onChange={(e) => setNewType(e.target.value as TaskType)}
+                className="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white text-xs sm:text-sm font-bold focus:outline-none"
+              >
+                <option value="homework">{isAr ? '📚 واجب منزلي (Devoir)' : '📚 Devoir Maison'}</option>
+                <option value="project">{isAr ? '🎓 مشروع أستاذ (Projet)' : '🎓 Projet / Devoir Prof'}</option>
+                <option value="quiz">{isAr ? '⚡ فرض محروس (Contrôle)' : '⚡ Contrôle Continu'}</option>
+                <option value="exam">{isAr ? '🎯 إمتحان وطني (Examen)' : '🎯 Examen / Bac'}</option>
+                <option value="revision">{isAr ? '🧠 مراجعة وتلخيص (Révision)' : '🧠 Révision & Synthèse'}</option>
+              </select>
+            </div>
+
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                 {isAr ? 'الأولوية' : 'Priorité'}
@@ -430,10 +455,10 @@ export const TasksTab: React.FC<TasksTabProps> = ({
                 onChange={(e) => setNewPriority(e.target.value as PriorityLevel)}
                 className="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white text-xs sm:text-sm focus:outline-none"
               >
-                <option value="urgent">🟣 Urgent (عاجل جداً)</option>
-                <option value="high">🔴 High (أولوية عالية)</option>
-                <option value="medium">🟡 Medium (متوسط)</option>
-                <option value="low">🟢 Low (عادي)</option>
+                <option value="urgent">{isAr ? '🚨 عاجل جداً (Urgent)' : '🚨 Urgent'}</option>
+                <option value="high">{isAr ? '🔴 مرتفعة (Haute)' : '🔴 Haute'}</option>
+                <option value="medium">{isAr ? '🟡 متوسطة (Moyenne)' : '🟡 Moyenne'}</option>
+                <option value="low">{isAr ? '🟢 عادية (Normale)' : '🟢 Normale'}</option>
               </select>
             </div>
 
@@ -491,14 +516,16 @@ export const TasksTab: React.FC<TasksTabProps> = ({
           const isCompleted = task.status === 'completed';
           const subjectInfo = BAC_SUBJECTS.find((s) => s.name === task.subject);
           const isExpanded = Boolean(expandedTaskIds[task.id]);
-          const isTaskForToday = task.dueDate === todayStr;
+          const typeVisual = TASK_TYPES_VISUAL[task.type || 'revision'] || TASK_TYPES_VISUAL.revision;
+          const TypeIcon = typeVisual.icon;
+          const urgency = evaluateTaskUrgency(task.dueDate, task.dueTime, task.priority, language);
 
           return (
             <div
               key={task.id}
               className={`p-4 sm:p-5 rounded-3xl border transition-all ${isCompleted
                 ? 'bg-slate-50/80 dark:bg-[#151D2A]/80 border-slate-200/80 dark:border-slate-800/80 opacity-90'
-                : 'bg-white dark:bg-[#1A2535] border-slate-200 dark:border-slate-800 shadow-sm hover:border-teal-500/40 hover:shadow-md'
+                : `${urgency.cardBgClass} ${urgency.borderLeftClass} hover:border-teal-500/60 hover:shadow-md`
                 }`}
             >
               <div className="flex items-start justify-between gap-3">
@@ -545,17 +572,18 @@ export const TasksTab: React.FC<TasksTabProps> = ({
                       >
                         {task.title}
                       </span>
-
-                      {/* Today Badge */}
-                      {isTaskForToday && (
-                        <span className="px-2 py-0.5 rounded-md bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20 text-[10px] font-black uppercase tracking-wider">
-                          {isAr ? 'اليوم' : "Aujourd'hui"}
-                        </span>
-                      )}
                     </div>
 
-                    {/* Metadata Badges */}
+                    {/* Metadata Badges with Type & Urgency Differentiation */}
                     <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+                      {/* Task Type Badge */}
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border text-[10px] font-bold ${typeVisual.badgeClass}`}
+                      >
+                        <TypeIcon className="w-2.5 h-2.5" />
+                        <span>{isAr ? typeVisual.labelAr : typeVisual.labelFr}</span>
+                      </span>
+
                       {/* Subject Pill */}
                       <span
                         className={`px-2 py-0.5 rounded-lg font-bold border text-[10px] ${subjectInfo?.badgeColor || 'bg-slate-100 text-slate-700'
@@ -563,6 +591,16 @@ export const TasksTab: React.FC<TasksTabProps> = ({
                       >
                         {task.subject}
                       </span>
+
+                      {/* Urgency Badge */}
+                      {!isCompleted && (
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] font-black ${urgency.badgeClass}`}
+                        >
+                          <Clock className="w-2.5 h-2.5" />
+                          <span>{urgency.label}</span>
+                        </span>
+                      )}
 
                       {/* Priority */}
                       <span
@@ -573,7 +611,13 @@ export const TasksTab: React.FC<TasksTabProps> = ({
                             : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
                           }`}
                       >
-                        {task.priority.toUpperCase()}
+                        {task.priority === 'urgent'
+                          ? (isAr ? 'عاجلة جداً' : 'Urgente')
+                          : task.priority === 'high'
+                            ? (isAr ? 'أولوية عالية' : 'Haute')
+                            : task.priority === 'medium'
+                              ? (isAr ? 'متوسطة' : 'Moyenne')
+                              : (isAr ? 'عادية' : 'Basse')}
                       </span>
 
                       {/* Due Date */}

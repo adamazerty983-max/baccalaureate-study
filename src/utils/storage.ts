@@ -6,6 +6,7 @@ import {
   INITIAL_HOMEWORK,
   INITIAL_LESSONS,
   INITIAL_NOTES,
+  INITIAL_NOTIFICATIONS_PREFERENCES,
   INITIAL_QUIZZES,
   INITIAL_SETTINGS,
   INITIAL_TASKS,
@@ -46,7 +47,22 @@ export function loadStoredAppData(): FullAppData {
     const parsed = JSON.parse(raw) as Partial<FullAppData>;
     return {
       version: parsed.version || 3,
-      settings: { ...INITIAL_SETTINGS, ...(parsed.settings || {}) },
+      settings: {
+        ...INITIAL_SETTINGS,
+        ...(parsed.settings || {}),
+        notifications: {
+          ...INITIAL_NOTIFICATIONS_PREFERENCES,
+          ...(parsed.settings?.notifications || {}),
+          modules: {
+            ...INITIAL_NOTIFICATIONS_PREFERENCES.modules,
+            ...(parsed.settings?.notifications?.modules || {}),
+          },
+          quietHours: {
+            ...INITIAL_NOTIFICATIONS_PREFERENCES.quietHours,
+            ...(parsed.settings?.notifications?.quietHours || {}),
+          },
+        },
+      },
       tasks: parsed.tasks || [],
       quizzes: parsed.quizzes || [],
       homework: parsed.homework || [],
@@ -71,10 +87,11 @@ export { loadFromIndexedDB, saveToIndexedDB, getStorageEstimate };
 
 export function saveStoredAppData(data: FullAppData): void {
   if (typeof window === 'undefined') return;
-  const toSave = {
-    ...data,
-    updatedAt: new Date().toISOString(),
-  };
+  // NOTE: do NOT re-stamp updatedAt here. The stamp belongs to the state that
+  // produced it; re-stamping on every mirror write made every save look
+  // "newer", which let stale snapshots legally overwrite fresh ones and
+  // caused cross-tab merge ping-pong.
+  const toSave = data;
 
   // 1. Primary: Save to IndexedDB (asynchronous, unlimited storage > 500MB)
   saveToIndexedDB(toSave).catch((err) => {

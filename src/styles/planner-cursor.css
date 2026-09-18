@@ -1,0 +1,85 @@
+/* ============================================================================
+   Planner task-list cursor — ported from the reference app (App V3.html)
+   ----------------------------------------------------------------------------
+   Two layers follow the pointer:
+     • #mb-cursor       — solid 12px dot, glued to the pointer
+     • #mb-cursor-ring  — 32px ring that eases behind it (lerp 0.18, see
+                          PlannerCursor.tsx), which is what produces the
+                          "smooth" trailing feel of the reference app.
+
+   Both layers are invisible by default. They only appear while the pointer is
+   inside an element carrying `data-mybac-cursor` — currently the timetable
+   matrix of the planner (`#timetable-drag-matrix`), i.e. the task list where
+   sessions are actually done. Everywhere else the native cursor is untouched.
+   ========================================================================== */
+
+#mb-cursor,
+#mb-cursor-ring {
+  position: fixed;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  opacity: 0;
+  will-change: transform;
+}
+
+#mb-cursor {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #e8284a;
+  z-index: 99999;
+  transform: translate(-50%, -50%);
+  transition: transform 0.08s, background 0.15s, width 0.12s, height 0.12s, opacity 0.15s;
+  box-shadow: 0 2px 6px rgba(232, 40, 74, 0.45);
+}
+
+#mb-cursor-ring {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1.5px solid #e8284a;
+  z-index: 99998;
+  transform: translate(-50%, -50%);
+  transition: opacity 0.15s, width 0.15s, height 0.15s, border-color 0.15s;
+}
+
+#mb-cursor.on {
+  opacity: 1;
+}
+
+#mb-cursor-ring.on {
+  opacity: 0.5;
+}
+
+#mb-cursor.hover {
+  width: 18px;
+  height: 18px;
+}
+
+#mb-cursor-ring.hover {
+  width: 44px;
+  height: 44px;
+  opacity: 0.25;
+}
+
+#mb-cursor.click {
+  width: 8px;
+  height: 8px;
+  transform: translate(-50%, -50%) scale(0.7);
+}
+
+.dark #mb-cursor {
+  background: #f04d6a;
+  box-shadow: 0 2px 8px rgba(240, 77, 106, 0.5);
+}
+
+.dark #mb-cursor-ring {
+  border-color: #f04d6a;
+}
+
+/* Hide the native pointer, but ONLY inside the opted-in zone */
+.mb-cur-active,
+.mb-cur-active * {
+  cursor: none !important;
+}

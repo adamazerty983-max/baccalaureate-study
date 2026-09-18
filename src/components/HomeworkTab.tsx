@@ -18,6 +18,7 @@ import {
 import { HomeworkItem, PriorityLevel } from '../types';
 import { PriorityBadge } from './PriorityBadge';
 import { BAC_SUBJECTS } from '../utils/constants';
+import { chimePlayer } from '../utils/audio';
 
 interface HomeworkTabProps {
   homework: HomeworkItem[];
@@ -55,6 +56,7 @@ export const HomeworkTab: React.FC<HomeworkTabProps> = ({
   const [formChecklistRaw, setFormChecklistRaw] = useState('');
 
   const openNewModal = () => {
+    chimePlayer.playChime('modal_open');
     setEditingHw(null);
     setFormTitle('');
     setFormSubject(BAC_SUBJECTS[0].name);
@@ -69,6 +71,7 @@ export const HomeworkTab: React.FC<HomeworkTabProps> = ({
   };
 
   const openEditModal = (hw: HomeworkItem) => {
+    chimePlayer.playChime('modal_open');
     setEditingHw(hw);
     setFormTitle(hw.title);
     setFormSubject(hw.subject);
@@ -127,6 +130,7 @@ export const HomeworkTab: React.FC<HomeworkTabProps> = ({
       });
     }
 
+    chimePlayer.playChime('add');
     setIsModalOpen(false);
   };
 
@@ -150,7 +154,9 @@ export const HomeworkTab: React.FC<HomeworkTabProps> = ({
     });
 
     if (newProgress === 100) {
-
+      chimePlayer.playChime('complete');
+    } else {
+      chimePlayer.playChime('click');
     }
   };
 
@@ -411,7 +417,9 @@ export const HomeworkTab: React.FC<HomeworkTabProps> = ({
                       onClick={() => {
                         onToggleStatus(hw.id);
                         if (!isSubmitted) {
-
+                          chimePlayer.playChime('complete');
+                        } else {
+                          chimePlayer.playChime('uncheck');
                         }
                       }}
                       className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors ${isSubmitted
@@ -431,7 +439,10 @@ export const HomeworkTab: React.FC<HomeworkTabProps> = ({
                     </button>
 
                     <button
-                      onClick={() => onDeleteHomework(hw.id)}
+                      onClick={() => {
+                        chimePlayer.playChime('delete');
+                        onDeleteHomework(hw.id);
+                      }}
                       className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -455,7 +466,7 @@ export const HomeworkTab: React.FC<HomeworkTabProps> = ({
               </h2>
               <button
                 type="button"
-                onClick={() => setIsModalOpen(false)}
+                onClick={() => { chimePlayer.playChime('modal_close'); setIsModalOpen(false); }}
                 className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-700/50 text-sm font-bold transition-colors cursor-pointer"
               >
                 ✕
@@ -609,7 +620,7 @@ export const HomeworkTab: React.FC<HomeworkTabProps> = ({
               <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-slate-200 dark:border-slate-800 shrink-0 bg-slate-50/60 dark:bg-slate-800/40">
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
+                  onClick={() => { chimePlayer.playChime('modal_close'); setIsModalOpen(false); }}
                   className="px-4 py-1.5 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold cursor-pointer text-xs sm:text-sm"
                 >
                   Cancel

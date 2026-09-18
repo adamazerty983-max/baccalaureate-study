@@ -130,10 +130,12 @@ export async function saveUserDataToFirestore(
 
   try {
     const userDataRef = doc(db, 'userData', userId);
+    // NOTE: keep appData's own updatedAt. Re-stamping at write time made the
+    // echo of our own write look "newer" than local, feeding an infinite
+    // save→echo cycle that could revert fresh local edits with stale payloads.
     const payload = {
       ...appData,
       userId,
-      updatedAt: new Date().toISOString(),
     };
     await setDoc(userDataRef, payload, { merge: true });
     return { success: true };

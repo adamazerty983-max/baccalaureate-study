@@ -16,6 +16,7 @@ import {
   Cloud,
   User,
   LogOut,
+  Bell,
 } from 'lucide-react';
 import { AppLanguage, AppSettings } from '../types';
 import { ALL_NAV_TABS, MainTabType } from './Sidebar';
@@ -41,6 +42,8 @@ interface TopHeaderProps {
   onToggleTheme: () => void;
   onToggleSound: () => void;
   daysRemaining: number;
+  unreadNotificationCount?: number;
+  onOpenNotifications?: () => void;
 }
 
 export const TopHeader: React.FC<TopHeaderProps> = ({
@@ -60,6 +63,8 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   onToggleTheme,
   onToggleSound,
   daysRemaining,
+  unreadNotificationCount = 0,
+  onOpenNotifications,
 }) => {
   const t = getT(language);
   const isAr = language === 'ar';
@@ -226,6 +231,27 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
             >
               <Zap className="w-3.5 h-3.5 fill-white shrink-0" />
               <span className="hidden sm:inline">Focus</span>
+            </button>
+
+            {/* 4b. Notification Center Bell Trigger */}
+            <button
+              type="button"
+              onClick={() => {
+                chimePlayer.playChime('click');
+                if (onOpenNotifications) {
+                  onOpenNotifications();
+                }
+              }}
+              className="relative h-9 w-9 flex items-center justify-center rounded-xl text-slate-500 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-all shrink-0 cursor-pointer"
+              title={t('notif_center_title')}
+              aria-label={t('notif_center_title')}
+            >
+              <Bell className="w-4 h-4" />
+              {unreadNotificationCount > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] px-1 items-center justify-center rounded-full bg-teal-500 text-white font-black text-[9px] shadow-sm animate-pulse">
+                  {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
+                </span>
+              )}
             </button>
 
             {/* 5. Keyboard Shortcuts Trigger */}

@@ -3,10 +3,16 @@
   "name": "منصة التحضير للامتحان الوطني للبكالوريا",
   "icons": [
     {
+      "src": "/original_icon_512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
       "src": "/icon.svg",
       "sizes": "512x512",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "maskable"
     }
   ],
   "start_url": "/",

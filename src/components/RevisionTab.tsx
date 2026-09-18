@@ -93,10 +93,12 @@ export const RevisionTab: React.FC<RevisionTabProps> = ({
 
     setNewTitle('');
     setNewNotes('');
+    chimePlayer.playChime('add');
     setIsAddModalOpen(false);
   };
 
   const handleStartReview = (lesson: LessonItem) => {
+    chimePlayer.playChime('modal_open');
     setActiveTestLesson(lesson);
     setIsAnswerRevealed(false);
   };
@@ -106,7 +108,9 @@ export const RevisionTab: React.FC<RevisionTabProps> = ({
     onReviewLesson(activeTestLesson.id, rating);
 
     if (rating >= 4) {
-
+      chimePlayer.playChime('complete');
+    } else {
+      chimePlayer.playChime('tab_switch');
     }
 
     setActiveTestLesson(null);
@@ -130,7 +134,7 @@ export const RevisionTab: React.FC<RevisionTabProps> = ({
         </div>
 
         <button
-          onClick={() => setIsAddModalOpen(true)}
+          onClick={() => { chimePlayer.playChime('modal_open'); setIsAddModalOpen(true); }}
           className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs shadow-md shadow-teal-500/20 transition-all active:scale-95 shrink-0"
         >
           <Plus className="w-4 h-4" />
@@ -293,7 +297,7 @@ export const RevisionTab: React.FC<RevisionTabProps> = ({
                   </div>
 
                   <button
-                    onClick={() => onDeleteLesson(lesson.id)}
+                    onClick={() => { chimePlayer.playChime('delete'); onDeleteLesson(lesson.id); }}
                     className="p-1 rounded-lg text-slate-300 hover:text-rose-500 dark:text-slate-600 transition-colors"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -421,7 +425,7 @@ export const RevisionTab: React.FC<RevisionTabProps> = ({
                 </div>
               </div>
               <button
-                onClick={() => setActiveTestLesson(null)}
+                onClick={() => { chimePlayer.playChime('modal_close'); setActiveTestLesson(null); }}
                 className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white"
               >
                 <X className="w-5 h-5" />
@@ -439,7 +443,7 @@ export const RevisionTab: React.FC<RevisionTabProps> = ({
 
               {!isAnswerRevealed ? (
                 <button
-                  onClick={() => setIsAnswerRevealed(true)}
+                  onClick={() => { chimePlayer.playChime('tab_switch'); setIsAnswerRevealed(true); }}
                   className="px-6 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs shadow-md shadow-teal-500/20 transition-transform active:scale-95"
                 >
                   {t('rev_reveal_answer')}
@@ -493,7 +497,7 @@ export const RevisionTab: React.FC<RevisionTabProps> = ({
                 {t('rev_add_lesson')}
               </h3>
               <button
-                onClick={() => setIsAddModalOpen(false)}
+                onClick={() => { chimePlayer.playChime('modal_close'); setIsAddModalOpen(false); }}
                 className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white"
               >
                 <X className="w-5 h-5" />
@@ -548,7 +552,7 @@ export const RevisionTab: React.FC<RevisionTabProps> = ({
               <div className="flex items-center justify-end gap-3 pt-3">
                 <button
                   type="button"
-                  onClick={() => setIsAddModalOpen(false)}
+                  onClick={() => { chimePlayer.playChime('modal_close'); setIsAddModalOpen(false); }}
                   className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold"
                 >
                   {t('cancel')}

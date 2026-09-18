@@ -49,6 +49,24 @@ export function getCompletedActivityDates(
       }
       if (b.dateKey) {
         dates.add(b.dateKey);
+        return;
+      }
+      if (b.createdAt) {
+        const d = new Date(b.createdAt);
+        if (!isNaN(d.getTime())) {
+          dates.add(getLocalDateStr(d));
+          return;
+        }
+      }
+      if (b.dayOfWeek !== undefined) {
+        const now = new Date();
+        const currentDay = now.getDay();
+        const currentMondayOffset = currentDay === 0 ? 6 : currentDay - 1;
+        const targetMondayOffset = b.dayOfWeek === 0 ? 6 : b.dayOfWeek - 1;
+        const diffDays = targetMondayOffset - currentMondayOffset;
+        const targetDate = new Date(now);
+        targetDate.setDate(now.getDate() + diffDays);
+        dates.add(getLocalDateStr(targetDate));
       }
     }
   });
@@ -166,7 +184,8 @@ export function calculateDailyStreak(
     (b) =>
       b.isCompleted &&
       ((b.completedAt && getLocalDateStr(new Date(b.completedAt)) === todayStr) ||
-        (!b.completedAt && b.dateKey === todayStr))
+        (!b.completedAt && b.dateKey === todayStr) ||
+        (!b.completedAt && !b.dateKey && b.dayOfWeek === today.getDay()))
   ).length;
 
   const todayTasksCompletedCount = completedTasksToday + completedBlocksToday;
@@ -324,6 +343,16 @@ export function calculateBestStreak(completedDates: Set<string>): number {
   });
 
   return maxStreak;
+}
+
+/**
+ * Blue/cold flame until at least one planner block or task is marked completed
+ * today. Completing any item lights the fire back to its hot red/orange color.
+ */
+export function shouldFreezeFlame(input: {
+  completedDates: Set<string>;
+}): boolean {
+  return !input.completedDates.has(getLocalDateStr());
 }
 
 export interface CalendarDayInfo {
