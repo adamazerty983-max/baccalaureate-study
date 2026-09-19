@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { BellRing, X, Sparkles, ShieldCheck } from 'lucide-react';
-import { AppLanguage } from '../types';
-import { getT } from '../utils/i18n';
-import { notificationService } from '../services/notificationService';
-import { chimePlayer } from '../utils/audio';
+import { AppLanguage } from '../../types';
+import { getT } from '../../utils/i18n';
+import { notificationService } from '../../services/notificationService';
+import { chimePlayer } from '../../utils/audio';
 
 interface NotificationPermissionBannerProps {
   language: AppLanguage;

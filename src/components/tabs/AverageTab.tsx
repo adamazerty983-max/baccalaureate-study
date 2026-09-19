@@ -1,10 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { Calculator, Plus, Trash2, TrendingUp, Award, CheckCircle, X, Sparkles } from 'lucide-react';
 import { BacPcWhatIfSimulator } from './BacPcWhatIfSimulator';
-import { AppLanguage, GradeItem } from '../types';
-import { BAC_SUBJECTS, getSubjectCoefficient } from '../utils/constants';
-import { chimePlayer } from '../utils/audio';
-import { getT } from '../utils/i18n';
+import { AppLanguage, GradeItem } from '../../types';
+import { BAC_SUBJECTS, getSubjectCoefficient } from '../../utils/constants';
+import { chimePlayer } from '../../utils/audio';
+import { getT } from '../../utils/i18n';
 
 interface AverageTabProps {
   grades: GradeItem[];

@@ -35,10 +35,10 @@ import {
 import { AppLanguage, FullAppData, HomeworkItem, QuizItem, TaskItem, TaskType } from '../types';
 import { BAC_SUBJECTS, getSubjectCoefficient } from '../utils/constants';
 import { TASK_TYPES_VISUAL, evaluateTaskUrgency } from '../utils/taskVisualConfig';
-import { StreakFlameCanvas } from './StreakFlameCanvas';
-import { DuolingoStreakFlame } from './DuolingoStreakFlame';
-import { ProgressRing } from './ProgressRing';
-import { CalendarHeatmap } from './CalendarHeatmap';
+import { StreakFlameCanvas } from './gamification/StreakFlameCanvas';
+import { DuolingoStreakFlame } from './gamification/DuolingoStreakFlame';
+import { ProgressRing } from './shared/ProgressRing';
+import { CalendarHeatmap } from './gamification/CalendarHeatmap';
 import { chimePlayer } from '../utils/audio';
 import { getT } from '../utils/i18n';
 import { calculateDailyStreak, getLocalDateStr, getWeekDaysStreakStatus } from '../utils/streak';

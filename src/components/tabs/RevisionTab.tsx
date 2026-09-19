@@ -15,11 +15,11 @@ import {
   ChevronRight,
   HelpCircle,
 } from 'lucide-react';
-import { AppLanguage, LessonItem } from '../types';
-import { BAC_SUBJECTS } from '../utils/constants';
-import { chimePlayer } from '../utils/audio';
-import { getT } from '../utils/i18n';
-import { ProgressRing } from './ProgressRing';
+import { AppLanguage, LessonItem } from '../../types';
+import { BAC_SUBJECTS } from '../../utils/constants';
+import { chimePlayer } from '../../utils/audio';
+import { getT } from '../../utils/i18n';
+import { ProgressRing } from '../shared/ProgressRing';
 
 interface RevisionTabProps {
   lessons: LessonItem[];

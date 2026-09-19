@@ -43,15 +43,15 @@ import {
   Info,
   Palette,
 } from 'lucide-react';
-import { AppLanguage, AppSettings, FontSizeOption, FullAppData, ThemeMode, UiStyleMode } from '../types';
-import { BAC_SUBJECTS, BAC_TRACK_PRESETS, BacTrackPreset, getSubjectCoefficient, INITIAL_NOTIFICATIONS_PREFERENCES } from '../utils/constants';
-import { exportAppDataToFile } from '../utils/storage';
-import { chimePlayer } from '../utils/audio';
-import { getT } from '../utils/i18n';
-import { DatabaseSyncState, logoutUser } from '../services/firestoreService';
-import { GoogleAuthButton } from './GoogleAuthButton';
-import { notificationService } from '../services/notificationService';
-import firebaseConfig from '../../firebase-applet-config.json';
+import { AppLanguage, AppSettings, FontSizeOption, FullAppData, ThemeMode, UiStyleMode } from '../../types';
+import { BAC_SUBJECTS, BAC_TRACK_PRESETS, BacTrackPreset, getSubjectCoefficient, INITIAL_NOTIFICATIONS_PREFERENCES } from '../../utils/constants';
+import { exportAppDataToFile } from '../../utils/storage';
+import { chimePlayer } from '../../utils/audio';
+import { getT } from '../../utils/i18n';
+import { DatabaseSyncState, logoutUser } from '../../services/firestoreService';
+import { GoogleAuthButton } from '../shared/GoogleAuthButton';
+import { notificationService } from '../../services/notificationService';
+import firebaseConfig from '../../../firebase-applet-config.json';
 
 interface SettingsTabProps {
   settings: AppSettings;

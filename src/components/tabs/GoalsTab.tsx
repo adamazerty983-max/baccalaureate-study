@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { Target, Plus, CheckCircle, Circle, Trash2, Trophy, Sparkles, X } from 'lucide-react';
-import { AppLanguage, GoalItem } from '../types';
-import { chimePlayer } from '../utils/audio';
-import { getT } from '../utils/i18n';
+import { AppLanguage, GoalItem } from '../../types';
+import { chimePlayer } from '../../utils/audio';
+import { getT } from '../../utils/i18n';
 
 interface GoalsTabProps {
   goals: GoalItem[];

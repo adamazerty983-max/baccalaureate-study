@@ -37,16 +37,16 @@ import {
   TimeBlock,
   WeeklyReviewData,
   MainTabType,
-} from '../types';
-import { BAC_SUBJECTS } from '../utils/constants';
-import { chimePlayer } from '../utils/audio';
-import { getT } from '../utils/i18n';
+} from '../../types';
+import { BAC_SUBJECTS } from '../../utils/constants';
+import { chimePlayer } from '../../utils/audio';
+import { getT } from '../../utils/i18n';
 import {
   calculateBestStreak,
   calculateDailyStreak,
   getAllStreakDates,
   getLocalDateStr,
-} from '../utils/streak';
+} from '../../utils/streak';
 
 interface WeeklyReviewTabProps {
   appData: FullAppData;

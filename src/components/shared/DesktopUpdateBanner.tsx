@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Download, RefreshCw, CheckCircle2, Sparkles, X } from 'lucide-react';
-import { AppLanguage } from '../types';
-import { getT } from '../utils/i18n';
-import { chimePlayer } from '../utils/audio';
+import { AppLanguage } from '../../types';
+import { getT } from '../../utils/i18n';
+import { chimePlayer } from '../../utils/audio';
 
 interface DesktopUpdateBannerProps {
   language: AppLanguage;

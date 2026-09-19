@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
-import { ToastProvider } from './components/Toast.tsx';
+import { ToastProvider } from './components/shared/Toast.tsx';
 import './index.css';
 // Optional skins / cursor layers — loaded after Tailwind so they can override it
 import './styles/mybac.css';

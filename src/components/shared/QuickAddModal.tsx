@@ -7,9 +7,9 @@ import {
   CalendarClock,
   Sparkles,
 } from 'lucide-react';
-import { HomeworkItem, LectureNote, PriorityLevel, QuizItem, TaskItem, TimeBlock } from '../types';
-import { BAC_SUBJECTS } from '../utils/constants';
-import { chimePlayer } from '../utils/audio';
+import { HomeworkItem, LectureNote, PriorityLevel, QuizItem, TaskItem, TimeBlock } from '../../types';
+import { BAC_SUBJECTS } from '../../utils/constants';
+import { chimePlayer } from '../../utils/audio';
 
 interface QuickAddModalProps {
   isOpen: boolean;

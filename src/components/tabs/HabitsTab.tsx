@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { Flame, Plus, CheckCircle, Trash2, Award, X, Sparkles, Calendar, ListFilter } from 'lucide-react';
-import { AppLanguage, HabitItem, TaskItem, TimeBlock } from '../types';
-import { chimePlayer } from '../utils/audio';
-import { getT } from '../utils/i18n';
-import { StreakCalendarView } from './StreakCalendarView';
-import { CalendarHeatmap } from './CalendarHeatmap';
+import { AppLanguage, HabitItem, TaskItem, TimeBlock } from '../../types';
+import { chimePlayer } from '../../utils/audio';
+import { getT } from '../../utils/i18n';
+import { StreakCalendarView } from '../gamification/StreakCalendarView';
+import { CalendarHeatmap } from '../gamification/CalendarHeatmap';
 
 interface HabitsTabProps {
   habits: HabitItem[];

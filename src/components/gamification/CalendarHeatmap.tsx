@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Flame, Calendar, Sparkles, Trophy, Award, Clock, ChevronRight } from 'lucide-react';
-import { AppLanguage, FullAppData, HabitItem, TaskItem, TimeBlock, LessonItem } from '../types';
-import { getLocalDateStr, calculateDailyStreak } from '../utils/streak';
+import { AppLanguage, FullAppData, HabitItem, TaskItem, TimeBlock, LessonItem } from '../../types';
+import { getLocalDateStr, calculateDailyStreak } from '../../utils/streak';
 
 interface CalendarHeatmapProps {
   appData?: FullAppData;

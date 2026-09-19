@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Play, Pause, X, CheckCircle, Flame, Sparkles, Minimize2, Maximize2 } from 'lucide-react';
-import { AppLanguage, TimeBlock } from '../types';
-import { BAC_SUBJECTS } from '../utils/constants';
-import { chimePlayer } from '../utils/audio';
-import { getT } from '../utils/i18n';
+import { AppLanguage, TimeBlock } from '../../types';
+import { BAC_SUBJECTS } from '../../utils/constants';
+import { chimePlayer } from '../../utils/audio';
+import { getT } from '../../utils/i18n';
 
 interface FocusModeModalProps {
   isOpen: boolean;

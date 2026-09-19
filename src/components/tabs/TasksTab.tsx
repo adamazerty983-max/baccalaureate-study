@@ -17,13 +17,13 @@ import {
   Filter,
   Search,
 } from 'lucide-react';
-import { AppLanguage, PriorityLevel, TaskItem, TaskStatus, TaskType, TimeBlock } from '../types';
-import { BAC_SUBJECTS } from '../utils/constants';
-import { TASK_TYPES_VISUAL, evaluateTaskUrgency } from '../utils/taskVisualConfig';
-import { calculateDailyStreak, getLocalDateStr, getWeekDaysStreakStatus } from '../utils/streak';
-import { chimePlayer } from '../utils/audio';
-import { getT } from '../utils/i18n';
-import { DuolingoStreakFlame } from './DuolingoStreakFlame';
+import { AppLanguage, PriorityLevel, TaskItem, TaskStatus, TaskType, TimeBlock } from '../../types';
+import { BAC_SUBJECTS } from '../../utils/constants';
+import { TASK_TYPES_VISUAL, evaluateTaskUrgency } from '../../utils/taskVisualConfig';
+import { calculateDailyStreak, getLocalDateStr, getWeekDaysStreakStatus } from '../../utils/streak';
+import { chimePlayer } from '../../utils/audio';
+import { getT } from '../../utils/i18n';
+import { DuolingoStreakFlame } from '../gamification/DuolingoStreakFlame';
 
 interface TasksTabProps {
   tasks: TaskItem[];

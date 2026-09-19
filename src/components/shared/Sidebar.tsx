@@ -25,10 +25,10 @@ import {
   LogOut,
   Cloud,
 } from 'lucide-react';
-import { AppLanguage, AppSettings, MainTabType } from '../types';
-import { getT } from '../utils/i18n';
-import { chimePlayer } from '../utils/audio';
-import { DatabaseSyncState } from '../services/firestoreService';
+import { AppLanguage, AppSettings, MainTabType } from '../../types';
+import { getT } from '../../utils/i18n';
+import { chimePlayer } from '../../utils/audio';
+import { DatabaseSyncState } from '../../services/firestoreService';
 import { GoogleAuthButton } from './GoogleAuthButton';
 
 export type { MainTabType };

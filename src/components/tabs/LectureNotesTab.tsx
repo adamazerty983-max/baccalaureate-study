@@ -18,8 +18,8 @@ import {
   Code2,
   Lightbulb,
 } from 'lucide-react';
-import { HomeworkItem, LectureNote } from '../types';
-import { BAC_SUBJECTS } from '../utils/constants';
+import { HomeworkItem, LectureNote } from '../../types';
+import { BAC_SUBJECTS } from '../../utils/constants';
 
 interface LectureNotesTabProps {
   notes: LectureNote[];

@@ -14,7 +14,7 @@ import {
   TrendingUp,
   X,
 } from 'lucide-react';
-import { AppLanguage, HabitItem, TaskItem, TimeBlock } from '../types';
+import { AppLanguage, HabitItem, TaskItem, TimeBlock } from '../../types';
 import {
   calculateBestStreak,
   calculateDailyStreak,
@@ -22,9 +22,9 @@ import {
   getAllStreakDates,
   getLocalDateStr,
   CalendarDayInfo,
-} from '../utils/streak';
-import { chimePlayer } from '../utils/audio';
-import { getT } from '../utils/i18n';
+} from '../../utils/streak';
+import { chimePlayer } from '../../utils/audio';
+import { getT } from '../../utils/i18n';
 
 interface StreakCalendarViewProps {
   tasks: TaskItem[];

@@ -20,11 +20,11 @@ import {
   Sparkles,
   HardDrive,
 } from 'lucide-react';
-import { AppLanguage, FullAppData } from '../types';
-import { DatabaseSyncState, loginWithGoogle, loginWithEmail, registerWithEmail, logoutUser, saveUserDataToFirestore } from '../services/firestoreService';
-import { syncWithCloud, getStorageEstimate } from '../utils/storage';
-import { chimePlayer } from '../utils/audio';
-import firebaseConfig from '../../firebase-applet-config.json';
+import { AppLanguage, FullAppData } from '../../types';
+import { DatabaseSyncState, loginWithGoogle, loginWithEmail, registerWithEmail, logoutUser, saveUserDataToFirestore } from '../../services/firestoreService';
+import { syncWithCloud, getStorageEstimate } from '../../utils/storage';
+import { chimePlayer } from '../../utils/audio';
+import firebaseConfig from '../../../firebase-applet-config.json';
 
 interface DatabaseModalProps {
   isOpen: boolean;

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Keyboard, X } from 'lucide-react';
-import { AppLanguage } from '../types';
-import { getT } from '../utils/i18n';
+import { AppLanguage } from '../../types';
+import { getT } from '../../utils/i18n';
 
 interface KeyboardShortcutsModalProps {
   isOpen: boolean;

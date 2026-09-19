@@ -1,6 +1,6 @@
 import React from 'react';
 import { Flame, AlertTriangle, Clock, Check } from 'lucide-react';
-import { PriorityLevel } from '../types';
+import { PriorityLevel } from '../../types';
 
 interface PriorityBadgeProps {
   priority: PriorityLevel;

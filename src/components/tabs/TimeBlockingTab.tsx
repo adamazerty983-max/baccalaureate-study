@@ -33,11 +33,11 @@ import {
   Brain,
   RotateCcw,
 } from 'lucide-react';
-import { ActivitySticker, AppLanguage, StickerActivityType, TaskItem, TimeBlock } from '../types';
-import { ACTIVITY_STICKERS, BAC_SUBJECTS } from '../utils/constants';
-import { useToast } from './Toast';
-import { chimePlayer } from '../utils/audio';
-import { calculateDailyStreak, getLocalDateStr } from '../utils/streak';
+import { ActivitySticker, AppLanguage, StickerActivityType, TaskItem, TimeBlock } from '../../types';
+import { ACTIVITY_STICKERS, BAC_SUBJECTS } from '../../utils/constants';
+import { useToast } from '../shared/Toast';
+import { chimePlayer } from '../../utils/audio';
+import { calculateDailyStreak, getLocalDateStr } from '../../utils/streak';
 
 interface TimeBlockingTabProps {
   timeBlocks: TimeBlock[];

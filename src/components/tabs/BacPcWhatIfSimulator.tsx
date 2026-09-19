@@ -16,8 +16,8 @@ import {
   Info,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { AppLanguage } from '../types';
-import { chimePlayer } from '../utils/audio';
+import { AppLanguage } from '../../types';
+import { chimePlayer } from '../../utils/audio';
 
 interface BacPcWhatIfSimulatorProps {
   language: AppLanguage;

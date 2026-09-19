@@ -14,9 +14,9 @@ import {
   Clock,
   ExternalLink,
 } from 'lucide-react';
-import { AppLanguage, InAppNotification, MainTabType } from '../types';
-import { getT } from '../utils/i18n';
-import { chimePlayer } from '../utils/audio';
+import { AppLanguage, InAppNotification, MainTabType } from '../../types';
+import { getT } from '../../utils/i18n';
+import { chimePlayer } from '../../utils/audio';
 
 interface NotificationCenterModalProps {
   isOpen: boolean;

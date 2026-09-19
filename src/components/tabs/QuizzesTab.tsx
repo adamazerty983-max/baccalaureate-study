@@ -15,10 +15,10 @@ import {
   Edit2,
   Check,
 } from 'lucide-react';
-import { PriorityLevel, QuizItem } from '../types';
-import { PriorityBadge } from './PriorityBadge';
-import { BAC_SUBJECTS } from '../utils/constants';
-import { chimePlayer } from '../utils/audio';
+import { PriorityLevel, QuizItem } from '../../types';
+import { PriorityBadge } from '../shared/PriorityBadge';
+import { BAC_SUBJECTS } from '../../utils/constants';
+import { chimePlayer } from '../../utils/audio';
 
 interface QuizzesTabProps {
   quizzes: QuizItem[];

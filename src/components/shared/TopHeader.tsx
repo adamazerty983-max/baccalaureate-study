@@ -18,11 +18,11 @@ import {
   LogOut,
   Bell,
 } from 'lucide-react';
-import { AppLanguage, AppSettings } from '../types';
+import { AppLanguage, AppSettings } from '../../types';
 import { ALL_NAV_TABS, MainTabType } from './Sidebar';
-import { getT } from '../utils/i18n';
-import { chimePlayer } from '../utils/audio';
-import { DatabaseSyncState } from '../services/firestoreService';
+import { getT } from '../../utils/i18n';
+import { chimePlayer } from '../../utils/audio';
+import { DatabaseSyncState } from '../../services/firestoreService';
 import { GoogleAuthButton } from './GoogleAuthButton';
 
 interface TopHeaderProps {

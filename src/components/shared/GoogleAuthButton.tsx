@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { loginWithGoogle, FirebaseUser } from '../services/firestoreService';
-import { chimePlayer } from '../utils/audio';
-import { AppLanguage } from '../types';
+import { loginWithGoogle, FirebaseUser } from '../../services/firestoreService';
+import { chimePlayer } from '../../utils/audio';
+import { AppLanguage } from '../../types';
 
 interface GoogleAuthButtonProps {
   language?: AppLanguage;

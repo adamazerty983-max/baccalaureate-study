@@ -15,10 +15,10 @@ import {
   Square,
   FolderGit2,
 } from 'lucide-react';
-import { HomeworkItem, PriorityLevel } from '../types';
-import { PriorityBadge } from './PriorityBadge';
-import { BAC_SUBJECTS } from '../utils/constants';
-import { chimePlayer } from '../utils/audio';
+import { HomeworkItem, PriorityLevel } from '../../types';
+import { PriorityBadge } from '../shared/PriorityBadge';
+import { BAC_SUBJECTS } from '../../utils/constants';
+import { chimePlayer } from '../../utils/audio';
 
 interface HomeworkTabProps {
   homework: HomeworkItem[];
