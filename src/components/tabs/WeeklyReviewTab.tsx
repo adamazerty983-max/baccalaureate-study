@@ -919,7 +919,7 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
       {/* Live Planner Sync Banner */}
       <div className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl bg-gradient-to-r from-teal-500/10 via-emerald-500/10 to-transparent border border-teal-500/20 text-xs text-teal-800 dark:text-teal-300">
         <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
           <span className="font-semibold">
             {t('wr_planner_linked') || (isAr ? 'متصل بالمخطط الزمني تلقائياً' : 'Synchronisé avec le Planning en temps réel')}
           </span>

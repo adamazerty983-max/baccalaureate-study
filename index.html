@@ -19,153 +19,236 @@
   <body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 transition-colors duration-200 antialiased min-h-screen">
     <div id="root">
       <style>
-        @keyframes loading-ui-twin-orbit-rotate {
-          100% {
-            transform: rotate(360deg) translate(155%);
+        :root {
+          --sk-bg: #f8fafc;
+          --sk-card: #ffffff;
+          --sk-border: #e2e8f0;
+          --sk-bone: #e2e8f0;
+          --sk-shimmer: rgba(255, 255, 255, 0.65);
+          --sk-accent: #0d9488;
+        }
+        @media (prefers-color-scheme: dark) {
+          :root {
+            --sk-bg: #0b1120;
+            --sk-card: #111827;
+            --sk-border: #1e293b;
+            --sk-bone: #1e293b;
+            --sk-shimmer: rgba(255, 255, 255, 0.04);
+            --sk-accent: #14b8a6;
           }
         }
-        @keyframes loading-ui-shimmer {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(250%); }
-        }
-        .loading-splash-root {
-          position: fixed;
-          inset: 0;
+        .sk-shell {
           display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          background-color: #0c121e;
-          color: #f8fafc;
+          min-height: 100vh;
+          background: var(--sk-bg);
           font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-          z-index: 9999;
-          overflow: hidden;
         }
-        .loading-ambient-glow {
-          position: absolute;
-          width: 450px;
-          height: 450px;
-          border-radius: 9999px;
-          background: radial-gradient(circle, rgba(13, 148, 136, 0.25) 0%, rgba(79, 70, 229, 0.15) 45%, transparent 70%);
-          filter: blur(40px);
-          pointer-events: none;
-        }
-        .loading-card-box {
-          position: relative;
-          z-index: 10;
-          display: flex;
+        .sk-sidebar {
+          display: none;
+          width: 256px;
+          border-right: 1px solid var(--sk-border);
+          background: var(--sk-card);
+          padding: 24px 16px;
+          flex-shrink: 0;
           flex-direction: column;
+          gap: 16px;
+        }
+        @media (min-width: 768px) {
+          .sk-sidebar {
+            display: flex;
+          }
+        }
+        .sk-brand {
+          display: flex;
           align-items: center;
-          text-align: center;
-          padding: 24px;
-          max-width: 360px;
+          gap: 12px;
+          padding-bottom: 20px;
+          border-bottom: 1px solid var(--sk-border);
         }
-        .loading-icon-wrap {
-          width: 64px;
-          height: 64px;
-          border-radius: 20px;
-          background: linear-gradient(135deg, #14b8a6, #10b981);
-          padding: 2px;
-          margin-bottom: 20px;
-          box-shadow: 0 10px 25px -5px rgba(20, 184, 166, 0.35);
-        }
-        .loading-icon-bg {
-          width: 100%;
-          height: 100%;
-          background: #0c121e;
-          border-radius: 18px;
+        .sk-brand-icon {
+          width: 40px;
+          height: 40px;
+          border-radius: 12px;
+          background: linear-gradient(135deg, #0d9488, #10b981);
           display: flex;
           align-items: center;
           justify-content: center;
+          box-shadow: 0 4px 12px rgba(13, 148, 136, 0.25);
         }
-        .loading-brand-title {
-          font-size: 20px;
+        .sk-brand-title {
           font-weight: 800;
-          color: #ffffff;
-          margin: 0 0 6px 0;
+          font-size: 15px;
+          color: var(--sk-accent);
           letter-spacing: -0.02em;
         }
-        .loading-brand-sub {
-          font-size: 12px;
-          font-weight: 500;
-          color: #94a3b8;
-          margin: 0 0 28px 0;
+        .sk-brand-sub {
+          font-size: 11px;
+          opacity: 0.6;
         }
-        .loading-orbit-area {
+        .sk-nav {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          flex: 1;
+        }
+        .sk-nav-item {
+          height: 38px;
+          border-radius: 10px;
+          background: var(--sk-bone);
+          position: relative;
+          overflow: hidden;
+        }
+        .sk-nav-item.active {
+          background: rgba(13, 148, 136, 0.15);
+          border: 1px solid rgba(13, 148, 136, 0.25);
+        }
+        .sk-main {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          min-width: 0;
+        }
+        .sk-header {
+          height: 64px;
+          border-bottom: 1px solid var(--sk-border);
+          background: var(--sk-card);
           display: flex;
           align-items: center;
-          justify-content: center;
-          height: 48px;
-          margin-bottom: 24px;
+          justify-content: space-between;
+          padding: 0 24px;
         }
-        .twin-orbit-core {
+        .sk-header-title {
+          width: 140px;
+          height: 22px;
+          border-radius: 6px;
+          background: var(--sk-bone);
+        }
+        .sk-header-actions {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+        .sk-circle-btn {
+          width: 36px;
+          height: 36px;
+          border-radius: 10px;
+          background: var(--sk-bone);
+        }
+        .sk-content {
+          flex: 1;
+          max-width: 1200px;
+          width: 100%;
+          margin: 0 auto;
+          padding: 24px;
+          display: flex;
+          flex-direction: column;
+          gap: 20px;
+        }
+        .sk-card {
+          border-radius: 20px;
+          background: var(--sk-card);
+          border: 1px solid var(--sk-border);
+          padding: 24px;
           position: relative;
-          display: inline-block;
-          width: 14px;
-          height: 14px;
-          aspect-ratio: 1 / 1;
-          border-radius: 9999px;
-          background-color: #14b8a6;
-          box-shadow: 0 0 14px rgba(20, 184, 166, 0.7);
-        }
-        .twin-orbit-sub-1 {
-          position: absolute;
-          inset: 0;
-          border-radius: 9999px;
-          background-color: #2dd4bf;
-          transform: rotate(0deg) translate(155%);
-          animation: loading-ui-twin-orbit-rotate 1.1s ease infinite;
-          box-shadow: 0 0 10px rgba(45, 212, 191, 0.8);
-        }
-        .twin-orbit-sub-2 {
-          position: absolute;
-          inset: 0;
-          border-radius: 9999px;
-          background-color: #38bdf8;
-          transform: rotate(0deg) translate(155%);
-          animation: loading-ui-twin-orbit-rotate 1.1s ease infinite;
-          animation-delay: 0.55s;
-          box-shadow: 0 0 10px rgba(56, 189, 248, 0.8);
-        }
-        .loading-bar-track {
-          width: 180px;
-          height: 4px;
-          background: rgba(30, 41, 59, 0.8);
-          border-radius: 9999px;
           overflow: hidden;
-          position: relative;
         }
-        .loading-bar-shimmer {
+        .sk-countdown-row {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 12px;
+          margin-top: 16px;
+        }
+        .sk-countdown-pod {
+          height: 80px;
+          border-radius: 14px;
+          background: var(--sk-bone);
+        }
+        .sk-grid-3 {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+          gap: 16px;
+        }
+        .sk-kpi-card {
+          height: 110px;
+          border-radius: 16px;
+          background: var(--sk-card);
+          border: 1px solid var(--sk-border);
+          padding: 16px;
+        }
+        .sk-shimmer-layer {
           position: absolute;
-          inset-block: 0;
-          width: 90px;
-          background: linear-gradient(90deg, transparent, #14b8a6, transparent);
-          border-radius: 9999px;
-          animation: loading-ui-shimmer 1.5s ease-in-out infinite;
+          inset: 0;
+          background: linear-gradient(90deg, transparent, var(--sk-shimmer), transparent);
+          animation: sk-shimmer 1.8s infinite;
+          transform: translateX(-100%);
+        }
+        @keyframes sk-shimmer {
+          100% {
+            transform: translateX(100%);
+          }
         }
       </style>
-      <div class="loading-splash-root">
-        <div class="loading-ambient-glow"></div>
-        <div class="loading-card-box">
-          <div class="loading-icon-wrap">
-            <div class="loading-icon-bg">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#2dd4bf" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <div class="sk-shell">
+        <div class="sk-sidebar">
+          <div class="sk-brand">
+            <div class="sk-brand-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M21.42 10.922a1 1 0 0 0-.019-.838L12.83 2.18a2 2 0 0 0-1.66 0L2.6 10.08a1 1 0 0 0 0 1.832l8.57 7.908a2 2 0 0 0 1.66 0l8.57-7.908a1 1 0 0 0 .02-.89z"></path>
                 <path d="M22 10v6"></path>
                 <path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"></path>
               </svg>
             </div>
+            <div class="sk-brand-text">
+              <div class="sk-brand-title">Bac Study Hub</div>
+              <div class="sk-brand-sub">Espace de travail</div>
+            </div>
           </div>
-          <h1 class="loading-brand-title">MyBac Study Hub</h1>
-          <p class="loading-brand-sub">Lancement de votre espace de travail...</p>
-          <div class="loading-orbit-area">
-            <span role="status" class="twin-orbit-core">
-              <span aria-hidden="true" class="twin-orbit-sub-1"></span>
-              <span aria-hidden="true" class="twin-orbit-sub-2"></span>
-            </span>
+          <div class="sk-nav">
+            <div class="sk-nav-item active"></div>
+            <div class="sk-nav-item"></div>
+            <div class="sk-nav-item"></div>
+            <div class="sk-nav-item"></div>
+            <div class="sk-nav-item"></div>
+            <div class="sk-nav-item"></div>
+            <div class="sk-nav-item"></div>
           </div>
-          <div class="loading-bar-track">
-            <div class="loading-bar-shimmer"></div>
+          <div class="sk-nav-item" style="height: 48px; border-radius: 12px;"></div>
+        </div>
+        <div class="sk-main">
+          <div class="sk-header">
+            <div class="sk-header-title"></div>
+            <div class="sk-header-actions">
+              <div class="sk-circle-btn"></div>
+              <div class="sk-circle-btn"></div>
+              <div class="sk-circle-btn" style="width: 80px; border-radius: 18px;"></div>
+            </div>
+          </div>
+          <div class="sk-content">
+            <div class="sk-card">
+              <div class="sk-shimmer-layer"></div>
+              <div style="height: 20px; width: 180px; border-radius: 6px; background: var(--sk-bone);"></div>
+              <div style="height: 14px; width: 280px; border-radius: 4px; background: var(--sk-bone); margin-top: 8px; opacity: 0.7;"></div>
+              <div class="sk-countdown-row">
+                <div class="sk-countdown-pod"></div>
+                <div class="sk-countdown-pod"></div>
+                <div class="sk-countdown-pod"></div>
+                <div class="sk-countdown-pod"></div>
+              </div>
+            </div>
+            <div class="sk-grid-3">
+              <div class="sk-kpi-card" style="position: relative; overflow: hidden;"><div class="sk-shimmer-layer"></div></div>
+              <div class="sk-kpi-card" style="position: relative; overflow: hidden;"><div class="sk-shimmer-layer"></div></div>
+              <div class="sk-kpi-card" style="position: relative; overflow: hidden;"><div class="sk-shimmer-layer"></div></div>
+            </div>
+            <div class="sk-card" style="height: 240px;">
+              <div class="sk-shimmer-layer"></div>
+              <div style="height: 18px; width: 160px; border-radius: 6px; background: var(--sk-bone); margin-bottom: 16px;"></div>
+              <div style="display: flex; flex-direction: column; gap: 12px;">
+                <div style="height: 42px; border-radius: 10px; background: var(--sk-bone); opacity: 0.6;"></div>
+                <div style="height: 42px; border-radius: 10px; background: var(--sk-bone); opacity: 0.4;"></div>
+                <div style="height: 42px; border-radius: 10px; background: var(--sk-bone); opacity: 0.2;"></div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

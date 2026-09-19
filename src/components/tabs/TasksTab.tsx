@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useDeferredValue, useCallback } from 'react';
 import {
   CheckSquare,
   Plus,
@@ -34,6 +34,215 @@ interface TasksTabProps {
   onDeleteTask: (taskId: string) => void;
   onToggleTaskComplete: (taskId: string) => void;
 }
+
+interface TaskCardItemProps {
+  task: TaskItem;
+  language: AppLanguage;
+  isExpanded: boolean;
+  onToggleComplete: (taskId: string) => void;
+  onDeleteTask: (taskId: string) => void;
+  onToggleExpand: (taskId: string) => void;
+  onToggleChecklistItem: (taskId: string, checkId: string) => void;
+}
+
+const TaskCardItem: React.FC<TaskCardItemProps> = React.memo(({
+  task,
+  language,
+  isExpanded,
+  onToggleComplete,
+  onDeleteTask,
+  onToggleExpand,
+  onToggleChecklistItem,
+}) => {
+  const isAr = language === 'ar';
+  const isCompleted = task.status === 'completed';
+  const subjectInfo = BAC_SUBJECTS.find((s) => s.name === task.subject);
+  const typeVisual = TASK_TYPES_VISUAL[task.type || 'revision'] || TASK_TYPES_VISUAL.revision;
+  const TypeIcon = typeVisual.icon;
+  const urgency = evaluateTaskUrgency(task.dueDate, task.dueTime, task.priority, language);
+
+  return (
+    <div
+      className={`p-4 sm:p-5 rounded-3xl border transition-all ${isCompleted
+        ? 'bg-slate-50/80 dark:bg-[#151D2A]/80 border-slate-200/80 dark:border-slate-800/80 opacity-90'
+        : `${urgency.cardBgClass} ${urgency.borderLeftClass} hover:border-teal-500/60 hover:shadow-md`
+        }`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        {/* Left: Interactive Confirmation Button + Task Info */}
+        <div className="flex items-start gap-3.5 min-w-0 flex-1">
+          {/* Task Confirmation Button */}
+          <button
+            type="button"
+            onClick={() => {
+              if (isCompleted) {
+                chimePlayer.playChime('uncheck');
+              } else {
+                chimePlayer.playChime('complete');
+              }
+              onToggleComplete(task.id);
+            }}
+            title={
+              isCompleted
+                ? isAr
+                  ? 'إلغاء التأكيد'
+                  : 'Marquer comme non complétée'
+                : isAr
+                  ? 'تأكيد إنجاز المهمة وإشعال الشعلة'
+                  : 'Confirmer l’accomplissement de la tâche pour la série'
+            }
+            className={`w-8 h-8 sm:w-9 sm:h-9 rounded-2xl flex items-center justify-center shrink-0 transition-transform active:scale-90 ${isCompleted
+              ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30'
+              : 'border-2 border-slate-300 dark:border-slate-600 hover:border-teal-500 hover:bg-teal-50 dark:hover:bg-teal-950/40 text-slate-400 hover:text-teal-600'
+              }`}
+          >
+            {isCompleted ? (
+              <CheckCircle2 className="w-5 h-5 stroke-[2.5]" />
+            ) : (
+              <Circle className="w-4 h-4 stroke-[2]" />
+            )}
+          </button>
+
+          {/* Task Details */}
+          <div className="min-w-0 flex-1 space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className={`text-sm sm:text-base font-bold text-slate-900 dark:text-white truncate ${isCompleted ? 'line-through text-slate-400 dark:text-slate-500' : ''
+                  }`}
+              >
+                {task.title}
+              </span>
+            </div>
+
+            {/* Metadata Badges with Type & Urgency Differentiation */}
+            <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+              {/* Task Type Badge */}
+              <span
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border text-[10px] font-bold ${typeVisual.badgeClass}`}
+              >
+                <TypeIcon className="w-2.5 h-2.5" />
+                <span>{isAr ? typeVisual.labelAr : typeVisual.labelFr}</span>
+              </span>
+
+              {/* Subject Pill */}
+              <span
+                className={`px-2 py-0.5 rounded-lg font-bold border text-[10px] ${subjectInfo?.badgeColor || 'bg-slate-100 text-slate-700'
+                  }`}
+              >
+                {task.subject}
+              </span>
+
+              {/* Urgency Badge */}
+              {!isCompleted && (
+                <span
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] font-black ${urgency.badgeClass}`}
+                >
+                  <Clock className="w-2.5 h-2.5" />
+                  <span>{urgency.label}</span>
+                </span>
+              )}
+
+              {/* Priority */}
+              <span
+                className={`px-2 py-0.5 rounded-lg font-bold text-[10px] ${task.priority === 'urgent'
+                  ? 'bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-700'
+                  : task.priority === 'high'
+                    ? 'bg-rose-100 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-700'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                  }`}
+              >
+                {task.priority === 'urgent'
+                  ? (isAr ? 'عاجلة جداً' : 'Urgente')
+                  : task.priority === 'high'
+                    ? (isAr ? 'أولوية عالية' : 'Haute')
+                    : task.priority === 'medium'
+                      ? (isAr ? 'متوسطة' : 'Moyenne')
+                      : (isAr ? 'عادية' : 'Basse')}
+              </span>
+
+              {/* Due Date */}
+              <span className="flex items-center gap-1">
+                <Calendar className="w-3 h-3 text-slate-400" />
+                {task.dueDate}
+              </span>
+
+              {/* Subtasks Count if any */}
+              {task.checklist && task.checklist.length > 0 && (
+                <span className="flex items-center gap-1 font-semibold text-teal-600 dark:text-teal-400">
+                  <ListTodo className="w-3 h-3" />
+                  {task.checklist.filter((c) => c.completed).length}/{task.checklist.length}{' '}
+                  {isAr ? 'عناصر' : 'étapes'}
+                </span>
+              )}
+            </div>
+
+            {/* Description if present */}
+            {task.description && (
+              <p className="text-xs text-slate-600 dark:text-slate-400 pt-1 leading-relaxed">
+                {task.description}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Right: Actions */}
+        <div className="flex items-center gap-1 shrink-0">
+          {task.checklist && task.checklist.length > 0 && (
+            <button
+              onClick={() => onToggleExpand(task.id)}
+              className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              title={isExpanded ? 'Réduire' : 'Afficher les sous-tâches'}
+            >
+              {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+          )}
+
+          <button
+            onClick={() => {
+              chimePlayer.playChime('delete');
+              onDeleteTask(task.id);
+            }}
+            className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
+            title={isAr ? 'حذف المهمة' : 'Supprimer la tâche'}
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Expandable Checklist Section */}
+      {isExpanded && task.checklist && task.checklist.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2 pl-11">
+          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+            {isAr ? 'خطوات المهمة الفرعية :' : 'Étapes de la tâche :'}
+          </div>
+          <div className="space-y-1.5">
+            {task.checklist.map((item) => (
+              <div
+                key={item.id}
+                onClick={() => onToggleChecklistItem(task.id, item.id)}
+                className="flex items-center gap-2.5 p-2 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/60 dark:border-slate-800/60 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-xs font-medium"
+              >
+                <input
+                  type="checkbox"
+                  checked={item.completed}
+                  onChange={() => { }}
+                  className="w-4 h-4 rounded text-teal-600 focus:ring-0 cursor-pointer"
+                />
+                <span
+                  className={`flex-1 ${item.completed ? 'line-through text-slate-400' : 'text-slate-700 dark:text-slate-300'
+                    }`}
+                >
+                  {item.text}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});
 
 export const TasksTab: React.FC<TasksTabProps> = ({
   tasks,
@@ -135,12 +344,15 @@ export const TasksTab: React.FC<TasksTabProps> = ({
     }
   };
 
-  // Filter tasks
+  const deferredSearch = useDeferredValue(searchQuery);
+
+  // Filter tasks (memoized with deferred search)
   const filteredTasks = useMemo(() => {
+    const trimmed = deferredSearch.trim();
     return tasks.filter((task) => {
       // Search
-      if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase();
+      if (trimmed) {
+        const query = trimmed.toLowerCase();
         const matchTitle = task.title.toLowerCase().includes(query);
         const matchSubject = task.subject.toLowerCase().includes(query);
         const matchDesc = task.description?.toLowerCase().includes(query);
@@ -168,7 +380,23 @@ export const TasksTab: React.FC<TasksTabProps> = ({
 
       return true;
     });
-  }, [tasks, searchQuery, filterStatus, selectedSubject, selectedPriority, todayStr]);
+  }, [tasks, deferredSearch, filterStatus, selectedSubject, selectedPriority, todayStr]);
+
+  const handleToggleComplete = useCallback((taskId: string) => {
+    onToggleTaskComplete(taskId);
+  }, [onToggleTaskComplete]);
+
+  const handleDeleteTask = useCallback((taskId: string) => {
+    onDeleteTask(taskId);
+  }, [onDeleteTask]);
+
+  const handleToggleExpand = useCallback((taskId: string) => {
+    toggleExpand(taskId);
+  }, []);
+
+  const handleToggleChecklist = useCallback((taskId: string, checkId: string) => {
+    handleToggleChecklistItem(taskId, checkId);
+  }, [tasks, onUpdateTask]);
 
   const completedCount = tasks.filter((t) => t.status === 'completed').length;
   const pendingCount = tasks.filter((t) => t.status !== 'completed').length;
@@ -512,197 +740,18 @@ export const TasksTab: React.FC<TasksTabProps> = ({
 
       {/* Task List */}
       <div className="space-y-3">
-        {filteredTasks.map((task) => {
-          const isCompleted = task.status === 'completed';
-          const subjectInfo = BAC_SUBJECTS.find((s) => s.name === task.subject);
-          const isExpanded = Boolean(expandedTaskIds[task.id]);
-          const typeVisual = TASK_TYPES_VISUAL[task.type || 'revision'] || TASK_TYPES_VISUAL.revision;
-          const TypeIcon = typeVisual.icon;
-          const urgency = evaluateTaskUrgency(task.dueDate, task.dueTime, task.priority, language);
-
-          return (
-            <div
-              key={task.id}
-              className={`p-4 sm:p-5 rounded-3xl border transition-all ${isCompleted
-                ? 'bg-slate-50/80 dark:bg-[#151D2A]/80 border-slate-200/80 dark:border-slate-800/80 opacity-90'
-                : `${urgency.cardBgClass} ${urgency.borderLeftClass} hover:border-teal-500/60 hover:shadow-md`
-                }`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                {/* Left: Interactive Confirmation Button + Task Info */}
-                <div className="flex items-start gap-3.5 min-w-0 flex-1">
-                  {/* Task Confirmation Button */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (isCompleted) {
-                        chimePlayer.playChime('uncheck');
-                      } else {
-                        chimePlayer.playChime('complete');
-                      }
-                      onToggleTaskComplete(task.id);
-                    }}
-                    title={
-                      isCompleted
-                        ? isAr
-                          ? 'إلغاء التأكيد'
-                          : 'Marquer comme non complétée'
-                        : isAr
-                          ? 'تأكيد إنجاز المهمة وإشعال الشعلة'
-                          : 'Confirmer l’accomplissement de la tâche pour la série'
-                    }
-                    className={`w-8 h-8 sm:w-9 sm:h-9 rounded-2xl flex items-center justify-center shrink-0 transition-transform active:scale-90 ${isCompleted
-                      ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30'
-                      : 'border-2 border-slate-300 dark:border-slate-600 hover:border-teal-500 hover:bg-teal-50 dark:hover:bg-teal-950/40 text-slate-400 hover:text-teal-600'
-                      }`}
-                  >
-                    {isCompleted ? (
-                      <CheckCircle2 className="w-5 h-5 stroke-[2.5]" />
-                    ) : (
-                      <Circle className="w-4 h-4 stroke-[2]" />
-                    )}
-                  </button>
-
-                  {/* Task Details */}
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span
-                        className={`text-sm sm:text-base font-bold text-slate-900 dark:text-white truncate ${isCompleted ? 'line-through text-slate-400 dark:text-slate-500' : ''
-                          }`}
-                      >
-                        {task.title}
-                      </span>
-                    </div>
-
-                    {/* Metadata Badges with Type & Urgency Differentiation */}
-                    <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
-                      {/* Task Type Badge */}
-                      <span
-                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border text-[10px] font-bold ${typeVisual.badgeClass}`}
-                      >
-                        <TypeIcon className="w-2.5 h-2.5" />
-                        <span>{isAr ? typeVisual.labelAr : typeVisual.labelFr}</span>
-                      </span>
-
-                      {/* Subject Pill */}
-                      <span
-                        className={`px-2 py-0.5 rounded-lg font-bold border text-[10px] ${subjectInfo?.badgeColor || 'bg-slate-100 text-slate-700'
-                          }`}
-                      >
-                        {task.subject}
-                      </span>
-
-                      {/* Urgency Badge */}
-                      {!isCompleted && (
-                        <span
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] font-black ${urgency.badgeClass}`}
-                        >
-                          <Clock className="w-2.5 h-2.5" />
-                          <span>{urgency.label}</span>
-                        </span>
-                      )}
-
-                      {/* Priority */}
-                      <span
-                        className={`px-2 py-0.5 rounded-lg font-bold text-[10px] ${task.priority === 'urgent'
-                          ? 'bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-700'
-                          : task.priority === 'high'
-                            ? 'bg-rose-100 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-700'
-                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
-                          }`}
-                      >
-                        {task.priority === 'urgent'
-                          ? (isAr ? 'عاجلة جداً' : 'Urgente')
-                          : task.priority === 'high'
-                            ? (isAr ? 'أولوية عالية' : 'Haute')
-                            : task.priority === 'medium'
-                              ? (isAr ? 'متوسطة' : 'Moyenne')
-                              : (isAr ? 'عادية' : 'Basse')}
-                      </span>
-
-                      {/* Due Date */}
-                      <span className="flex items-center gap-1">
-                        <Calendar className="w-3 h-3 text-slate-400" />
-                        {task.dueDate}
-                      </span>
-
-                      {/* Subtasks Count if any */}
-                      {task.checklist && task.checklist.length > 0 && (
-                        <span className="flex items-center gap-1 font-semibold text-teal-600 dark:text-teal-400">
-                          <ListTodo className="w-3 h-3" />
-                          {task.checklist.filter((c) => c.completed).length}/{task.checklist.length}{' '}
-                          {isAr ? 'عناصر' : 'étapes'}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Description if present */}
-                    {task.description && (
-                      <p className="text-xs text-slate-600 dark:text-slate-400 pt-1 leading-relaxed">
-                        {task.description}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Right: Actions */}
-                <div className="flex items-center gap-1 shrink-0">
-                  {task.checklist && task.checklist.length > 0 && (
-                    <button
-                      onClick={() => toggleExpand(task.id)}
-                      className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                      title={isExpanded ? 'Réduire' : 'Afficher les sous-tâches'}
-                    >
-                      {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                    </button>
-                  )}
-
-                  <button
-                    onClick={() => {
-                      chimePlayer.playChime('delete');
-                      onDeleteTask(task.id);
-                    }}
-                    className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
-                    title={isAr ? 'حذف المهمة' : 'Supprimer la tâche'}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Expandable Checklist Section */}
-              {isExpanded && task.checklist && task.checklist.length > 0 && (
-                <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2 pl-11">
-                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                    {isAr ? 'خطوات المهمة الفرعية :' : 'Étapes de la tâche :'}
-                  </div>
-                  <div className="space-y-1.5">
-                    {task.checklist.map((item) => (
-                      <div
-                        key={item.id}
-                        onClick={() => handleToggleChecklistItem(task.id, item.id)}
-                        className="flex items-center gap-2.5 p-2 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/60 dark:border-slate-800/60 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-xs font-medium"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={item.completed}
-                          onChange={() => { }}
-                          className="w-4 h-4 rounded text-teal-600 focus:ring-0 cursor-pointer"
-                        />
-                        <span
-                          className={`flex-1 ${item.completed ? 'line-through text-slate-400' : 'text-slate-700 dark:text-slate-300'
-                            }`}
-                        >
-                          {item.text}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
+        {filteredTasks.map((task) => (
+          <TaskCardItem
+            key={task.id}
+            task={task}
+            language={language}
+            isExpanded={Boolean(expandedTaskIds[task.id])}
+            onToggleComplete={handleToggleComplete}
+            onDeleteTask={handleDeleteTask}
+            onToggleExpand={handleToggleExpand}
+            onToggleChecklistItem={handleToggleChecklist}
+          />
+        ))}
 
         {/* Empty State */}
         {filteredTasks.length === 0 && (

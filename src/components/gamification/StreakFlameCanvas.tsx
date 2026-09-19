@@ -29,8 +29,9 @@ export const StreakFlameCanvas: React.FC<StreakFlameCanvasProps> = ({ streak, is
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    let animId: number;
-    let running = true;
+    let animId: number | null = null;
+    let isVisible = true;
+    let isDestroyed = false;
 
     const dpr = Math.min(typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1, 2);
     const W = 76;
@@ -83,7 +84,7 @@ export const StreakFlameCanvas: React.FC<StreakFlameCanvasProps> = ({ streak, is
     let time = 0;
 
     const render = () => {
-      if (!running) return;
+      if (!isVisible || isDestroyed) return;
       time += 0.038;
 
       ctx.clearRect(0, 0, W, H);
@@ -390,14 +391,49 @@ export const StreakFlameCanvas: React.FC<StreakFlameCanvasProps> = ({ streak, is
         }
       }
 
-      animId = requestAnimationFrame(render);
+      if (isVisible && !isDestroyed) {
+        animId = requestAnimationFrame(render);
+      } else {
+        animId = null;
+      }
     };
 
-    animId = requestAnimationFrame(render);
+    const startLoop = () => {
+      if (animId === null && isVisible && !isDestroyed) {
+        animId = requestAnimationFrame(render);
+      }
+    };
+
+    const stopLoop = () => {
+      if (animId !== null) {
+        cancelAnimationFrame(animId);
+        animId = null;
+      }
+    };
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            isVisible = true;
+            startLoop();
+          } else {
+            isVisible = false;
+            stopLoop();
+          }
+        }
+      },
+      { threshold: 0.05 }
+    );
+
+    observer.observe(canvas);
+    startLoop();
 
     return () => {
-      running = false;
-      cancelAnimationFrame(animId);
+      isDestroyed = true;
+      isVisible = false;
+      stopLoop();
+      observer.disconnect();
     };
   }, [streak, isBroken]);
 

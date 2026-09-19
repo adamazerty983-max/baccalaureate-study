@@ -42,6 +42,7 @@ import { CalendarHeatmap } from './gamification/CalendarHeatmap';
 import { chimePlayer } from '../utils/audio';
 import { getT } from '../utils/i18n';
 import { calculateDailyStreak, getLocalDateStr, getWeekDaysStreakStatus } from '../utils/streak';
+import { preloadTab } from '../utils/tabPreloader';
 
 interface DashboardProps {
   appData: FullAppData;
@@ -439,7 +440,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       {/* =========================================================
           EXECUTIVE GREETING & STATUS BANNER
           ========================================================= */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 sm:p-6 rounded-3xl bg-gradient-to-r from-white via-slate-50/90 to-teal-50/30 dark:from-[#0D1525]/95 dark:via-[#101A2E]/95 dark:to-[#152238]/95 border border-slate-200/80 dark:border-white/[0.08] shadow-xs backdrop-blur-md">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 sm:p-6 rounded-3xl bg-gradient-to-r from-white via-slate-50/90 to-teal-50/30 dark:from-[#0D1525]/95 dark:via-[#101A2E]/95 dark:to-[#152238]/95 border border-slate-200/80 dark:border-white/[0.08] shadow-xs">
         <div className="flex items-center gap-3.5 min-w-0">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-teal-600 via-emerald-600 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-teal-600/20 shrink-0">
             <GraduationCap className="w-6 h-6" />
@@ -476,7 +477,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
           )}
           <button
             onClick={() => onNavigateTab('timeblocking')}
-            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-white/90 hover:bg-slate-100 dark:bg-slate-800/90 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 text-xs font-bold border border-slate-200/80 dark:border-slate-700/80 transition-all cursor-pointer shadow-2xs"
+            onMouseEnter={() => preloadTab('timeblocking')}
+            onFocus={() => preloadTab('timeblocking')}
+            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-white/90 hover:bg-slate-100 dark:bg-slate-800/90 dark:hover:bg-slate-755 text-slate-700 dark:text-slate-200 text-xs font-bold border border-slate-200/80 dark:border-slate-700/80 transition-all cursor-pointer shadow-2xs"
           >
             <CalendarClock className="w-4 h-4 text-teal-600 dark:text-teal-400" />
             <span className="hidden sm:inline">{isAr ? 'المخطط' : 'Planning'}</span>
@@ -497,8 +500,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
           {/* Header Bar */}
           <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="space-y-2 min-w-0">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-500/15 border border-teal-400/30 text-teal-300 text-[11px] font-bold uppercase tracking-wider backdrop-blur-md shadow-xs">
-                <span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse" />
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-500/15 border border-teal-400/30 text-teal-300 text-[11px] font-bold uppercase tracking-wider shadow-xs">
+                <span className="w-1.5 h-1.5 rounded-full bg-teal-400" />
                 <Sparkles className="w-3.5 h-3.5 text-teal-400" />
                 <span>{t('cd_eyebrow')}</span>
               </div>
@@ -521,7 +524,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
             <button
               onClick={() => setIsEditDateOpen(true)}
-              className="self-start sm:self-center flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-teal-200 text-xs font-bold transition-all duration-200 border border-white/15 cursor-pointer backdrop-blur-md hover:border-teal-400/40 shadow-xs active:scale-95 shrink-0"
+              className="self-start sm:self-center flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-teal-200 text-xs font-bold transition-all duration-200 border border-white/15 cursor-pointer hover:border-teal-400/40 shadow-xs active:scale-95 shrink-0"
               title={isAr ? 'تعديل موعد الامتحان' : 'Modifier la date de l\'examen'}
             >
               <Edit2 className="w-3.5 h-3.5" />
@@ -532,7 +535,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           {/* 4 Precision Digital Countdown Pods */}
           <div className="relative z-10 grid grid-cols-4 gap-2 sm:gap-3.5 my-6 text-center">
             {/* Days Pod */}
-            <div className="relative rounded-2xl bg-teal-950/25 dark:bg-black/35 border border-teal-500/25 p-3 sm:p-4 backdrop-blur-md shadow-inner group/pod hover:border-teal-400/50 transition-all duration-200">
+            <div className="relative rounded-2xl bg-teal-950/40 dark:bg-black/50 border border-teal-500/25 p-3 sm:p-4 shadow-inner group/pod hover:border-teal-400/50 transition-all duration-200">
               <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-teal-400/40 to-transparent" />
               <div className="text-2xl sm:text-4xl lg:text-5xl font-black font-['Outfit'] font-mono text-teal-400 tracking-tight">
                 {timeLeft.days}
@@ -543,7 +546,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
 
             {/* Hours Pod */}
-            <div className="relative rounded-2xl bg-sky-950/25 dark:bg-black/35 border border-sky-500/25 p-3 sm:p-4 backdrop-blur-md shadow-inner group/pod hover:border-sky-400/50 transition-all duration-200">
+            <div className="relative rounded-2xl bg-sky-950/40 dark:bg-black/50 border border-sky-500/25 p-3 sm:p-4 shadow-inner group/pod hover:border-sky-400/50 transition-all duration-200">
               <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-sky-400/40 to-transparent" />
               <div className="text-2xl sm:text-4xl lg:text-5xl font-black font-['Outfit'] font-mono text-sky-300 tracking-tight">
                 {timeLeft.hours < 10 ? `0${timeLeft.hours}` : timeLeft.hours}
@@ -554,7 +557,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
 
             {/* Minutes Pod */}
-            <div className="relative rounded-2xl bg-indigo-950/25 dark:bg-black/35 border border-indigo-500/25 p-3 sm:p-4 backdrop-blur-md shadow-inner group/pod hover:border-indigo-400/50 transition-all duration-200">
+            <div className="relative rounded-2xl bg-indigo-950/40 dark:bg-black/50 border border-indigo-500/25 p-3 sm:p-4 shadow-inner group/pod hover:border-indigo-400/50 transition-all duration-200">
               <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-indigo-400/40 to-transparent" />
               <div className="text-2xl sm:text-4xl lg:text-5xl font-black font-['Outfit'] font-mono text-indigo-300 tracking-tight">
                 {timeLeft.minutes < 10 ? `0${timeLeft.minutes}` : timeLeft.minutes}
@@ -565,9 +568,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
 
             {/* Seconds Pod */}
-            <div className="relative rounded-2xl bg-amber-950/25 dark:bg-black/35 border border-amber-500/25 p-3 sm:p-4 backdrop-blur-md shadow-inner group/pod hover:border-amber-400/50 transition-all duration-200">
+            <div className="relative rounded-2xl bg-amber-950/40 dark:bg-black/50 border border-amber-500/25 p-3 sm:p-4 shadow-inner group/pod hover:border-amber-400/50 transition-all duration-200">
               <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-400/40 to-transparent" />
-              <div className="text-2xl sm:text-4xl lg:text-5xl font-black font-['Outfit'] font-mono text-amber-400 tracking-tight animate-pulse">
+              <div className="text-2xl sm:text-4xl lg:text-5xl font-black font-['Outfit'] font-mono text-amber-400 tracking-tight">
                 {timeLeft.seconds < 10 ? `0${timeLeft.seconds}` : timeLeft.seconds}
               </div>
               <div className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-amber-300/80 mt-1">
@@ -660,7 +663,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
 
           {/* 7-Days Progression Matrix */}
-          <div className="relative z-10 w-full bg-black/30 border border-white/10 rounded-2xl p-3.5 sm:p-4 mt-5 space-y-3 backdrop-blur-md">
+          <div className="relative z-10 w-full bg-black/45 border border-white/10 rounded-2xl p-3.5 sm:p-4 mt-5 space-y-3">
             <div className="grid grid-cols-7 gap-1 sm:gap-1.5 text-center">
               {weekDays.map((day, idx) => (
                 <div key={idx} className="flex flex-col items-center gap-1.5">
@@ -733,6 +736,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
         {/* Metric 1: Weighted Average */}
         <div
           onClick={() => onNavigateTab('average')}
+          onMouseEnter={() => preloadTab('average')}
+          onFocus={() => preloadTab('average')}
           className="bento-card p-5 sm:p-5.5 rounded-3xl bg-gradient-to-br from-white via-white to-teal-50/25 dark:from-[#0E1726]/95 dark:via-[#10192A]/95 dark:to-[#122432]/95 border border-slate-200/80 dark:border-white/[0.08] shadow-xs hover:border-teal-500/50 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer flex flex-col justify-between group relative overflow-hidden"
         >
           <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-teal-500 via-teal-400 to-emerald-400" />
@@ -787,6 +792,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
         {/* Metric 2: Goals Progress */}
         <div
           onClick={() => onNavigateTab('goals')}
+          onMouseEnter={() => preloadTab('goals')}
+          onFocus={() => preloadTab('goals')}
           className="bento-card p-5 sm:p-5.5 rounded-3xl bg-gradient-to-br from-white via-white to-emerald-50/25 dark:from-[#0E1726]/95 dark:via-[#10192A]/95 dark:to-[#102422]/95 border border-slate-200/80 dark:border-white/[0.08] shadow-xs hover:border-emerald-500/50 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer flex flex-col justify-between group relative overflow-hidden"
         >
           <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-emerald-500 via-emerald-400 to-teal-400" />
@@ -828,6 +835,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
         {/* Metric 3: Upcoming Exams */}
         <div
           onClick={() => onNavigateTab('quizzes')}
+          onMouseEnter={() => preloadTab('quizzes')}
+          onFocus={() => preloadTab('quizzes')}
           className="bento-card p-5 sm:p-5.5 rounded-3xl bg-gradient-to-br from-white via-white to-indigo-50/25 dark:from-[#0E1726]/95 dark:via-[#10192A]/95 dark:to-[#181938]/95 border border-slate-200/80 dark:border-white/[0.08] shadow-xs hover:border-indigo-500/50 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer flex flex-col justify-between group relative overflow-hidden"
         >
           <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-indigo-500 via-indigo-400 to-purple-500" />
@@ -875,6 +884,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
         {/* Metric 4: Pending Homework */}
         <div
           onClick={() => onNavigateTab('homework')}
+          onMouseEnter={() => preloadTab('homework')}
+          onFocus={() => preloadTab('homework')}
           className="bento-card p-5 sm:p-5.5 rounded-3xl bg-gradient-to-br from-white via-white to-amber-50/25 dark:from-[#0E1726]/95 dark:via-[#10192A]/95 dark:to-[#221c1f]/95 border border-slate-200/80 dark:border-white/[0.08] shadow-xs hover:border-amber-500/50 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer flex flex-col justify-between group relative overflow-hidden"
         >
           <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-amber-500 via-amber-400 to-rose-500" />
@@ -944,6 +955,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
           <button
             onClick={() => onNavigateTab('average')}
+            onMouseEnter={() => preloadTab('average')}
+            onFocus={() => preloadTab('average')}
             className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 flex items-center gap-1 shrink-0 self-end sm:self-center cursor-pointer transition-colors"
           >
             <span>{isAr ? 'سجل النقط والمعاملات' : 'Toutes les matières'}</span>
@@ -1072,6 +1085,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
               <button
                 onClick={() => onNavigateTab('tasks')}
+                onMouseEnter={() => preloadTab('tasks')}
+                onFocus={() => preloadTab('tasks')}
                 className="text-xs font-bold text-teal-600 dark:text-teal-400 hover:text-teal-500 flex items-center gap-1 shrink-0 ml-1 cursor-pointer transition-colors"
               >
                 <span>{isAr ? 'عرض الكل' : 'Voir tout'}</span>
@@ -1246,6 +1261,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       chimePlayer.playChime('click');
                       onNavigateTab('tasks');
                     }}
+                    onMouseEnter={() => preloadTab('tasks')}
+                    onFocus={() => preloadTab('tasks')}
                     className="inline-flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-xl bg-white dark:bg-slate-900 border border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 font-bold hover:bg-rose-50 dark:hover:bg-rose-950/40 shadow-xs cursor-pointer transition-all active:scale-95"
                   >
                     <Flame className="w-2.5 h-2.5 text-rose-500 fill-rose-500" />
@@ -1320,6 +1337,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
                           chimePlayer.playChime('click');
                           onNavigateTab('tasks');
                         }}
+                        onMouseEnter={() => preloadTab('tasks')}
+                        onFocus={() => preloadTab('tasks')}
                         className="min-w-0 flex-1 cursor-pointer"
                         title={isAr ? 'انقر للانتقال وتفاصيل المهمة' : 'Cliquez pour ouvrir la tâche'}
                       >
@@ -1418,6 +1437,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
                           chimePlayer.playChime('click');
                           onNavigateTab('tasks');
                         }}
+                        onMouseEnter={() => preloadTab('tasks')}
+                        onFocus={() => preloadTab('tasks')}
                         title={isAr ? 'فتح تفاصيل المهمة' : 'Ouvrir les détails'}
                         className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-teal-50 dark:bg-slate-800/80 dark:hover:bg-teal-950/40 text-slate-600 hover:text-teal-600 dark:text-slate-400 dark:hover:text-teal-300 text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer"
                       >
@@ -1484,6 +1505,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <div className="flex items-center gap-1.5">
                 <button
                   onClick={() => onNavigateTab('quizzes')}
+                  onMouseEnter={() => preloadTab('quizzes')}
+                  onFocus={() => preloadTab('quizzes')}
                   className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
                 >
                   {isAr ? 'فروض' : 'Quiz'}
@@ -1491,6 +1514,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <span className="text-slate-300 dark:text-slate-700">•</span>
                 <button
                   onClick={() => onNavigateTab('homework')}
+                  onMouseEnter={() => preloadTab('homework')}
+                  onFocus={() => preloadTab('homework')}
                   className="text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:underline cursor-pointer"
                 >
                   {isAr ? 'واجبات' : 'Devoirs'}
@@ -1508,6 +1533,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <div
                   key={exam.id}
                   onClick={() => onNavigateTab('quizzes')}
+                  onMouseEnter={() => preloadTab('quizzes')}
+                  onFocus={() => preloadTab('quizzes')}
                   className="p-3 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/20 border border-indigo-200/60 dark:border-indigo-800/40 flex items-center justify-between gap-2.5 cursor-pointer hover:border-indigo-400/60 hover:shadow-xs transition-all duration-200 group"
                 >
                   <div className="min-w-0">
@@ -1584,6 +1611,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </span>
             <button
               onClick={() => onNavigateTab('timeblocking')}
+              onMouseEnter={() => preloadTab('timeblocking')}
+              onFocus={() => preloadTab('timeblocking')}
               className="text-teal-600 dark:text-teal-400 font-bold hover:text-teal-500 flex items-center gap-1 cursor-pointer transition-colors"
             >
               <span>{isAr ? 'فتح المخطط' : 'Ouvrir'}</span>
@@ -1608,6 +1637,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
         {/* Launchpad 1: Time Blocking Planner */}
         <div
           onClick={() => onNavigateTab('timeblocking')}
+          onMouseEnter={() => preloadTab('timeblocking')}
+          onFocus={() => preloadTab('timeblocking')}
           className="bento-card p-4 sm:p-5 rounded-3xl bg-gradient-to-br from-white via-white to-teal-50/30 dark:from-[#0E1726]/95 dark:via-[#10192A]/95 dark:to-[#122432]/95 border border-slate-200/80 dark:border-white/[0.08] shadow-xs hover:border-teal-500/50 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer flex flex-col justify-between group relative overflow-hidden"
         >
           <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-teal-500 to-emerald-500" />
@@ -1630,6 +1661,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
         {/* Launchpad 2: Leitner Smart Revision */}
         <div
           onClick={() => onNavigateTab('revision')}
+          onMouseEnter={() => preloadTab('revision')}
+          onFocus={() => preloadTab('revision')}
           className="bento-card p-4 sm:p-5 rounded-3xl bg-gradient-to-br from-white via-white to-purple-50/30 dark:from-[#0E1726]/95 dark:via-[#10192A]/95 dark:to-[#1f1936]/95 border border-slate-200/80 dark:border-white/[0.08] shadow-xs hover:border-purple-500/50 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer flex flex-col justify-between group relative overflow-hidden"
         >
           <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-purple-500 to-indigo-500" />
@@ -1652,6 +1685,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
         {/* Launchpad 3: Habits & Rituals */}
         <div
           onClick={() => onNavigateTab('habits')}
+          onMouseEnter={() => preloadTab('habits')}
+          onFocus={() => preloadTab('habits')}
           className="bento-card p-4 sm:p-5 rounded-3xl bg-gradient-to-br from-white via-white to-amber-50/30 dark:from-[#0E1726]/95 dark:via-[#10192A]/95 dark:to-[#261e1b]/95 border border-slate-200/80 dark:border-white/[0.08] shadow-xs hover:border-amber-500/50 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer flex flex-col justify-between group relative overflow-hidden"
         >
           <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-amber-500 to-orange-500" />

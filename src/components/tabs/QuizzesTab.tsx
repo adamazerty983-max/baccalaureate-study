@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useDeferredValue, useCallback } from 'react';
 import {
   HelpCircle,
   Plus,
@@ -27,6 +27,174 @@ interface QuizzesTabProps {
   onDeleteQuiz: (quizId: string) => void;
   onToggleStatus: (quizId: string) => void;
 }
+
+const getDaysUntil = (dateStr: string) => {
+  const target = new Date(dateStr).getTime();
+  const now = new Date().setHours(0, 0, 0, 0);
+  const diffDays = Math.ceil((target - now) / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) return 'Past';
+  if (diffDays === 0) return 'Today!';
+  if (diffDays === 1) return 'Tomorrow';
+  return `In ${diffDays} days`;
+};
+
+const getSubjectBadge = (subjectName: string) => {
+  const found = BAC_SUBJECTS.find((s) => s.name.toLowerCase() === subjectName.toLowerCase());
+  return (
+    found?.badgeColor ||
+    'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+  );
+};
+
+interface QuizCardItemProps {
+  quiz: QuizItem;
+  onToggleStatus: (id: string) => void;
+  onEdit: (quiz: QuizItem) => void;
+  onDelete: (id: string) => void;
+}
+
+const QuizCardItem: React.FC<QuizCardItemProps> = React.memo(({
+  quiz,
+  onToggleStatus,
+  onEdit,
+  onDelete,
+}) => {
+  const isDone = quiz.status === 'completed';
+  const daysLabel = getDaysUntil(quiz.date);
+
+  return (
+    <div
+      className={`p-5 rounded-2xl border transition-all flex flex-col justify-between ${isDone
+          ? 'bg-slate-50/80 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 opacity-80'
+          : quiz.priority === 'urgent'
+            ? 'bg-white dark:bg-slate-900 border-purple-300 dark:border-purple-800 shadow-sm shadow-purple-500/10'
+            : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs'
+        }`}
+    >
+      <div>
+        {/* Top Badges */}
+        <div className="flex items-center justify-between gap-2 flex-wrap mb-2.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <PriorityBadge priority={quiz.priority} />
+            <span
+              className={`text-[11px] font-semibold px-2 py-0.5 rounded-md border ${getSubjectBadge(
+                quiz.subject
+              )}`}
+            >
+              {quiz.subject}
+            </span>
+          </div>
+
+          <span
+            className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${daysLabel === 'Today!' || daysLabel === 'Tomorrow'
+                ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 animate-pulse'
+                : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+              }`}
+          >
+            {daysLabel}
+          </span>
+        </div>
+
+        {/* Title & Notes */}
+        <h3
+          className={`text-base font-bold font-['Outfit'] ${isDone
+              ? 'line-through text-slate-400 dark:text-slate-500'
+              : 'text-slate-900 dark:text-white'
+            }`}
+        >
+          {quiz.title}
+        </h3>
+
+        {quiz.notes && (
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 line-clamp-2">
+            {quiz.notes}
+          </p>
+        )}
+
+        {/* Topics Chips */}
+        <div className="flex items-center gap-1.5 flex-wrap mt-3">
+          {quiz.topics.map((topic, i) => (
+            <span
+              key={i}
+              className="text-[11px] px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-900"
+            >
+              #{topic}
+            </span>
+          ))}
+        </div>
+
+        {/* Target & Actual Score Metrics */}
+        <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 text-xs">
+          <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/80">
+            <span className="text-[10px] uppercase font-semibold text-slate-400 block">
+              Target Score
+            </span>
+            <span className="text-sm font-bold text-amber-600 dark:text-amber-400">
+              {quiz.targetScore} / {quiz.totalScore}
+            </span>
+          </div>
+
+          <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/80">
+            <span className="text-[10px] uppercase font-semibold text-slate-400 block">
+              Actual Score
+            </span>
+            <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400">
+              {quiz.actualScore !== undefined ? `${quiz.actualScore} / ${quiz.totalScore}` : 'Pending'}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom Actions */}
+      <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+          <Calendar className="w-3.5 h-3.5" />
+          <span>
+            {quiz.date} at {quiz.time}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => {
+              onToggleStatus(quiz.id);
+              if (!isDone) {
+                chimePlayer.playChime('complete');
+              } else {
+                chimePlayer.playChime('uncheck');
+              }
+            }}
+            className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors ${isDone
+                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                : 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100'
+              }`}
+          >
+            <Check className="w-3.5 h-3.5" />
+            <span>{isDone ? 'Completed' : 'Mark Done'}</span>
+          </button>
+
+          <button
+            onClick={() => onEdit(quiz)}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
+          >
+            <Edit2 className="w-3.5 h-3.5" />
+          </button>
+
+          <button
+            onClick={() => {
+              chimePlayer.playChime('delete');
+              onDelete(quiz.id);
+            }}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+});
 
 export const QuizzesTab: React.FC<QuizzesTabProps> = ({
   quizzes,
@@ -134,38 +302,37 @@ export const QuizzesTab: React.FC<QuizzesTabProps> = ({
     setIsAddModalOpen(false);
   };
 
-  // Filter quizzes
-  const filteredQuizzes = quizzes.filter((quiz) => {
-    const matchesSearch =
-      quiz.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      quiz.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      quiz.topics.some((t) => t.toLowerCase().includes(searchTerm.toLowerCase()));
+  const deferredSearch = useDeferredValue(searchTerm);
 
-    const matchesSubject = selectedSubject === 'all' || quiz.subject === selectedSubject;
-    const matchesStatus = selectedStatus === 'all' || quiz.status === selectedStatus;
-    const matchesPriority = selectedPriority === 'all' || quiz.priority === selectedPriority;
+  // Filter quizzes (memoized with deferred search)
+  const filteredQuizzes = useMemo(() => {
+    const searchLower = deferredSearch.trim().toLowerCase();
+    return quizzes.filter((quiz) => {
+      const matchesSearch =
+        !searchLower ||
+        quiz.title.toLowerCase().includes(searchLower) ||
+        quiz.subject.toLowerCase().includes(searchLower) ||
+        quiz.topics.some((t) => t.toLowerCase().includes(searchLower));
 
-    return matchesSearch && matchesSubject && matchesStatus && matchesPriority;
-  });
+      const matchesSubject = selectedSubject === 'all' || quiz.subject === selectedSubject;
+      const matchesStatus = selectedStatus === 'all' || quiz.status === selectedStatus;
+      const matchesPriority = selectedPriority === 'all' || quiz.priority === selectedPriority;
 
-  const getDaysUntil = (dateStr: string) => {
-    const target = new Date(dateStr).getTime();
-    const now = new Date().setHours(0, 0, 0, 0);
-    const diffDays = Math.ceil((target - now) / (1000 * 60 * 60 * 24));
+      return matchesSearch && matchesSubject && matchesStatus && matchesPriority;
+    });
+  }, [quizzes, deferredSearch, selectedSubject, selectedStatus, selectedPriority]);
 
-    if (diffDays < 0) return 'Past';
-    if (diffDays === 0) return 'Today!';
-    if (diffDays === 1) return 'Tomorrow';
-    return `In ${diffDays} days`;
-  };
+  const handleEditQuiz = useCallback((quiz: QuizItem) => {
+    openEditModal(quiz);
+  }, []);
 
-  const getSubjectBadge = (subjectName: string) => {
-    const found = BAC_SUBJECTS.find((s) => s.name.toLowerCase() === subjectName.toLowerCase());
-    return (
-      found?.badgeColor ||
-      'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700'
-    );
-  };
+  const handleDeleteQuiz = useCallback((quizId: string) => {
+    onDeleteQuiz(quizId);
+  }, [onDeleteQuiz]);
+
+  const handleToggleStatus = useCallback((quizId: string) => {
+    onToggleStatus(quizId);
+  }, [onToggleStatus]);
 
   return (
     <div className="space-y-6 pb-12">
@@ -260,143 +427,15 @@ export const QuizzesTab: React.FC<QuizzesTabProps> = ({
             <p className="text-xs text-slate-400 mt-1">Click "New Quiz Deadline" to add your upcoming tests!</p>
           </div>
         ) : (
-          filteredQuizzes.map((quiz) => {
-            const isDone = quiz.status === 'completed';
-            const daysLabel = getDaysUntil(quiz.date);
-
-            return (
-              <div
-                key={quiz.id}
-                className={`p-5 rounded-2xl border transition-all flex flex-col justify-between ${isDone
-                    ? 'bg-slate-50/80 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 opacity-80'
-                    : quiz.priority === 'urgent'
-                      ? 'bg-white dark:bg-slate-900 border-purple-300 dark:border-purple-800 shadow-sm shadow-purple-500/10'
-                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs'
-                  }`}
-              >
-                <div>
-                  {/* Top Badges */}
-                  <div className="flex items-center justify-between gap-2 flex-wrap mb-2.5">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <PriorityBadge priority={quiz.priority} />
-                      <span
-                        className={`text-[11px] font-semibold px-2 py-0.5 rounded-md border ${getSubjectBadge(
-                          quiz.subject
-                        )}`}
-                      >
-                        {quiz.subject}
-                      </span>
-                    </div>
-
-                    <span
-                      className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${daysLabel === 'Today!' || daysLabel === 'Tomorrow'
-                          ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 animate-pulse'
-                          : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
-                        }`}
-                    >
-                      {daysLabel}
-                    </span>
-                  </div>
-
-                  {/* Title & Notes */}
-                  <h3
-                    className={`text-base font-bold font-['Outfit'] ${isDone
-                        ? 'line-through text-slate-400 dark:text-slate-500'
-                        : 'text-slate-900 dark:text-white'
-                      }`}
-                  >
-                    {quiz.title}
-                  </h3>
-
-                  {quiz.notes && (
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 line-clamp-2">
-                      {quiz.notes}
-                    </p>
-                  )}
-
-                  {/* Topics Chips */}
-                  <div className="flex items-center gap-1.5 flex-wrap mt-3">
-                    {quiz.topics.map((topic, i) => (
-                      <span
-                        key={i}
-                        className="text-[11px] px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-900"
-                      >
-                        #{topic}
-                      </span>
-                    ))}
-                  </div>
-
-                  {/* Target & Actual Score Metrics */}
-                  <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 text-xs">
-                    <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/80">
-                      <span className="text-[10px] uppercase font-semibold text-slate-400 block">
-                        Target Score
-                      </span>
-                      <span className="text-sm font-bold text-amber-600 dark:text-amber-400">
-                        {quiz.targetScore} / {quiz.totalScore}
-                      </span>
-                    </div>
-
-                    <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/80">
-                      <span className="text-[10px] uppercase font-semibold text-slate-400 block">
-                        Actual Score
-                      </span>
-                      <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400">
-                        {quiz.actualScore !== undefined ? `${quiz.actualScore} / ${quiz.totalScore}` : 'Pending'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Bottom Actions */}
-                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                    <Calendar className="w-3.5 h-3.5" />
-                    <span>
-                      {quiz.date} at {quiz.time}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => {
-                        onToggleStatus(quiz.id);
-                        if (!isDone) {
-                          chimePlayer.playChime('complete');
-                        } else {
-                          chimePlayer.playChime('uncheck');
-                        }
-                      }}
-                      className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors ${isDone
-                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                          : 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100'
-                        }`}
-                    >
-                      <Check className="w-3.5 h-3.5" />
-                      <span>{isDone ? 'Completed' : 'Mark Done'}</span>
-                    </button>
-
-                    <button
-                      onClick={() => openEditModal(quiz)}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        chimePlayer.playChime('delete');
-                        onDeleteQuiz(quiz.id);
-                      }}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          })
+          filteredQuizzes.map((quiz) => (
+            <QuizCardItem
+              key={quiz.id}
+              quiz={quiz}
+              onToggleStatus={handleToggleStatus}
+              onEdit={handleEditQuiz}
+              onDelete={handleDeleteQuiz}
+            />
+          ))
         )}
       </div>
 

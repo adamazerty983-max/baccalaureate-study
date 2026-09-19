@@ -481,7 +481,7 @@ export const StreakCalendarView: React.FC<StreakCalendarViewProps> = ({
                         </span>
                       </div>
                     ) : isToday ? (
-                      <div className="text-[10px] font-bold text-amber-500/80 flex items-center gap-1 animate-pulse">
+                      <div className="text-[10px] font-bold text-amber-500/90 flex items-center gap-1">
                         <Clock className="w-3 h-3" />
                         <span className="hidden sm:inline">
                           {isAr ? 'في الانتظار' : 'En attente'}

@@ -1,18 +1,23 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, Suspense, lazy } from 'react';
 import { Sidebar, MainTabType, ALL_NAV_TABS } from './components/shared/Sidebar';
 import { TopHeader } from './components/shared/TopHeader';
 import { Dashboard } from './components/Dashboard';
-import { TasksTab } from './components/tabs/TasksTab';
-import { QuizzesTab } from './components/tabs/QuizzesTab';
-import { HomeworkTab } from './components/tabs/HomeworkTab';
-import { LectureNotesTab } from './components/tabs/LectureNotesTab';
-import { TimeBlockingTab } from './components/tabs/TimeBlockingTab';
-import { RevisionTab } from './components/tabs/RevisionTab';
-import { AverageTab } from './components/tabs/AverageTab';
-import { GoalsTab } from './components/tabs/GoalsTab';
-import { HabitsTab } from './components/tabs/HabitsTab';
-import { WeeklyReviewTab } from './components/tabs/WeeklyReviewTab';
-import { SettingsTab } from './components/tabs/SettingsTab';
+import { TabLoadingSkeleton } from './components/shared/TabLoadingSkeleton';
+import { tabLoaders, startIdleTabPreloading, preloadTab } from './utils/tabPreloader';
+
+// Code-split secondary tabs connected to preloader cache
+const TasksTab = lazy(() => tabLoaders.tasks().then((m: any) => ({ default: m.TasksTab })));
+const QuizzesTab = lazy(() => tabLoaders.quizzes().then((m: any) => ({ default: m.QuizzesTab })));
+const HomeworkTab = lazy(() => tabLoaders.homework().then((m: any) => ({ default: m.HomeworkTab })));
+const LectureNotesTab = lazy(() => tabLoaders.notes().then((m: any) => ({ default: m.LectureNotesTab })));
+const TimeBlockingTab = lazy(() => tabLoaders.timeblocking().then((m: any) => ({ default: m.TimeBlockingTab })));
+const RevisionTab = lazy(() => tabLoaders.revision().then((m: any) => ({ default: m.RevisionTab })));
+const AverageTab = lazy(() => tabLoaders.average().then((m: any) => ({ default: m.AverageTab })));
+const GoalsTab = lazy(() => tabLoaders.goals().then((m: any) => ({ default: m.GoalsTab })));
+const HabitsTab = lazy(() => tabLoaders.habits().then((m: any) => ({ default: m.HabitsTab })));
+const WeeklyReviewTab = lazy(() => tabLoaders.review().then((m: any) => ({ default: m.WeeklyReviewTab })));
+const SettingsTab = lazy(() => tabLoaders.settings().then((m: any) => ({ default: m.SettingsTab })));
+
 import { FocusModeModal } from './components/shared/FocusModeModal';
 import { KeyboardShortcutsModal } from './components/shared/KeyboardShortcutsModal';
 import { QuickAddModal } from './components/shared/QuickAddModal';
@@ -61,6 +66,16 @@ import { chimePlayer } from './utils/audio';
 export default function App() {
   const [appData, setAppData] = useState<FullAppData>(() => loadStoredAppData());
   const [activeTab, setActiveTab] = useState<MainTabType>('dashboard');
+  const [visitedTabs, setVisitedTabs] = useState<Set<MainTabType>>(() => new Set<MainTabType>(['dashboard']));
+
+  useEffect(() => {
+    setVisitedTabs((prev) => {
+      if (prev.has(activeTab)) return prev;
+      const next = new Set(prev);
+      next.add(activeTab);
+      return next;
+    });
+  }, [activeTab]);
   const [showSplash, setShowSplash] = useState(true);
   const [isSplashFading, setIsSplashFading] = useState(false);
 
@@ -77,6 +92,12 @@ export default function App() {
       clearTimeout(fadeTimer);
       clearTimeout(removeTimer);
     };
+  }, []);
+
+  // Idle background preloader for secondary tabs
+  useEffect(() => {
+    const cancel = startIdleTabPreloading(500);
+    return () => cancel();
   }, []);
 
   // Database and Auth State
@@ -1072,153 +1093,199 @@ export default function App() {
 
         {/* Tab View Container with View Transitions API isolation */}
         <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 main-tab-content">
-          {activeTab === 'dashboard' && (
-            <Dashboard
-              appData={appData}
-              language={language}
-              onNavigateTab={(tab) => handleNavigateTab(tab as MainTabType)}
-              onToggleHomework={handleToggleHomeworkStatus}
-              onToggleTaskComplete={handleToggleTaskComplete}
-              onAddTask={handleAddTask}
-              onDeleteTask={handleDeleteTask}
-              onOpenFocusMode={() => {
-                chimePlayer.playChime('modal_open');
-                setIsFocusMinimized(false);
-                setIsFocusModeOpen(true);
-              }}
-              onUpdateBacDate={(newDate, newStartDate) =>
-                handleUpdateSettings({
-                  baccalaureateDate: newDate,
-                  ...(newStartDate ? { academicYearStartDate: newStartDate } : {}),
-                })
-              }
-            />
+          {visitedTabs.has('dashboard') && (
+            <div className={activeTab === 'dashboard' ? 'w-full' : 'hidden'} aria-hidden={activeTab !== 'dashboard'}>
+              <Dashboard
+                appData={appData}
+                language={language}
+                onNavigateTab={(tab) => handleNavigateTab(tab as MainTabType)}
+                onToggleHomework={handleToggleHomeworkStatus}
+                onToggleTaskComplete={handleToggleTaskComplete}
+                onAddTask={handleAddTask}
+                onDeleteTask={handleDeleteTask}
+                onOpenFocusMode={() => {
+                  chimePlayer.playChime('modal_open');
+                  setIsFocusMinimized(false);
+                  setIsFocusModeOpen(true);
+                }}
+                onUpdateBacDate={(newDate, newStartDate) =>
+                  handleUpdateSettings({
+                    baccalaureateDate: newDate,
+                    ...(newStartDate ? { academicYearStartDate: newStartDate } : {}),
+                  })
+                }
+              />
+            </div>
           )}
 
-          {activeTab === 'tasks' && (
-            <TasksTab
-              tasks={appData.tasks || []}
-              timeBlocks={appData.timeBlocks || []}
-              language={language}
-              onAddTask={handleAddTask}
-              onUpdateTask={handleUpdateTask}
-              onDeleteTask={handleDeleteTask}
-              onToggleTaskComplete={handleToggleTaskComplete}
-            />
+          {visitedTabs.has('tasks') && (
+            <div className={activeTab === 'tasks' ? 'w-full' : 'hidden'} aria-hidden={activeTab !== 'tasks'}>
+              <Suspense fallback={<TabLoadingSkeleton />}>
+                <TasksTab
+                  tasks={appData.tasks || []}
+                  timeBlocks={appData.timeBlocks || []}
+                  language={language}
+                  onAddTask={handleAddTask}
+                  onUpdateTask={handleUpdateTask}
+                  onDeleteTask={handleDeleteTask}
+                  onToggleTaskComplete={handleToggleTaskComplete}
+                />
+              </Suspense>
+            </div>
           )}
 
-          {activeTab === 'quizzes' && (
-            <QuizzesTab
-              quizzes={appData.quizzes}
-              onAddQuiz={handleAddQuiz}
-              onUpdateQuiz={handleUpdateQuiz}
-              onDeleteQuiz={handleDeleteQuiz}
-              onToggleStatus={handleToggleQuizStatus}
-            />
+          {visitedTabs.has('quizzes') && (
+            <div className={activeTab === 'quizzes' ? 'w-full' : 'hidden'} aria-hidden={activeTab !== 'quizzes'}>
+              <Suspense fallback={<TabLoadingSkeleton />}>
+                <QuizzesTab
+                  quizzes={appData.quizzes}
+                  onAddQuiz={handleAddQuiz}
+                  onUpdateQuiz={handleUpdateQuiz}
+                  onDeleteQuiz={handleDeleteQuiz}
+                  onToggleStatus={handleToggleQuizStatus}
+                />
+              </Suspense>
+            </div>
           )}
 
-          {activeTab === 'homework' && (
-            <HomeworkTab
-              homework={appData.homework}
-              onAddHomework={handleAddHomework}
-              onUpdateHomework={handleUpdateHomework}
-              onDeleteHomework={handleDeleteHomework}
-              onToggleStatus={handleToggleHomeworkStatus}
-            />
+          {visitedTabs.has('homework') && (
+            <div className={activeTab === 'homework' ? 'w-full' : 'hidden'} aria-hidden={activeTab !== 'homework'}>
+              <Suspense fallback={<TabLoadingSkeleton />}>
+                <HomeworkTab
+                  homework={appData.homework}
+                  onAddHomework={handleAddHomework}
+                  onUpdateHomework={handleUpdateHomework}
+                  onDeleteHomework={handleDeleteHomework}
+                  onToggleStatus={handleToggleHomeworkStatus}
+                />
+              </Suspense>
+            </div>
           )}
 
-          {activeTab === 'notes' && (
-            <LectureNotesTab
-              notes={appData.notes}
-              homework={appData.homework}
-              onAddNote={handleAddNote}
-              onUpdateNote={handleUpdateNote}
-              onDeleteNote={handleDeleteNote}
-            />
+          {visitedTabs.has('notes') && (
+            <div className={activeTab === 'notes' ? 'w-full' : 'hidden'} aria-hidden={activeTab !== 'notes'}>
+              <Suspense fallback={<TabLoadingSkeleton />}>
+                <LectureNotesTab
+                  notes={appData.notes}
+                  homework={appData.homework}
+                  onAddNote={handleAddNote}
+                  onUpdateNote={handleUpdateNote}
+                  onDeleteNote={handleDeleteNote}
+                />
+              </Suspense>
+            </div>
           )}
 
-          {activeTab === 'timeblocking' && (
-            <TimeBlockingTab
-              timeBlocks={appData.timeBlocks}
-              tasks={appData.tasks || []}
-              language={language}
-              onAddTimeBlock={handleAddTimeBlock}
-              onUpdateTimeBlock={handleUpdateTimeBlock}
-              onDeleteTimeBlock={handleDeleteTimeBlock}
-              onToggleComplete={handleToggleBlockComplete}
-            />
+          {visitedTabs.has('timeblocking') && (
+            <div className={activeTab === 'timeblocking' ? 'w-full' : 'hidden'} aria-hidden={activeTab !== 'timeblocking'}>
+              <Suspense fallback={<TabLoadingSkeleton />}>
+                <TimeBlockingTab
+                  timeBlocks={appData.timeBlocks}
+                  tasks={appData.tasks || []}
+                  language={language}
+                  onAddTimeBlock={handleAddTimeBlock}
+                  onUpdateTimeBlock={handleUpdateTimeBlock}
+                  onDeleteTimeBlock={handleDeleteTimeBlock}
+                  onToggleComplete={handleToggleBlockComplete}
+                />
+              </Suspense>
+            </div>
           )}
 
-          {activeTab === 'revision' && (
-            <RevisionTab
-              lessons={appData.lessons || []}
-              language={language}
-              onAddLesson={handleAddLesson}
-              onReviewLesson={handleReviewLesson}
-              onDeleteLesson={handleDeleteLesson}
-            />
+          {visitedTabs.has('revision') && (
+            <div className={activeTab === 'revision' ? 'w-full' : 'hidden'} aria-hidden={activeTab !== 'revision'}>
+              <Suspense fallback={<TabLoadingSkeleton />}>
+                <RevisionTab
+                  lessons={appData.lessons || []}
+                  language={language}
+                  onAddLesson={handleAddLesson}
+                  onReviewLesson={handleReviewLesson}
+                  onDeleteLesson={handleDeleteLesson}
+                />
+              </Suspense>
+            </div>
           )}
 
-          {activeTab === 'average' && (
-            <AverageTab
-              grades={appData.grades || []}
-              language={language}
-              customCoefficients={appData.settings.customCoefficients}
-              onAddGrade={handleAddGrade}
-              onDeleteGrade={handleDeleteGrade}
-            />
+          {visitedTabs.has('average') && (
+            <div className={activeTab === 'average' ? 'w-full' : 'hidden'} aria-hidden={activeTab !== 'average'}>
+              <Suspense fallback={<TabLoadingSkeleton />}>
+                <AverageTab
+                  grades={appData.grades || []}
+                  language={language}
+                  customCoefficients={appData.settings.customCoefficients}
+                  onAddGrade={handleAddGrade}
+                  onDeleteGrade={handleDeleteGrade}
+                />
+              </Suspense>
+            </div>
           )}
 
-          {activeTab === 'goals' && (
-            <GoalsTab
-              goals={appData.goals || []}
-              language={language}
-              onAddGoal={handleAddGoal}
-              onToggleGoal={handleToggleGoal}
-              onDeleteGoal={handleDeleteGoal}
-            />
+          {visitedTabs.has('goals') && (
+            <div className={activeTab === 'goals' ? 'w-full' : 'hidden'} aria-hidden={activeTab !== 'goals'}>
+              <Suspense fallback={<TabLoadingSkeleton />}>
+                <GoalsTab
+                  goals={appData.goals || []}
+                  language={language}
+                  onAddGoal={handleAddGoal}
+                  onToggleGoal={handleToggleGoal}
+                  onDeleteGoal={handleDeleteGoal}
+                />
+              </Suspense>
+            </div>
           )}
 
-          {activeTab === 'habits' && (
-            <HabitsTab
-              habits={appData.habits || []}
-              habitLogs={appData.habitLogs || {}}
-              tasks={appData.tasks || []}
-              timeBlocks={appData.timeBlocks || []}
-              language={language}
-              onToggleHabitDay={handleToggleHabitDay}
-              onToggleHabit={handleToggleHabitDay}
-              onAddHabit={handleAddHabit}
-              onDeleteHabit={handleDeleteHabit}
-            />
+          {visitedTabs.has('habits') && (
+            <div className={activeTab === 'habits' ? 'w-full' : 'hidden'} aria-hidden={activeTab !== 'habits'}>
+              <Suspense fallback={<TabLoadingSkeleton />}>
+                <HabitsTab
+                  habits={appData.habits || []}
+                  habitLogs={appData.habitLogs || {}}
+                  tasks={appData.tasks || []}
+                  timeBlocks={appData.timeBlocks || []}
+                  language={language}
+                  onToggleHabitDay={handleToggleHabitDay}
+                  onToggleHabit={handleToggleHabitDay}
+                  onAddHabit={handleAddHabit}
+                  onDeleteHabit={handleDeleteHabit}
+                />
+              </Suspense>
+            </div>
           )}
 
-          {activeTab === 'review' && (
-            <WeeklyReviewTab
-              appData={appData}
-              language={language}
-              onSaveWeeklyReview={handleSaveWeeklyReview}
-              onSaveMonthlyReview={handleSaveMonthlyReview}
-              onAddTimeBlock={handleAddTimeBlock}
-              onStartFocusMode={handleStartFocusMode}
-              onNavigateTab={(tab) => handleNavigateTab(tab)}
-            />
+          {visitedTabs.has('review') && (
+            <div className={activeTab === 'review' ? 'w-full' : 'hidden'} aria-hidden={activeTab !== 'review'}>
+              <Suspense fallback={<TabLoadingSkeleton />}>
+                <WeeklyReviewTab
+                  appData={appData}
+                  language={language}
+                  onSaveWeeklyReview={handleSaveWeeklyReview}
+                  onSaveMonthlyReview={handleSaveMonthlyReview}
+                  onAddTimeBlock={handleAddTimeBlock}
+                  onStartFocusMode={handleStartFocusMode}
+                  onNavigateTab={(tab) => handleNavigateTab(tab)}
+                />
+              </Suspense>
+            </div>
           )}
 
-          {activeTab === 'settings' && (
-            <SettingsTab
-              settings={appData.settings}
-              fullData={appData}
-              language={language}
-              onUpdateSettings={handleUpdateSettings}
-              onImportData={handleImportData}
-              onResetData={handleResetData}
-              syncState={syncState}
-              onOpenDatabaseModal={() => {
-                chimePlayer.playChime('modal_open');
-                setIsDatabaseModalOpen(true);
-              }}
-            />
+          {visitedTabs.has('settings') && (
+            <div className={activeTab === 'settings' ? 'w-full' : 'hidden'} aria-hidden={activeTab !== 'settings'}>
+              <Suspense fallback={<TabLoadingSkeleton />}>
+                <SettingsTab
+                  settings={appData.settings}
+                  fullData={appData}
+                  language={language}
+                  onUpdateSettings={handleUpdateSettings}
+                  onImportData={handleImportData}
+                  onResetData={handleResetData}
+                  syncState={syncState}
+                  onOpenDatabaseModal={() => {
+                    chimePlayer.playChime('modal_open');
+                    setIsDatabaseModalOpen(true);
+                  }}
+                />
+              </Suspense>
+            </div>
           )}
         </main>
       </div>

@@ -516,7 +516,7 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({
       {selectedDayDetails && selectedDayDetails.total > 0 && (
         <div className="p-3.5 rounded-2xl bg-teal-500/10 border border-teal-500/20 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 animate-fade-in">
           <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-teal-500 animate-pulse" />
+            <span className="w-2.5 h-2.5 rounded-full bg-teal-500" />
             <span className="font-bold text-slate-800 dark:text-slate-200">
               {isAr ? 'تفاصيل نشاط يوم ' : 'Détails du '}
               {new Date(selectedDayDetails.dateStr + 'T12:00:00').toLocaleDateString(

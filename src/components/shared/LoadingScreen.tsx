@@ -33,12 +33,12 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({
         {/* Brand Icon with Glow */}
         <div className="relative mb-6">
           <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-teal-500 to-emerald-400 p-0.5 shadow-xl shadow-teal-500/20 flex items-center justify-center">
-            <div className="w-full h-full bg-[#0C121E]/80 rounded-[22px] flex items-center justify-center backdrop-blur-xs">
+            <div className="w-full h-full bg-[#0C121E]/95 rounded-[22px] flex items-center justify-center">
               <GraduationCap className="w-8 h-8 text-teal-400" />
             </div>
           </div>
-          {/* Subtle Outer Pulse */}
-          <div className="absolute -inset-1 rounded-3xl bg-teal-500/20 blur-sm -z-10 animate-pulse" />
+          {/* Subtle Outer Glow */}
+          <div className="absolute -inset-1 rounded-3xl bg-teal-500/20 blur-sm -z-10" />
         </div>
 
         {/* Title */}

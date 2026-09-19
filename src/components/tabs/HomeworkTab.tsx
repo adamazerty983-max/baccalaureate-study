@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useDeferredValue, useCallback } from 'react';
 import {
   BookOpen,
   Plus,
@@ -27,6 +27,191 @@ interface HomeworkTabProps {
   onDeleteHomework: (hwId: string) => void;
   onToggleStatus: (hwId: string) => void;
 }
+
+const getSubjectBadge = (subjectName: string) => {
+  const found = BAC_SUBJECTS.find((s) => s.name.toLowerCase() === subjectName.toLowerCase());
+  return (
+    found?.badgeColor ||
+    'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+  );
+};
+
+const getDueStatus = (dueDateStr: string) => {
+  const target = new Date(dueDateStr).getTime();
+  const today = new Date().setHours(0, 0, 0, 0);
+  const diff = Math.ceil((target - today) / (1000 * 60 * 60 * 24));
+
+  if (diff < 0) return { label: 'Overdue', color: 'text-rose-600 dark:text-rose-400 font-bold' };
+  if (diff === 0) return { label: 'Due Today', color: 'text-amber-600 dark:text-amber-400 font-bold' };
+  if (diff === 1) return { label: 'Due Tomorrow', color: 'text-amber-500 font-semibold' };
+  return { label: `Due in ${diff} days`, color: 'text-slate-500 dark:text-slate-400' };
+};
+
+interface HomeworkCardItemProps {
+  hw: HomeworkItem;
+  onToggleStatus: (id: string) => void;
+  onEdit: (hw: HomeworkItem) => void;
+  onDelete: (id: string) => void;
+  onToggleChecklistItem: (hw: HomeworkItem, checkId: string) => void;
+}
+
+const HomeworkCardItem: React.FC<HomeworkCardItemProps> = React.memo(({
+  hw,
+  onToggleStatus,
+  onEdit,
+  onDelete,
+  onToggleChecklistItem,
+}) => {
+  const isSubmitted = hw.status === 'submitted';
+  const dueInfo = getDueStatus(hw.dueDate);
+
+  return (
+    <div
+      className={`p-5 rounded-2xl border transition-all flex flex-col justify-between ${isSubmitted
+          ? 'bg-slate-50/80 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 opacity-80'
+          : hw.isProjectSubmission
+            ? 'bg-gradient-to-br from-white via-rose-50/20 to-white dark:from-slate-900 dark:via-rose-950/20 dark:to-slate-900 border-rose-200 dark:border-rose-900 shadow-xs'
+            : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs'
+        }`}
+    >
+      <div>
+        {/* Top Badges */}
+        <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <PriorityBadge priority={hw.priority} />
+            <span
+              className={`text-[11px] font-semibold px-2 py-0.5 rounded-md border ${getSubjectBadge(
+                hw.subject
+              )}`}
+            >
+              {hw.subject}
+            </span>
+            {hw.isProjectSubmission && (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-200 flex items-center gap-1">
+                <FolderGit2 className="w-3 h-3" /> Project
+              </span>
+            )}
+          </div>
+
+          <span className={`text-xs ${dueInfo.color}`}>{dueInfo.label}</span>
+        </div>
+
+        {/* Title & Notes */}
+        <h3
+          className={`text-base font-bold font-['Outfit'] ${isSubmitted
+              ? 'line-through text-slate-400 dark:text-slate-500'
+              : 'text-slate-900 dark:text-white'
+            }`}
+        >
+          {hw.title}
+        </h3>
+
+        {hw.notes && (
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">
+            {hw.notes}
+          </p>
+        )}
+
+        {/* Interactive Checklist */}
+        {hw.checklist && hw.checklist.length > 0 && (
+          <div className="mt-3 space-y-1.5 bg-slate-50/80 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+              Checklist Milestones ({hw.checklist.filter((c) => c.completed).length}/
+              {hw.checklist.length})
+            </span>
+            {hw.checklist.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => onToggleChecklistItem(hw, item.id)}
+                className="w-full flex items-center gap-2 text-left text-xs py-0.5 group focus:outline-none"
+              >
+                {item.completed ? (
+                  <CheckSquare className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                ) : (
+                  <Square className="w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-600 shrink-0" />
+                )}
+                <span
+                  className={`truncate ${item.completed
+                      ? 'line-through text-slate-400 dark:text-slate-500'
+                      : 'text-slate-700 dark:text-slate-300'
+                    }`}
+                >
+                  {item.text}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Progress Bar & Slider */}
+        <div className="mt-4">
+          <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 mb-1 font-medium">
+            <span>Completion Progress</span>
+            <span className="font-bold text-indigo-600 dark:text-indigo-400">
+              {hw.progressPercentage}%
+            </span>
+          </div>
+          <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-300 ${hw.progressPercentage === 100
+                  ? 'bg-emerald-500'
+                  : 'bg-gradient-to-r from-rose-500 to-indigo-500'
+                }`}
+              style={{ width: `${hw.progressPercentage}%` }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom Actions */}
+      <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+          <Calendar className="w-3.5 h-3.5" />
+          <span>
+            {hw.dueDate} {hw.dueTime ? `at ${hw.dueTime}` : ''}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => {
+              onToggleStatus(hw.id);
+              if (!isSubmitted) {
+                chimePlayer.playChime('complete');
+              } else {
+                chimePlayer.playChime('uncheck');
+              }
+            }}
+            className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors ${isSubmitted
+                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                : 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 hover:bg-rose-100'
+              }`}
+          >
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            <span>{isSubmitted ? 'Submitted' : 'Submit Done'}</span>
+          </button>
+
+          <button
+            onClick={() => onEdit(hw)}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
+          >
+            <Edit2 className="w-3.5 h-3.5" />
+          </button>
+
+          <button
+            onClick={() => {
+              chimePlayer.playChime('delete');
+              onDelete(hw.id);
+            }}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+});
 
 export const HomeworkTab: React.FC<HomeworkTabProps> = ({
   homework,
@@ -160,38 +345,37 @@ export const HomeworkTab: React.FC<HomeworkTabProps> = ({
     }
   };
 
-  const filteredHomework = homework.filter((hw) => {
-    const matchesSearch =
-      hw.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      hw.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (hw.notes && hw.notes.toLowerCase().includes(searchTerm.toLowerCase()));
+  const deferredSearch = useDeferredValue(searchTerm);
 
-    const matchesSubject = selectedSubject === 'all' || hw.subject === selectedSubject;
-    const matchesStatus = selectedStatus === 'all' || hw.status === selectedStatus;
-    const matchesPriority = selectedPriority === 'all' || hw.priority === selectedPriority;
-    const matchesProjects = !filterProjectsOnly || hw.isProjectSubmission;
+  const filteredHomework = useMemo(() => {
+    const searchLower = deferredSearch.trim().toLowerCase();
+    return homework.filter((hw) => {
+      const matchesSearch =
+        !searchLower ||
+        hw.title.toLowerCase().includes(searchLower) ||
+        hw.subject.toLowerCase().includes(searchLower) ||
+        (hw.notes && hw.notes.toLowerCase().includes(searchLower));
 
-    return matchesSearch && matchesSubject && matchesStatus && matchesPriority && matchesProjects;
-  });
+      const matchesSubject = selectedSubject === 'all' || hw.subject === selectedSubject;
+      const matchesStatus = selectedStatus === 'all' || hw.status === selectedStatus;
+      const matchesPriority = selectedPriority === 'all' || hw.priority === selectedPriority;
+      const matchesProjects = !filterProjectsOnly || hw.isProjectSubmission;
 
-  const getSubjectBadge = (subjectName: string) => {
-    const found = BAC_SUBJECTS.find((s) => s.name.toLowerCase() === subjectName.toLowerCase());
-    return (
-      found?.badgeColor ||
-      'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700'
-    );
-  };
+      return matchesSearch && matchesSubject && matchesStatus && matchesPriority && matchesProjects;
+    });
+  }, [homework, deferredSearch, selectedSubject, selectedStatus, selectedPriority, filterProjectsOnly]);
 
-  const getDueStatus = (dueDateStr: string) => {
-    const target = new Date(dueDateStr).getTime();
-    const today = new Date().setHours(0, 0, 0, 0);
-    const diff = Math.ceil((target - today) / (1000 * 60 * 60 * 24));
+  const handleEditHw = useCallback((hw: HomeworkItem) => {
+    openEditModal(hw);
+  }, []);
 
-    if (diff < 0) return { label: 'Overdue', color: 'text-rose-600 dark:text-rose-400 font-bold' };
-    if (diff === 0) return { label: 'Due Today', color: 'text-amber-600 dark:text-amber-400 font-bold' };
-    if (diff === 1) return { label: 'Due Tomorrow', color: 'text-amber-500 font-semibold' };
-    return { label: `Due in ${diff} days`, color: 'text-slate-500 dark:text-slate-400' };
-  };
+  const handleDeleteHw = useCallback((hwId: string) => {
+    onDeleteHomework(hwId);
+  }, [onDeleteHomework]);
+
+  const handleToggleStatus = useCallback((hwId: string) => {
+    onToggleStatus(hwId);
+  }, [onToggleStatus]);
 
   return (
     <div className="space-y-6 pb-12">
@@ -300,158 +484,16 @@ export const HomeworkTab: React.FC<HomeworkTabProps> = ({
             <p className="text-xs text-slate-400 mt-1">Add a new homework deadline to start organizing!</p>
           </div>
         ) : (
-          filteredHomework.map((hw) => {
-            const isSubmitted = hw.status === 'submitted';
-            const dueInfo = getDueStatus(hw.dueDate);
-
-            return (
-              <div
-                key={hw.id}
-                className={`p-5 rounded-2xl border transition-all flex flex-col justify-between ${isSubmitted
-                    ? 'bg-slate-50/80 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 opacity-80'
-                    : hw.isProjectSubmission
-                      ? 'bg-gradient-to-br from-white via-rose-50/20 to-white dark:from-slate-900 dark:via-rose-950/20 dark:to-slate-900 border-rose-200 dark:border-rose-900 shadow-xs'
-                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs'
-                  }`}
-              >
-                <div>
-                  {/* Top Badges */}
-                  <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <PriorityBadge priority={hw.priority} />
-                      <span
-                        className={`text-[11px] font-semibold px-2 py-0.5 rounded-md border ${getSubjectBadge(
-                          hw.subject
-                        )}`}
-                      >
-                        {hw.subject}
-                      </span>
-                      {hw.isProjectSubmission && (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-200 flex items-center gap-1">
-                          <FolderGit2 className="w-3 h-3" /> Project
-                        </span>
-                      )}
-                    </div>
-
-                    <span className={`text-xs ${dueInfo.color}`}>{dueInfo.label}</span>
-                  </div>
-
-                  {/* Title & Notes */}
-                  <h3
-                    className={`text-base font-bold font-['Outfit'] ${isSubmitted
-                        ? 'line-through text-slate-400 dark:text-slate-500'
-                        : 'text-slate-900 dark:text-white'
-                      }`}
-                  >
-                    {hw.title}
-                  </h3>
-
-                  {hw.notes && (
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">
-                      {hw.notes}
-                    </p>
-                  )}
-
-                  {/* Interactive Checklist */}
-                  {hw.checklist && hw.checklist.length > 0 && (
-                    <div className="mt-3 space-y-1.5 bg-slate-50/80 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
-                        Checklist Milestones ({hw.checklist.filter((c) => c.completed).length}/
-                        {hw.checklist.length})
-                      </span>
-                      {hw.checklist.map((item) => (
-                        <button
-                          key={item.id}
-                          onClick={() => handleToggleChecklistItem(hw, item.id)}
-                          className="w-full flex items-center gap-2 text-left text-xs py-0.5 group focus:outline-none"
-                        >
-                          {item.completed ? (
-                            <CheckSquare className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                          ) : (
-                            <Square className="w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-600 shrink-0" />
-                          )}
-                          <span
-                            className={`truncate ${item.completed
-                                ? 'line-through text-slate-400 dark:text-slate-500'
-                                : 'text-slate-700 dark:text-slate-300'
-                              }`}
-                          >
-                            {item.text}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Progress Bar & Slider */}
-                  <div className="mt-4">
-                    <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 mb-1 font-medium">
-                      <span>Completion Progress</span>
-                      <span className="font-bold text-indigo-600 dark:text-indigo-400">
-                        {hw.progressPercentage}%
-                      </span>
-                    </div>
-                    <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all duration-300 ${hw.progressPercentage === 100
-                            ? 'bg-emerald-500'
-                            : 'bg-gradient-to-r from-rose-500 to-indigo-500'
-                          }`}
-                        style={{ width: `${hw.progressPercentage}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Bottom Actions */}
-                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-                    <Calendar className="w-3.5 h-3.5" />
-                    <span>
-                      {hw.dueDate} {hw.dueTime ? `at ${hw.dueTime}` : ''}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => {
-                        onToggleStatus(hw.id);
-                        if (!isSubmitted) {
-                          chimePlayer.playChime('complete');
-                        } else {
-                          chimePlayer.playChime('uncheck');
-                        }
-                      }}
-                      className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors ${isSubmitted
-                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                          : 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 hover:bg-rose-100'
-                        }`}
-                    >
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>{isSubmitted ? 'Submitted' : 'Submit Done'}</span>
-                    </button>
-
-                    <button
-                      onClick={() => openEditModal(hw)}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        chimePlayer.playChime('delete');
-                        onDeleteHomework(hw.id);
-                      }}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          })
+          filteredHomework.map((hw) => (
+            <HomeworkCardItem
+              key={hw.id}
+              hw={hw}
+              onToggleStatus={handleToggleStatus}
+              onEdit={handleEditHw}
+              onDelete={handleDeleteHw}
+              onToggleChecklistItem={handleToggleChecklistItem}
+            />
+          ))
         )}
       </div>
 

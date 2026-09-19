@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useDeferredValue, useCallback } from 'react';
 import {
   FileText,
   Plus,
@@ -29,6 +29,53 @@ interface LectureNotesTabProps {
   onDeleteNote: (noteId: string) => void;
 }
 
+interface NoteListItemProps {
+  note: LectureNote;
+  isSelected: boolean;
+  onSelect: (id: string) => void;
+}
+
+const NoteListItem: React.FC<NoteListItemProps> = React.memo(({
+  note,
+  isSelected,
+  onSelect,
+}) => {
+  const hasReminder = Boolean(note.linkedSubmissionDeadlineId || note.reviewReminderDate);
+
+  return (
+    <div
+      onClick={() => onSelect(note.id)}
+      className={`cursor-pointer p-4 rounded-xl border transition-all text-left group ${
+        isSelected
+          ? 'bg-indigo-50/80 dark:bg-indigo-950/60 border-indigo-300 dark:border-indigo-700 shadow-xs'
+          : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+      }`}
+    >
+      <div className="flex items-center justify-between gap-1 mb-1.5">
+        <span className="text-[11px] font-bold text-indigo-700 dark:text-indigo-300">
+          {note.subject}
+        </span>
+        <span className="text-[10px] text-slate-400">{note.date}</span>
+      </div>
+
+      <h3 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white line-clamp-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+        {note.title}
+      </h3>
+
+      <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 mt-1">
+        {note.summary || note.content}
+      </p>
+
+      {hasReminder && (
+        <div className="mt-2 flex items-center gap-1.5 text-[10px] font-semibold text-rose-600 dark:text-rose-400">
+          <Bell className="w-3 h-3" />
+          <span>Project Deadline Linked</span>
+        </div>
+      )}
+    </div>
+  );
+});
+
 export const LectureNotesTab: React.FC<LectureNotesTabProps> = ({
   notes,
   homework,
@@ -54,11 +101,14 @@ export const LectureNotesTab: React.FC<LectureNotesTabProps> = ({
   const [formLinkedProject, setFormLinkedProject] = useState('');
   const [formReviewReminder, setFormReviewReminder] = useState('');
 
-  // Collect all unique tags
-  const allTags = Array.from(new Set(notes.flatMap((n) => n.tags || [])));
+  // Collect all unique tags (memoized)
+  const allTags = useMemo(() => Array.from(new Set(notes.flatMap((n) => n.tags || []))), [notes]);
 
-  // Available project submissions for linking
-  const projectDeadlines = homework.filter((h) => h.isProjectSubmission || h.status !== 'submitted');
+  // Available project submissions for linking (memoized)
+  const projectDeadlines = useMemo(
+    () => homework.filter((h) => h.isProjectSubmission || h.status !== 'submitted'),
+    [homework]
+  );
 
   const openNewModal = () => {
     setEditingNote(null);
@@ -134,25 +184,38 @@ export const LectureNotesTab: React.FC<LectureNotesTabProps> = ({
     setIsModalOpen(false);
   };
 
-  const filteredNotes = notes.filter((n) => {
-    const matchesSearch =
-      n.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      n.summary.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      n.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      n.subject.toLowerCase().includes(searchTerm.toLowerCase());
+  const deferredSearch = useDeferredValue(searchTerm);
 
-    const matchesSubject = selectedSubject === 'all' || n.subject === selectedSubject;
-    const matchesTag = selectedTag === 'all' || n.tags.includes(selectedTag);
+  const filteredNotes = useMemo(() => {
+    const searchLower = deferredSearch.trim().toLowerCase();
+    return notes.filter((n) => {
+      const matchesSearch =
+        !searchLower ||
+        n.title.toLowerCase().includes(searchLower) ||
+        n.summary.toLowerCase().includes(searchLower) ||
+        n.content.toLowerCase().includes(searchLower) ||
+        n.subject.toLowerCase().includes(searchLower);
 
-    return matchesSearch && matchesSubject && matchesTag;
-  });
+      const matchesSubject = selectedSubject === 'all' || n.subject === selectedSubject;
+      const matchesTag = selectedTag === 'all' || n.tags.includes(selectedTag);
 
-  const selectedNote = notes.find((n) => n.id === activeNoteId) || filteredNotes[0] || notes[0];
+      return matchesSearch && matchesSubject && matchesTag;
+    });
+  }, [notes, deferredSearch, selectedSubject, selectedTag]);
+
+  const selectedNote = useMemo(
+    () => notes.find((n) => n.id === activeNoteId) || filteredNotes[0] || notes[0],
+    [notes, activeNoteId, filteredNotes]
+  );
 
   // Linked Project Info for Active Note
-  const linkedProjectInfo = selectedNote?.linkedSubmissionDeadlineId
-    ? homework.find((h) => h.id === selectedNote.linkedSubmissionDeadlineId)
-    : null;
+  const linkedProjectInfo = useMemo(
+    () =>
+      selectedNote?.linkedSubmissionDeadlineId
+        ? homework.find((h) => h.id === selectedNote.linkedSubmissionDeadlineId)
+        : null,
+    [selectedNote, homework]
+  );
 
   return (
     <div className="space-y-6 pb-12">
@@ -250,44 +313,14 @@ export const LectureNotesTab: React.FC<LectureNotesTabProps> = ({
                 No lecture notes found.
               </div>
             ) : (
-              filteredNotes.map((note) => {
-                const isSelected = note.id === (selectedNote?.id || '');
-                const hasReminder = Boolean(note.linkedSubmissionDeadlineId || note.reviewReminderDate);
-
-                return (
-                  <div
-                    key={note.id}
-                    onClick={() => setActiveNoteId(note.id)}
-                    className={`cursor-pointer p-4 rounded-xl border transition-all text-left group ${
-                      isSelected
-                        ? 'bg-indigo-50/80 dark:bg-indigo-950/60 border-indigo-300 dark:border-indigo-700 shadow-xs'
-                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-1 mb-1.5">
-                      <span className="text-[11px] font-bold text-indigo-700 dark:text-indigo-300">
-                        {note.subject}
-                      </span>
-                      <span className="text-[10px] text-slate-400">{note.date}</span>
-                    </div>
-
-                    <h3 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white line-clamp-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                      {note.title}
-                    </h3>
-
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 mt-1">
-                      {note.summary || note.content}
-                    </p>
-
-                    {hasReminder && (
-                      <div className="mt-2 flex items-center gap-1.5 text-[10px] font-semibold text-rose-600 dark:text-rose-400">
-                        <Bell className="w-3 h-3 animate-bounce" />
-                        <span>Project Deadline Linked</span>
-                      </div>
-                    )}
-                  </div>
-                );
-              })
+              filteredNotes.map((note) => (
+                <NoteListItem
+                  key={note.id}
+                  note={note}
+                  isSelected={note.id === (selectedNote?.id || '')}
+                  onSelect={setActiveNoteId}
+                />
+              ))
             )}
           </div>
         </div>

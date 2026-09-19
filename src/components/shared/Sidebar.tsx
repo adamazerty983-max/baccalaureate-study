@@ -30,6 +30,7 @@ import { getT } from '../../utils/i18n';
 import { chimePlayer } from '../../utils/audio';
 import { DatabaseSyncState } from '../../services/firestoreService';
 import { GoogleAuthButton } from './GoogleAuthButton';
+import { preloadTab } from '../../utils/tabPreloader';
 
 export type { MainTabType };
 
@@ -258,6 +259,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <button
                 key={tab.id}
                 onClick={() => handleSelectTab(tab.id)}
+                onMouseEnter={() => preloadTab(tab.id)}
+                onFocus={() => preloadTab(tab.id)}
                 className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all group ${
                   isActive
                     ? 'bg-gradient-to-r from-teal-600 to-teal-500 text-white shadow-md shadow-teal-500/20'
@@ -321,7 +324,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       {syncState.currentUser.displayName || syncState.currentUser.email?.split('@')[0] || 'Élève Bac'}
                     </div>
                     <div className="text-[10px] text-emerald-400 flex items-center gap-1 font-medium truncate">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
                       <span>{isAr ? 'متصل ومحفوظ سحابياً' : 'Google Synchronisé'}</span>
                     </div>
                   </div>

@@ -252,7 +252,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
           <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
             <span className="text-[11px] text-slate-400 block">{isAr ? 'حالة الاتصال' : 'Statut de connexion'}</span>
             <div className="flex items-center gap-2 mt-1">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className={`w-2.5 h-2.5 rounded-full ${isConnected ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`} />
               <strong className="text-xs font-bold text-slate-900 dark:text-white">
                 {isConnected ? 'Connecté à Firestore' : 'Initialisation...'}
               </strong>
@@ -1168,7 +1168,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
               className="px-5 py-3 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold shadow-md hover:shadow-teal-500/20 transition-all active:scale-95 flex items-center justify-center gap-2 shrink-0"
               title="Télécharger une copie JSON de sauvegarde"
             >
-              <Download className="w-4 h-4 animate-bounce" />
+              <Download className="w-4 h-4" />
               <span>{isAr ? 'تحميل النسخة الاحتياطية' : 'Télécharger le Backup JSON'}</span>
             </button>
           </div>

@@ -294,7 +294,7 @@ export const BacPcWhatIfSimulator: React.FC<BacPcWhatIfSimulatorProps> = ({ lang
 
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-1.5">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-500/15 border border-teal-400/30 text-teal-300 text-[11px] font-bold uppercase tracking-wider backdrop-blur-md shadow-xs">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-500/15 border border-teal-400/30 text-teal-300 text-[11px] font-bold uppercase tracking-wider shadow-xs">
               <Sparkles className="w-3.5 h-3.5 text-teal-400" />
               <span>{isAr ? 'محاكي الامتحان الوطني الذكي' : 'Simulateur National Bac'}</span>
               <span className="px-1.5 py-0.2 rounded-md bg-teal-400/20 text-teal-200 text-[10px] font-black">
@@ -682,7 +682,7 @@ export const BacPcWhatIfSimulator: React.FC<BacPcWhatIfSimulatorProps> = ({ lang
         <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
           {/* Main Grade Big Callout */}
           <div className="flex flex-col items-center md:items-start text-center md:text-left space-y-2">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border backdrop-blur-md bg-white/10 border-white/20">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border bg-white/10 border-white/20">
               <Sparkles className="w-3.5 h-3.5 text-amber-300" />
               <span>{isAr ? 'النتيجة المتوقعة للبكالوريا (مسلك PC)' : 'Résultat Estimé du Baccalauréat (PC)'}</span>
             </div>
@@ -722,7 +722,7 @@ export const BacPcWhatIfSimulator: React.FC<BacPcWhatIfSimulatorProps> = ({ lang
           {/* 3 Pillars Summary Pillars */}
           <div className="grid grid-cols-3 gap-2 sm:gap-3 w-full md:w-auto text-center">
             {/* National Exam Box */}
-            <div className="p-3 sm:p-4 rounded-2xl bg-black/35 border border-white/10 backdrop-blur-md space-y-1">
+            <div className="p-3 sm:p-4 rounded-2xl bg-black/50 border border-white/10 space-y-1">
               <span className="text-[10px] sm:text-xs font-bold uppercase text-slate-400">
                 {isAr ? 'الوطني (50%)' : 'National'}
               </span>
@@ -735,7 +735,7 @@ export const BacPcWhatIfSimulator: React.FC<BacPcWhatIfSimulatorProps> = ({ lang
             </div>
 
             {/* Regional Exam Box */}
-            <div className="p-3 sm:p-4 rounded-2xl bg-black/35 border border-white/10 backdrop-blur-md space-y-1">
+            <div className="p-3 sm:p-4 rounded-2xl bg-black/50 border border-white/10 space-y-1">
               <span className="text-[10px] sm:text-xs font-bold uppercase text-slate-400">
                 {isAr ? 'الجهوي (25%)' : 'Régional'}
               </span>
@@ -748,7 +748,7 @@ export const BacPcWhatIfSimulator: React.FC<BacPcWhatIfSimulatorProps> = ({ lang
             </div>
 
             {/* Continuous Assessment Box */}
-            <div className="p-3 sm:p-4 rounded-2xl bg-black/35 border border-white/10 backdrop-blur-md space-y-1">
+            <div className="p-3 sm:p-4 rounded-2xl bg-black/50 border border-white/10 space-y-1">
               <span className="text-[10px] sm:text-xs font-bold uppercase text-slate-400">
                 {isAr ? 'المراقبة (25%)' : 'Contrôle'}
               </span>

@@ -1224,11 +1224,11 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
   return (
     <div className="space-y-4 pb-16 select-none font-sans text-slate-900 dark:text-slate-100">
       {/* 1. TOP HEADER BAR: PLANNED TIME, SESSIONS, DATE SELECTOR & ADD BUTTON */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/90 dark:bg-[#111827]/95 p-3.5 sm:p-4 rounded-3xl border border-slate-200/80 dark:border-white/[0.08] shadow-xs backdrop-blur-md">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/95 dark:bg-[#111827]/95 p-3.5 sm:p-4 rounded-3xl border border-slate-200/80 dark:border-white/[0.08] shadow-xs">
         {/* Left: Stats Badges (1h planifiées • 0/1 sessions) & Direct Add Button */}
         <div className="flex items-center gap-2.5 flex-wrap">
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100/80 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 text-xs font-semibold text-slate-700 dark:text-slate-200">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="w-2 h-2 rounded-full bg-emerald-500" />
             <span>
               {plannedStudyMinutes > 0 ? formatDurationLabel(plannedStudyMinutes) : '0h'}{' '}
               {isAr ? 'مخطط' : 'planifiées'}
@@ -1339,7 +1339,7 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
       <div className="bg-white/90 dark:bg-[#111827]/95 p-3 sm:p-3.5 rounded-3xl border border-slate-200/80 dark:border-white/[0.08] shadow-xs flex items-center justify-between gap-3 overflow-x-auto no-scrollbar">
         <div className="flex items-center gap-2 shrink-0">
           <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-600 dark:text-slate-400 px-1 shrink-0 flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-teal-500 animate-pulse" />
+            <span className="w-2 h-2 rounded-full bg-teal-500" />
             {isAr ? 'أنشطة (اسحب وضع في الجدول)' : 'ACTIVITÉS (Glisser-Déposer)'}
           </span>
         </div>
@@ -1912,7 +1912,7 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
 
       {/* 4. DISMISSIBLE NOTIFICATION CARD AT BOTTOM RIGHT */}
       {isReminderVisible && (
-        <div className="fixed bottom-6 right-6 z-40 max-w-sm w-full bg-white/95 dark:bg-[#192237]/95 border border-slate-200/90 dark:border-white/10 rounded-3xl p-4 sm:p-5 shadow-2xl backdrop-blur-md animate-fade-in flex items-start justify-between gap-3">
+        <div className="fixed bottom-6 right-6 z-40 max-w-sm w-full bg-white/95 dark:bg-[#192237]/95 border border-slate-200/90 dark:border-white/10 rounded-3xl p-4 sm:p-5 shadow-2xl animate-fade-in flex items-start justify-between gap-3">
           <div>
             <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">
               {isAr ? 'لم تراجع مادة' : "Vous n'avez pas étudié"} <strong>{isAr ? 'الرياضيات' : 'Mathématiques'}</strong> {isAr ? 'اليوم.' : "aujourd'hui."}

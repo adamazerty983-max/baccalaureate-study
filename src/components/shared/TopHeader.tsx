@@ -85,7 +85,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   const isConnected = syncState?.status === 'synced' || syncState?.status === 'connected';
 
   return (
-    <header className="sticky top-0 z-30 bg-white/90 dark:bg-[#1A2535]/90 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 transition-colors">
+    <header className="sticky top-0 z-30 bg-white/95 dark:bg-[#1A2535]/95 border-b border-slate-200/80 dark:border-slate-800 transition-colors">
       <div className="px-4 sm:px-6">
         <div className="flex items-center justify-between h-16 gap-3">
           {/* Left: Hamburger & Current View Title */}
@@ -248,7 +248,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
             >
               <Bell className="w-4 h-4" />
               {unreadNotificationCount > 0 && (
-                <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] px-1 items-center justify-center rounded-full bg-teal-500 text-white font-black text-[9px] shadow-sm animate-pulse">
+                <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] px-1 items-center justify-center rounded-full bg-teal-500 text-white font-black text-[9px] shadow-sm">
                   {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
                 </span>
               )}

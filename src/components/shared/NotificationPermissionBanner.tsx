@@ -80,7 +80,7 @@ export const NotificationPermissionBanner: React.FC<NotificationPermissionBanner
       <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-start gap-3.5 min-w-0">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-teal-500 to-emerald-400 text-white p-0.5 shadow-md shadow-teal-500/20 flex items-center justify-center shrink-0">
-            <div className="w-full h-full bg-[#132233]/70 rounded-[10px] flex items-center justify-center backdrop-blur-xs">
+            <div className="w-full h-full bg-[#132233]/90 rounded-[10px] flex items-center justify-center">
               <BellRing className="w-5 h-5 text-teal-300 animate-bounce" />
             </div>
           </div>

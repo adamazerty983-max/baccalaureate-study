@@ -88,7 +88,7 @@ export const DesktopUpdateBanner: React.FC<DesktopUpdateBannerProps> = ({ langua
         {/* Left icon and message */}
         <div className="flex items-start gap-3.5 min-w-0 flex-1">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-sky-400 text-white p-0.5 shadow-md shadow-indigo-500/25 flex items-center justify-center shrink-0">
-            <div className="w-full h-full bg-slate-950/70 rounded-[10px] flex items-center justify-center backdrop-blur-xs">
+            <div className="w-full h-full bg-slate-950/80 rounded-[10px] flex items-center justify-center">
               {status === 'downloaded' ? (
                 <CheckCircle2 className="w-5 h-5 text-emerald-400 animate-pulse" />
               ) : (
