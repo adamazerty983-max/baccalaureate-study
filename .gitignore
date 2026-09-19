@@ -63,3 +63,11 @@ node_modules
 # registered worktree path, but Tailwind skips the nested repo anyway.
 .kilo/
 
+# Python cache & unused lockfiles
+__pycache__/
+*.pyc
+bun.lock
+
+# Test scratch folders
+scratch/
+
