@@ -71,3 +71,6 @@ bun.lock
 # Test scratch folders
 scratch/
 
+# Sandbox / preview temporary state
+.freebuff/
+

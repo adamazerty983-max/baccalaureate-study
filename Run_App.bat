@@ -1,14 +1,14 @@
-﻿@echo off
-title Baccalaureate Study Hub - Desktop Offline Launcher
+@echo off
+title Baccalaureate Study Hub - Application Launcher
 cls
 echo ====================================================================
-echo    Baccalaureate Study Hub - Standalone Desktop Application
+echo    Baccalaureate Study Hub - Desktop Application
 echo ====================================================================
 echo.
 
 cd /d "%~dp0"
 
-:: 1. Prioritize standalone unpacked executable (Zero Node.js/npm required)
+:: 1. Prioritize standalone unpacked Electron executable (Zero Node.js/npm required)
 if exist "release\win-unpacked\Baccalaureate Study Hub.exe" (
     echo Launching standalone desktop application...
     start "" "release\win-unpacked\Baccalaureate Study Hub.exe"
@@ -22,14 +22,19 @@ if exist "%LOCALAPPDATA%\Programs\baccalaureate-study-hub\Baccalaureate Study Hu
     exit /b 0
 )
 
-:: 3. Fallback: launch using local Electron runner
+:: 3. Fallback: launch using local Electron runner if in dev environment
 if exist "node_modules\electron\dist\electron.exe" (
     echo Starting desktop application via Electron...
     start "" "node_modules\electron\dist\electron.exe" .
     exit /b 0
 )
 
-echo [ERROR] Packaged desktop app not found.
-echo Please run: npm run electron:build:win
+:: 4. Fallback: Offer web dev server or build command
+echo [INFO] Packaged desktop executable not found.
 echo.
+echo Options:
+echo   1. To build the desktop executable, run: npm run electron:build:win
+echo   2. Starting local web development server...
+echo.
+call npm.cmd run dev
 pause
