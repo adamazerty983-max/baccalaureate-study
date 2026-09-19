@@ -82,8 +82,9 @@ function getBlockDurationHours(b: TimeBlock): number {
   const [eh, em] = b.endTime.split(':').map(Number);
   const startM = (sh || 0) * 60 + (sm || 0);
   const endM = (eh || 0) * 60 + (em || 0);
-  const diffMins = endM > startM ? endM - startM : 60;
-  return Math.max(0.1, diffMins / 60);
+  const rawDiff = endM > startM ? endM - startM : (endM + 1440 - startM);
+  const diffMins = Math.max(1, rawDiff);
+  return diffMins / 60;
 }
 
 // Resolve the date string (YYYY-MM-DD) for a timeblock

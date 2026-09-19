@@ -717,7 +717,7 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
 
         setActiveMove((prev) => (prev ? { ...prev, currentStartMinutes: boundedStart } : null));
       } else if (activeMove.type === 'resize-bottom') {
-        const minEnd = activeMove.currentStartMinutes + 15;
+        const minEnd = activeMove.currentStartMinutes + 5;
         const maxEnd = TIMETABLE_END_HOUR * 60;
         const snappedEnd = Math.round(mins / 5) * 5;
         const boundedEnd = Math.max(minEnd, Math.min(maxEnd, snappedEnd));
@@ -726,7 +726,7 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
         setActiveMove((prev) => (prev ? { ...prev, durationMinutes: newDuration } : null));
       } else if (activeMove.type === 'resize-top') {
         const fixedEnd = activeMove.currentStartMinutes + activeMove.durationMinutes;
-        const maxStart = fixedEnd - 15;
+        const maxStart = fixedEnd - 5;
         const minStart = TIMETABLE_START_HOUR * 60;
         const snappedStart = Math.round(mins / 5) * 5;
         const boundedStart = Math.max(minStart, Math.min(maxStart, snappedStart));
@@ -825,8 +825,8 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
     let duration = rawEndMins - startMins;
     if (duration <= 0) {
       duration = 60; // quick click → default 1 hour
-    } else if (duration < 15) {
-      duration = 15;
+    } else if (duration < 5) {
+      duration = 5;
     }
 
     setEditingBlockId(null);
@@ -1153,9 +1153,9 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
   // Calculate live drag box geometry for creating
   const dragMinMins = Math.min(dragStartMinutes, dragCurrentMinutes);
   const dragMaxMins = Math.max(dragStartMinutes, dragCurrentMinutes);
-  const dragDurationMins = Math.max(5, dragMaxMins - dragMinMins);
+  const dragDurationMins = Math.max(1, dragMaxMins - dragMinMins);
   const dragTopPx = minutesToPixelOffset(dragMinMins);
-  const dragHeightPx = Math.max(24, minutesToPixelOffset(dragMaxMins) - dragTopPx);
+  const dragHeightPx = Math.max(8, minutesToPixelOffset(dragMaxMins) - dragTopPx);
 
   // ─── Smart Schedule Optimizer handlers ─────────────────────────────────────
 
@@ -1544,11 +1544,11 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
             <div
               style={{
                 top: `${minutesToPixelOffset(stickerDropMinutes)}px`,
-                height: `${Math.max(44, draggingSticker.defaultDurationMinutes * PIXELS_PER_MINUTE)}px`,
+                height: `${Math.max(12, draggingSticker.defaultDurationMinutes * PIXELS_PER_MINUTE)}px`,
                 left: '4.5rem',
                 right: '1rem',
               }}
-              className={`absolute z-30 rounded-2xl border-2 border-dashed ${getStickerTheme(draggingSticker.type).border} ${getStickerTheme(draggingSticker.type).bg} shadow-2xl backdrop-blur-xs flex items-center justify-between px-4 transition-all duration-75 pointer-events-none animate-pulse`}
+              className={`absolute z-30 rounded-2xl border-2 border-dashed ${getStickerTheme(draggingSticker.type).border} ${getStickerTheme(draggingSticker.type).bg} shadow-2xl backdrop-blur-xs flex items-center justify-between px-4 transition-all duration-75 pointer-events-none animate-pulse overflow-hidden`}
             >
               {/* Top guideline time tag */}
               <div
@@ -1598,10 +1598,13 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
               : timeToMinutes(block.startTime);
             const duration = isBeingMoved
               ? activeMove.durationMinutes
-              : Math.max(15, timeToMinutes(block.endTime) - timeToMinutes(block.startTime));
+              : Math.max(1, timeToMinutes(block.endTime) - timeToMinutes(block.startTime));
 
             const topPx = minutesToPixelOffset(startM);
-            const heightPx = Math.max(46, duration * PIXELS_PER_MINUTE);
+            const heightPx = Math.max(12, duration * PIXELS_PER_MINUTE);
+
+            const isUltraCompact = heightPx < 20; // 5m (~12px) - 12m (~18px)
+            const isCompact = heightPx < 36;      // 15m (~22.5px) - 23m (~35px)
 
             const isSticker = block.type === 'sticker_activity';
             const stickerData = isSticker
@@ -1628,152 +1631,268 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                   left: '4.5rem',
                   right: '1rem',
                 }}
-                className={`time-block-card absolute p-3 rounded-2xl border transition-all select-none flex flex-col justify-between overflow-hidden group cursor-grab active:cursor-grabbing shadow-sm hover:shadow-md ${isBeingMoved
-                  ? 'z-40 ring-2 ring-teal-500 shadow-2xl scale-[1.01] opacity-95 bg-white dark:bg-slate-800'
-                  : `${cardTheme.bg} ${cardTheme.border} hover:border-teal-500/60`
-                  }`}
+                className={`time-block-card absolute ${
+                  isUltraCompact
+                    ? 'px-2 py-0 rounded-lg'
+                    : isCompact
+                    ? 'px-2.5 py-0.5 rounded-xl'
+                    : 'p-3 rounded-2xl'
+                } border transition-all select-none flex ${
+                  isCompact ? 'flex-row items-center justify-between' : 'flex-col justify-between'
+                } overflow-hidden group cursor-grab active:cursor-grabbing shadow-sm hover:shadow-md ${
+                  isBeingMoved
+                    ? 'z-40 ring-2 ring-teal-500 shadow-2xl scale-[1.01] opacity-95 bg-white dark:bg-slate-800'
+                    : `${cardTheme.bg} ${cardTheme.border} hover:border-teal-500/60`
+                }`}
               >
                 {/* Top Resize Drag Handle */}
                 <div
                   onMouseDown={(e) => handleStartMoveBlock(e, block, 'resize-top')}
-                  className="absolute top-0 inset-x-0 h-2 cursor-ns-resize hover:bg-teal-500/40 z-30 transition-colors"
+                  className={`absolute top-0 inset-x-0 ${isUltraCompact ? 'h-1' : 'h-2'} cursor-ns-resize hover:bg-teal-500/40 z-30 transition-colors`}
                   title={isAr ? 'اسحب لتعديل وقت البدء' : "Glisser pour modifier l'heure de début"}
                 />
 
-                {/* Card Header & Content */}
-                <div className="flex items-start justify-between gap-2 pointer-events-auto">
-                  <div className="min-w-0 flex items-center gap-2.5">
-                    {/* Move Grip Icon */}
-                    <div
-                      className="text-slate-400 group-hover:text-teal-600 dark:group-hover:text-teal-400 cursor-grab active:cursor-grabbing shrink-0"
-                      title={isAr ? 'اسحب لنقل الحصة' : "Glisser pour déplacer"}
-                    >
-                      <GripVertical className="w-4 h-4" />
-                    </div>
+                {isCompact ? (
+                  // Compact Single-Row View for Short Blocks (5m, 10m, 15m, 20m)
+                  <>
+                    <div className="min-w-0 flex items-center gap-1.5 flex-1 pointer-events-auto">
+                      {!isUltraCompact && (
+                        <div
+                          className="text-slate-400 group-hover:text-teal-600 dark:group-hover:text-teal-400 cursor-grab active:cursor-grabbing shrink-0"
+                          title={isAr ? 'اسحب لنقل الحصة' : 'Glisser pour déplacer'}
+                        >
+                          <GripVertical className="w-3 h-3" />
+                        </div>
+                      )}
 
-                    {/* Completion Checkbox (Comfortable Touch Target) */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onToggleComplete(block.id);
-                        if (!block.isCompleted) {
-                          chimePlayer.playChime('complete');
-                          toast.success(
-                            isAr ? 'تم إنجاز الحصة ✓' : 'Tâche terminée ✓',
-                            block.title,
-                          );
-                        } else {
-                          chimePlayer.playChime('uncheck');
-                          toast.info(
-                            isAr ? 'إعادة المهمة للانتظار' : 'Tâche réactivée',
-                            block.title,
-                          );
-                        }
-                      }}
-                      className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl flex items-center justify-center shrink-0 border transition-all active:scale-95 cursor-pointer ${block.isCompleted
-                        ? 'bg-emerald-500 border-emerald-500 text-white shadow-sm shadow-emerald-500/30'
-                        : 'border-slate-300 dark:border-white/20 bg-white/80 dark:bg-white/5 hover:border-teal-500 text-transparent'
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onToggleComplete(block.id);
+                          if (!block.isCompleted) {
+                            chimePlayer.playChime('complete');
+                            toast.success(
+                              isAr ? 'تم إنجاز الحصة ✓' : 'Tâche terminée ✓',
+                              block.title,
+                            );
+                          } else {
+                            chimePlayer.playChime('uncheck');
+                            toast.info(
+                              isAr ? 'إعادة المهمة للانتظار' : 'Tâche réactivée',
+                              block.title,
+                            );
+                          }
+                        }}
+                        className={`${
+                          isUltraCompact ? 'w-3.5 h-3.5 rounded-xs' : 'w-4 h-4 sm:w-5 sm:h-5 rounded-md'
+                        } flex items-center justify-center shrink-0 border transition-all active:scale-95 cursor-pointer ${
+                          block.isCompleted
+                            ? 'bg-emerald-500 border-emerald-500 text-white shadow-xs'
+                            : 'border-slate-300 dark:border-white/20 bg-white/80 dark:bg-white/5 hover:border-teal-500 text-transparent'
                         }`}
-                      title={block.isCompleted ? (isAr ? 'إلغاء التأكيد' : 'Décocher') : (isAr ? 'تأكيد الإنجاز' : 'Valider')}
-                    >
-                      <Check className="w-4 h-4 text-white stroke-[3]" />
-                    </button>
+                        title={block.isCompleted ? (isAr ? 'إلغاء التأكيد' : 'Décocher') : (isAr ? 'تأكيد الإنجاز' : 'Valider')}
+                      >
+                        <Check className={`${isUltraCompact ? 'w-2 h-2' : 'w-2.5 h-2.5 sm:w-3 sm:h-3'} text-white stroke-[3]`} />
+                      </button>
 
-                    <div className="truncate">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`font-bold text-xs sm:text-sm truncate ${block.isCompleted ? 'line-through opacity-70' : 'text-slate-900 dark:text-white'}`}>
-                          {block.title}
+                      <span
+                        className={`${isUltraCompact ? 'w-1.5 h-1.5' : 'w-2 h-2'} rounded-full shrink-0 ${
+                          subjectData?.dotColor || ('dot' in cardTheme ? cardTheme.dot : 'bg-teal-500')
+                        }`}
+                      />
+
+                      <span
+                        className={`font-bold ${
+                          isUltraCompact ? 'text-[10px]' : 'text-xs'
+                        } truncate ${
+                          block.isCompleted
+                            ? 'line-through opacity-70'
+                            : 'text-slate-900 dark:text-white'
+                        }`}
+                      >
+                        {block.title}
+                      </span>
+
+                      <span
+                        className={`font-mono font-bold text-teal-700 dark:text-teal-300 bg-teal-500/10 dark:bg-teal-500/20 rounded-md border border-teal-500/25 ${
+                          isUltraCompact ? 'text-[9px] px-1 py-0' : 'text-[10px] px-1.5 py-0.5'
+                        } shrink-0`}
+                      >
+                        {formatDurationLabel(duration)}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0 pointer-events-auto">
+                      {!isUltraCompact && (
+                        <span className="text-[9px] font-mono font-bold text-slate-700 dark:text-slate-300 bg-black/5 dark:bg-black/40 px-1.5 py-0.5 rounded-md border border-slate-200/60 dark:border-white/10 hidden md:inline-flex">
+                          {startTimeFormatted}-{endTimeFormatted}
                         </span>
-                        <span className="text-[10px] sm:text-[11px] font-mono font-bold text-teal-700 dark:text-teal-300 bg-teal-500/10 dark:bg-teal-500/20 px-2 py-0.5 rounded-md border border-teal-500/25">
-                          {formatDurationLabel(duration)}
-                        </span>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenEditBlock(block);
+                          chimePlayer.playChime('click');
+                        }}
+                        className="p-1 rounded-md text-slate-400 hover:text-teal-600 dark:hover:text-teal-300 hover:bg-slate-200/60 dark:hover:bg-white/10 hidden group-hover:inline-flex cursor-pointer transition-colors"
+                        title={isAr ? 'تعديل' : 'Modifier'}
+                      >
+                        <Pencil className="w-3 h-3" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteTimeBlock(block.id);
+                          chimePlayer.playChime('delete');
+                          toast.warning(
+                            isAr ? 'تم حذف الحصة' : 'Tâche supprimée',
+                            block.title,
+                          );
+                        }}
+                        className="p-1 rounded-md text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 hidden group-hover:inline-flex cursor-pointer transition-colors"
+                        title={isAr ? 'حذف الحصة' : 'Supprimer'}
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  // Full Multi-Row View for Normal/Long Blocks (>= 25m / height >= 36px)
+                  <>
+                    <div className="flex items-start justify-between gap-2 pointer-events-auto">
+                      <div className="min-w-0 flex items-center gap-2.5">
+                        <div
+                          className="text-slate-400 group-hover:text-teal-600 dark:group-hover:text-teal-400 cursor-grab active:cursor-grabbing shrink-0"
+                          title={isAr ? 'اسحب لنقل الحصة' : "Glisser pour déplacer"}
+                        >
+                          <GripVertical className="w-4 h-4" />
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onToggleComplete(block.id);
+                            if (!block.isCompleted) {
+                              chimePlayer.playChime('complete');
+                              toast.success(
+                                isAr ? 'تم إنجاز الحصة ✓' : 'Tâche terminée ✓',
+                                block.title,
+                              );
+                            } else {
+                              chimePlayer.playChime('uncheck');
+                              toast.info(
+                                isAr ? 'إعادة المهمة للانتظار' : 'Tâche réactivée',
+                                block.title,
+                              );
+                            }
+                          }}
+                          className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl flex items-center justify-center shrink-0 border transition-all active:scale-95 cursor-pointer ${
+                            block.isCompleted
+                              ? 'bg-emerald-500 border-emerald-500 text-white shadow-sm shadow-emerald-500/30'
+                              : 'border-slate-300 dark:border-white/20 bg-white/80 dark:bg-white/5 hover:border-teal-500 text-transparent'
+                          }`}
+                          title={block.isCompleted ? (isAr ? 'إلغاء التأكيد' : 'Décocher') : (isAr ? 'تأكيد الإنجاز' : 'Valider')}
+                        >
+                          <Check className="w-4 h-4 text-white stroke-[3]" />
+                        </button>
+
+                        <div className="truncate">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className={`font-bold text-xs sm:text-sm truncate ${block.isCompleted ? 'line-through opacity-70' : 'text-slate-900 dark:text-white'}`}>
+                              {block.title}
+                            </span>
+                            <span className="text-[10px] sm:text-[11px] font-mono font-bold text-teal-700 dark:text-teal-300 bg-teal-500/10 dark:bg-teal-500/20 px-2 py-0.5 rounded-md border border-teal-500/25">
+                              {formatDurationLabel(duration)}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate flex items-center gap-1.5 mt-0.5">
+                            <span
+                              className={`w-2 h-2 rounded-full shrink-0 ${subjectData?.dotColor || ('dot' in cardTheme ? cardTheme.dot : 'bg-teal-500')}`}
+                            />
+                            <span>{getSubjectDisplayName(block.subject)}</span>
+                          </div>
+                        </div>
                       </div>
-                      <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate flex items-center gap-1.5 mt-0.5">
-                        <span
-                          className={`w-2 h-2 rounded-full shrink-0 ${subjectData?.dotColor || ('dot' in cardTheme ? cardTheme.dot : 'bg-teal-500')}`}
-                        />
-                        <span>{getSubjectDisplayName(block.subject)}</span>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <span className="text-[10px] sm:text-[11px] font-mono font-bold text-slate-700 dark:text-slate-300 bg-black/5 dark:bg-black/40 px-2 py-0.5 rounded-lg border border-slate-200/60 dark:border-white/10">
+                          {startTimeFormatted} - {endTimeFormatted}
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleShiftBlockHours(block, -1);
+                          }}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-teal-600 dark:hover:text-teal-300 hover:bg-slate-200/60 dark:hover:bg-white/10 hidden group-hover:inline-flex cursor-pointer transition-colors"
+                          title={isAr ? 'تقديم بساعة (-1h)' : "Avancer d'une heure (-1h)"}
+                        >
+                          <ArrowUp className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleShiftBlockHours(block, 1);
+                          }}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-teal-600 dark:hover:text-teal-300 hover:bg-slate-200/60 dark:hover:bg-white/10 hidden group-hover:inline-flex cursor-pointer transition-colors"
+                          title={isAr ? 'تأخير بساعة (+1h)' : "Reculer d'une heure (+1h)"}
+                        >
+                          <ArrowDown className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenEditBlock(block);
+                            chimePlayer.playChime('click');
+                          }}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-teal-600 dark:hover:text-teal-300 hover:bg-slate-200/60 dark:hover:bg-white/10 cursor-pointer transition-colors"
+                          title={isAr ? 'تعديل / تحديد الوقت' : 'Modifier'}
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDeleteTimeBlock(block.id);
+                            chimePlayer.playChime('delete');
+                            toast.warning(
+                              isAr ? 'تم حذف الحصة' : 'Tâche supprimée',
+                              block.title,
+                            );
+                          }}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer transition-colors"
+                          title={isAr ? 'حذف الحصة' : 'Supprimer'}
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Actions Bar (Quick Move, Edit, Delete) */}
-                  <div className="flex items-center gap-1 shrink-0">
-                    {/* Time Range Badge */}
-                    <span className="text-[10px] sm:text-[11px] font-mono font-bold text-slate-700 dark:text-slate-300 bg-black/5 dark:bg-black/40 px-2 py-0.5 rounded-lg border border-slate-200/60 dark:border-white/10">
-                      {startTimeFormatted} - {endTimeFormatted}
-                    </span>
-
-                    {/* Quick Shift Up (-30m / -1h) */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleShiftBlockHours(block, -1);
-                      }}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-teal-600 dark:hover:text-teal-300 hover:bg-slate-200/60 dark:hover:bg-white/10 hidden group-hover:inline-flex cursor-pointer transition-colors"
-                      title={isAr ? 'تقديم بساعة (-1h)' : "Avancer d'une heure (-1h)"}
-                    >
-                      <ArrowUp className="w-3.5 h-3.5" />
-                    </button>
-
-                    {/* Quick Shift Down (+30m / +1h) */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleShiftBlockHours(block, 1);
-                      }}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-teal-600 dark:hover:text-teal-300 hover:bg-slate-200/60 dark:hover:bg-white/10 hidden group-hover:inline-flex cursor-pointer transition-colors"
-                      title={isAr ? 'تأخير بساعة (+1h)' : "Reculer d'une heure (+1h)"}
-                    >
-                      <ArrowDown className="w-3.5 h-3.5" />
-                    </button>
-
-                    {/* Edit Pencil Button */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleOpenEditBlock(block);
-                      }}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-teal-600 dark:hover:text-teal-300 hover:bg-slate-200/60 dark:hover:bg-white/10 cursor-pointer transition-colors"
-                      title={isAr ? 'تعديل / تحديد الوقت' : 'Modifier'}
-                    >
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
-
-                    {/* Delete Button */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDeleteTimeBlock(block.id);
-                        chimePlayer.playChime('delete');
-                        toast.warning(
-                          isAr ? 'تم حذف الحصة' : 'Tâche supprimée',
-                          block.title,
-                        );
-                      }}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer transition-colors"
-                      title={isAr ? 'حذف الحصة' : 'Supprimer'}
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-
-                {block.notes && (
-                  <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate mt-1">
-                    {block.notes}
-                  </div>
+                    {block.notes && (
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate mt-1">
+                        {block.notes}
+                      </div>
+                    )}
+                  </>
                 )}
 
                 {/* Bottom Resize Drag Handle */}
                 <div
                   onMouseDown={(e) => handleStartMoveBlock(e, block, 'resize-bottom')}
-                  className="absolute bottom-0 inset-x-0 h-2 cursor-ns-resize hover:bg-teal-500/40 z-30 transition-colors"
+                  className={`absolute bottom-0 inset-x-0 ${isUltraCompact ? 'h-1' : 'h-2'} cursor-ns-resize hover:bg-teal-500/40 z-30 transition-colors`}
                   title={isAr ? 'اسحب لتعديل وقت النهاية' : "Glisser pour modifier l'heure de fin"}
                 />
               </div>
@@ -2300,6 +2419,8 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                     {/* Primary Duration Presets */}
                     <div className="flex items-center gap-1.5 flex-wrap">
                       {[
+                        { mins: 5, label: '5m' },
+                        { mins: 10, label: '10m' },
                         { mins: 15, label: '15m' },
                         { mins: 25, label: '25m (Pomo)' },
                         { mins: 30, label: '30m' },
@@ -2375,9 +2496,9 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                                 onChange={(e) => {
                                   const endMins = timeToMinutes(e.target.value);
                                   if (endMins > modalStartMinutes) {
-                                    setModalDurationMinutes(endMins - modalStartMinutes);
+                                    setModalDurationMinutes(Math.max(1, endMins - modalStartMinutes));
                                   } else if (endMins < modalStartMinutes) {
-                                    setModalDurationMinutes(Math.max(15, 24 * 60 - modalStartMinutes + endMins));
+                                    setModalDurationMinutes(Math.max(1, 24 * 60 - modalStartMinutes + endMins));
                                   }
                                 }}
                                 className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#111827] border border-slate-200 dark:border-white/10 text-slate-900 dark:text-slate-100 font-mono font-bold text-xs focus:outline-none focus:border-teal-500"
@@ -2429,7 +2550,7 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                                 onChange={(e) => {
                                   const h = Math.max(0, parseInt(e.target.value, 10) || 0);
                                   const m = modalDurationMinutes % 60;
-                                  setModalDurationMinutes(Math.max(5, h * 60 + m));
+                                  setModalDurationMinutes(Math.max(1, h * 60 + m));
                                 }}
                                 className="w-full px-2 py-1 rounded-lg bg-slate-50 dark:bg-[#182030] text-center font-mono font-bold text-teal-700 dark:text-teal-300 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
                               />
@@ -2443,12 +2564,12 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                                 type="number"
                                 min={0}
                                 max={59}
-                                step={5}
+                                step={1}
                                 value={modalDurationMinutes % 60}
                                 onChange={(e) => {
                                   const m = Math.max(0, Math.min(59, parseInt(e.target.value, 10) || 0));
                                   const h = Math.floor(modalDurationMinutes / 60);
-                                  setModalDurationMinutes(Math.max(5, h * 60 + m));
+                                  setModalDurationMinutes(Math.max(1, h * 60 + m));
                                 }}
                                 className="w-full px-2 py-1 rounded-lg bg-slate-50 dark:bg-[#182030] text-center font-mono font-bold text-teal-700 dark:text-teal-300 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
                               />
@@ -2459,15 +2580,16 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                           <div className="space-y-1 pt-1">
                             <input
                               type="range"
-                              min={5}
+                              min={1}
                               max={360}
-                              step={5}
+                              step={1}
                               value={modalDurationMinutes}
-                              onChange={(e) => setModalDurationMinutes(parseInt(e.target.value, 10))}
+                              onChange={(e) => setModalDurationMinutes(Math.max(1, parseInt(e.target.value, 10) || 1))}
                               className="w-full accent-teal-600 cursor-pointer h-2 bg-slate-200 dark:bg-slate-800 rounded-lg"
                             />
                             <div className="flex items-center justify-between text-[9px] font-mono text-slate-400 dark:text-slate-500 px-1">
-                              <span>5m</span>
+                              <span>1m</span>
+                              <span>15m</span>
                               <span>1h</span>
                               <span>2h</span>
                               <span>3h</span>

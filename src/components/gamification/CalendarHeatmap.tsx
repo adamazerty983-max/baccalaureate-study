@@ -122,7 +122,9 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({
           if (b.startTime && b.endTime) {
             const [sh, sm] = b.startTime.split(':').map(Number);
             const [eh, em] = b.endTime.split(':').map(Number);
-            const dur = Math.max(0.5, ((eh * 60 + em) - (sh * 60 + sm)) / 60);
+            const rawMins = (eh * 60 + em) - (sh * 60 + sm);
+            const diffMins = Math.max(1, rawMins > 0 ? rawMins : rawMins + 1440);
+            const dur = diffMins / 60;
             entry.studyHours = Math.round((entry.studyHours + dur) * 10) / 10;
           } else {
             entry.studyHours = Math.round((entry.studyHours + 1) * 10) / 10;

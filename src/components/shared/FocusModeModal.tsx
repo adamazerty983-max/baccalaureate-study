@@ -44,7 +44,8 @@ export const FocusModeModal: React.FC<FocusModeModalProps> = ({
     if (activeBlock) {
       const [sh, sm] = activeBlock.startTime.split(':').map(Number);
       const [eh, em] = activeBlock.endTime.split(':').map(Number);
-      const diffMins = Math.max(10, eh * 60 + em - (sh * 60 + sm));
+      const rawDiff = eh * 60 + em - (sh * 60 + sm);
+      const diffMins = Math.max(1, rawDiff > 0 ? rawDiff : rawDiff + 1440);
       const secs = diffMins * 60;
       setTotalDurationSeconds(secs);
       setSecondsRemaining(secs);
