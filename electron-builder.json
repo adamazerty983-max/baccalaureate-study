@@ -13,7 +13,7 @@
   },
   "files": [
     "dist/**/*",
-    "electron/**/*",
+    "server/**/*",
     "public/**/*",
     "package.json"
   ],

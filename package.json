@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "Baccalaureate Study Hub - Standalone Desktop Application",
   "author": "Antigravity Study Team",
-  "main": "electron/main.cjs",
+  "main": "server/main.cjs",
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
