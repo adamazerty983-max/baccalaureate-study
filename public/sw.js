@@ -1,23 +1,26 @@
-const CACHE_NAME = 'mybac-offline-v3';
+const BASE = '/baccalaureate-study';
+const CACHE_NAME = 'mybac-offline-v4';
 
 const STATIC_ASSETS = [
-  '/',
-  '/index.html',
-  '/icon.svg',
-  '/original_icon_512.png',
-  '/manifest.json',
-  '/campfire-streak.webm',
-  '/campfire-streak.gif',
-  '/campfire-streak-poster.png',
-  '/campfire-streak-cold.webm',
-  '/campfire-streak-cold.gif',
-  '/campfire-streak-cold-poster.png'
+  BASE + '/',
+  BASE + '/index.html',
+  BASE + '/icon.svg',
+  BASE + '/original_icon_512.png',
+  BASE + '/manifest.json',
+  BASE + '/campfire-streak.webm',
+  BASE + '/campfire-streak.gif',
+  BASE + '/campfire-streak-poster.png',
+  BASE + '/campfire-streak-cold.webm',
+  BASE + '/campfire-streak-cold.gif',
+  BASE + '/campfire-streak-cold-poster.png'
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(STATIC_ASSETS);
+    }).catch(() => {
+      // Non-blocking: if any asset fails to cache, the SW still installs
     })
   );
   self.skipWaiting();
@@ -52,9 +55,6 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
 
   // 1. App shell: network-first, so a freshly deployed build wins immediately.
-  //    The cache is only a fallback for when the device is offline.
-  //    `cache: 'no-store'` also bypasses any previously stored HTTP cache entry
-  //    for index.html, which is what kept serving an old build.
   if (isDocumentRequest(event.request)) {
     event.respondWith(
       fetch(event.request, { cache: 'no-store' })
@@ -68,15 +68,13 @@ self.addEventListener('fetch', (event) => {
         .catch(() =>
           caches
             .match(event.request)
-            .then((cached) => cached || caches.match('/index.html'))
+            .then((cached) => cached || caches.match(BASE + '/index.html'))
         )
     );
     return;
   }
 
   // 2. Everything else (hashed bundles, media, icons): stale-while-revalidate.
-  //    Serve the cached copy instantly, then quietly refresh it in the
-  //    background so the next load is current.
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) {
@@ -111,11 +109,10 @@ self.addEventListener('notificationclick', (event) => {
   const data = event.notification.data || {};
   const targetTab = data.tab || 'dashboard';
   const itemId = data.itemId;
-  const targetUrl = data.url || `/?tab=${targetTab}${itemId ? `&id=${encodeURIComponent(itemId)}` : ''}`;
+  const targetUrl = data.url || `${BASE}/?tab=${targetTab}${itemId ? `&id=${encodeURIComponent(itemId)}` : ''}`;
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // 1. If a window is already open, focus it and post a deep-link message
       for (const client of clientList) {
         if ('focus' in client) {
           client.focus();
@@ -127,8 +124,6 @@ self.addEventListener('notificationclick', (event) => {
           return client;
         }
       }
-
-      // 2. Otherwise open a fresh window pointing to the target tab
       if (self.clients.openWindow) {
         return self.clients.openWindow(targetUrl);
       }
@@ -140,8 +135,8 @@ self.addEventListener('push', (event) => {
   let title = 'MyBac Tracker';
   let options = {
     body: 'Rappel pour votre session de préparation au Bac',
-    icon: '/original_icon_512.png',
-    badge: '/original_icon_512.png',
+    icon: BASE + '/original_icon_512.png',
+    badge: BASE + '/original_icon_512.png',
     data: { tab: 'dashboard' },
     vibrate: [200, 100, 200],
     requireInteraction: false,
@@ -164,4 +159,3 @@ self.addEventListener('push', (event) => {
 
   event.waitUntil(self.registration.showNotification(title, options));
 });
-

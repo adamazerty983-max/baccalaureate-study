@@ -6,7 +6,7 @@ import { cloudSyncPlugin } from './server/dev-sync-plugin';
 
 export default defineConfig(() => {
   return {
-    base: './',
+    base: '/baccalaureate-study/',
     plugins: [react(), tailwindcss(), cloudSyncPlugin()],
     resolve: {
       alias: {
