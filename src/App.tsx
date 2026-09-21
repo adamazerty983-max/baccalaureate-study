@@ -28,12 +28,15 @@ import { NotificationPermissionBanner } from './components/shared/NotificationPe
 import { DesktopUpdateBanner } from './components/shared/DesktopUpdateBanner';
 import { PlannerCursor } from './components/shared/PlannerCursor';
 import { notificationService } from './services/notificationService';
+import { auth } from './lib/firebase';
 import {
   initAuthListener,
-  loadUserDataFromFirestore,
-  saveUserDataToFirestore,
-  DatabaseSyncState,
 } from './services/firestoreService';
+import {
+  saveUserData as saveUserDataToSupabase,
+  subscribeToUserData,
+  DatabaseSyncState,
+} from './services/supabaseService';
 
 import {
   AppLanguage,
@@ -102,10 +105,11 @@ export default function App() {
 
   // Database and Auth State
   const [syncState, setSyncState] = useState<DatabaseSyncState>({
-    status: 'idle',
+    status: 'offline',
     currentUser: null,
     lastSyncedAt: null,
-    error: null,
+    errorMessage: null,
+    isAnonymous: false,
   });
   const [isDatabaseModalOpen, setIsDatabaseModalOpen] = useState(false);
 
@@ -218,37 +222,83 @@ export default function App() {
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 
-  // 1. Firebase Auth & Initial Cloud Sync Listener
+  // 1. Firebase Auth → Supabase Data Sync
   useEffect(() => {
-    const unsubscribe = initAuthListener(
+    let unsubscribeSupabase: (() => void) | null = null;
+
+    const unsubscribeAuth = initAuthListener(
       (user) => {
-        if (!user) {
+        // Clean up previous Supabase subscription
+        if (unsubscribeSupabase) {
+          unsubscribeSupabase();
+          unsubscribeSupabase = null;
+        }
+
+        if (user) {
+          // Firebase auth succeeded → attach Supabase real-time listener
+          unsubscribeSupabase = subscribeToUserData(
+            user.uid,
+            (remoteData) => {
+              if (remoteData) {
+                setAppData((prev) => {
+                  const merged = mergeAppData(prev, remoteData);
+                  return merged === prev ? prev : merged;
+                });
+              }
+            },
+            (status) => {
+              setSyncState({
+                ...status,
+                // Inject Firebase user info so DatabaseModal can display name/uid/email
+                currentUser: {
+                  uid: user.uid,
+                  email: user.email,
+                  displayName: user.displayName,
+                  isAnonymous: user.isAnonymous,
+                },
+              });
+            }
+          );
+
+          // Also set initial connected state with user info immediately
+          setSyncState({
+            status: 'connected',
+            lastSyncedAt: null,
+            errorMessage: null,
+            isAnonymous: user.isAnonymous,
+            currentUser: {
+              uid: user.uid,
+              email: user.email,
+              displayName: user.displayName,
+              isAnonymous: user.isAnonymous,
+            },
+          });
+        } else {
           setSyncState({
             status: 'offline',
-            currentUser: null,
             lastSyncedAt: null,
             errorMessage: null,
             isAnonymous: true,
+            currentUser: null,
           });
         }
       },
-      (remoteData) => {
-        if (remoteData) {
-          setAppData((prev) => {
-            // Merge, don't replace: a stale cloud echo (or our own write re-stamped
-            // by the server) must never delete a completion made since.
-            const merged = mergeAppData(prev, remoteData);
-            return merged === prev ? prev : merged;
-          });
-        }
+      (_remoteData) => {
+        // Firebase Firestore data callback — no longer used (Supabase handles data)
       },
-      (status) => {
-        setSyncState(status);
+      (_status) => {
+        // Firebase sync status — no longer used
       }
     );
 
-    return () => unsubscribe();
+    return () => {
+      if (unsubscribeSupabase) unsubscribeSupabase();
+      unsubscribeAuth();
+    };
   }, []);
+
+
+
 
   // Toggle Sidebar Collapse & Persist
   const handleToggleSidebarCollapse = () => {
@@ -310,33 +360,44 @@ export default function App() {
     chimePlayer.initGlobalListeners();
   }, [appData.settings.soundVolume, appData.settings.chimeSoundEnabled]);
 
-  // Persistent LocalStorage & Cloud Database Auto-Save
-  // lastPushedRef skips Firestore pushes for states that came FROM the cloud
-  // (echoes) — otherwise the echo loop re-stamped the doc and forced every
-  // other device to adopt a potentially stale snapshot.
+  // Persistent LocalStorage & Cloud Database Auto-Save (Supabase)
+  // lastPushedRef skips Supabase pushes for states that came FROM the cloud
+  // (echoes) — otherwise the echo loop forces every device to adopt a potentially stale snapshot.
   const lastPushedRef = useRef<FullAppData | null>(null);
+  const currentUserIdRef = useRef<string | null>(null);
+
+  // Track Firebase Auth user UID in a ref for use in auto-save
+  useEffect(() => {
+    const unsub = auth.onAuthStateChanged((u) => {
+      currentUserIdRef.current = u?.uid ?? null;
+    });
+    return unsub;
+  }, []);
+
   useEffect(() => {
     saveStoredAppData(appData);
 
-    if (syncState.currentUser) {
+    const userId = currentUserIdRef.current;
+    if (userId) {
       if (lastPushedRef.current === appData) return;
       const timer = setTimeout(async () => {
         try {
           lastPushedRef.current = appData;
-          await saveUserDataToFirestore(syncState.currentUser!.uid, appData);
+          await saveUserDataToSupabase(userId, appData);
           setSyncState((prev) => ({
             ...prev,
             status: 'synced',
             lastSyncedAt: new Date().toLocaleTimeString(),
           }));
         } catch (err: any) {
-          console.warn('Firestore auto-save notification:', err);
+          console.warn('Supabase auto-save notification:', err);
         }
       }, 1200);
 
       return () => clearTimeout(timer);
     }
-  }, [appData, syncState.currentUser?.uid]);
+  }, [appData]);
+
 
   // 4. Global Keyboard Shortcuts
   useEffect(() => {

@@ -107,11 +107,11 @@ export function saveStoredAppData(data: FullAppData): void {
   }
 }
 
-import { saveStudyRoomToFirestore, loadStudyRoomFromFirestore } from '../services/firestoreService';
+import { saveStudyRoom, loadStudyRoom } from '../services/supabaseService';
 
 /**
  * Cloud Synchronization Client
- * Communicates with Firestore Database by Sync Room Code
+ * Communicates with Supabase Database by Sync Room Code
  */
 export async function syncWithCloud(
   syncCode: string,
@@ -123,9 +123,9 @@ export async function syncWithCloud(
     return { success: false, message: 'Le code de synchronisation ne peut pas être vide' };
   }
 
-  // 1. Try Firestore First
+  // 1. Try Supabase First
   try {
-    const remoteResult = await loadStudyRoomFromFirestore(code);
+    const remoteResult = await loadStudyRoom(code);
     let resolvedData = localData;
 
     if (remoteResult.success && remoteResult.data) {
@@ -142,16 +142,16 @@ export async function syncWithCloud(
     resolvedData.settings.cloudSyncCode = code;
     resolvedData.updatedAt = new Date().toISOString();
 
-    await saveStudyRoomToFirestore(code, resolvedData, userId);
+    await saveStudyRoom(code, resolvedData, userId);
     saveStoredAppData(resolvedData);
 
     return {
       success: true,
       data: resolvedData,
-      message: `Synchronisé avec succès dans la base Firestore [Salle : ${code}]`,
+      message: `Synchronisé avec succès dans la base Supabase [Salle : ${code}]`,
     };
   } catch (err: any) {
-    console.warn('Firestore sync failed, attempting local fallback:', err);
+    console.warn('Supabase sync failed, attempting local fallback:', err);
   }
 
   try {

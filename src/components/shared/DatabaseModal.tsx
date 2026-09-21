@@ -21,7 +21,8 @@ import {
   HardDrive,
 } from 'lucide-react';
 import { AppLanguage, FullAppData } from '../../types';
-import { DatabaseSyncState, loginWithGoogle, loginWithEmail, registerWithEmail, logoutUser, saveUserDataToFirestore } from '../../services/firestoreService';
+import { DatabaseSyncState, loginWithGoogle, loginWithEmail, registerWithEmail, logoutUser } from '../../services/firestoreService';
+import { saveUserData as saveUserDataToSupabase } from '../../services/supabaseService';
 import { syncWithCloud, getStorageEstimate } from '../../utils/storage';
 import { chimePlayer } from '../../utils/audio';
 import firebaseConfig from '../../../firebase-applet-config.json';
@@ -84,13 +85,13 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
     setIsManualSaving(true);
     setManualSaveMessage(null);
     try {
-      const res = await saveUserDataToFirestore(syncState.currentUser.uid, appData);
+      const res = await saveUserDataToSupabase(syncState.currentUser.uid, appData);
       if (res.success) {
         
         setManualSaveMessage(
           isAr
             ? 'تم حفظ ومزامنة قاعدة البيانات السحابية بنجاح!'
-            : 'Base de données Firestore synchronisée avec succès !'
+            : 'Base de données Supabase synchronisée avec succès !'
         );
       } else {
         setManualSaveMessage(res.error || 'Erreur lors de la sauvegarde');
