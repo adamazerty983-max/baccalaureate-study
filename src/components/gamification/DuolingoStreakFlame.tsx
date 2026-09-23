@@ -6,9 +6,9 @@ interface DuolingoStreakFlameProps {
   isFrozen?: boolean;
 }
 
-const VIDEO_SRC = '/campfire-streak.webm';
-const GIF_SRC = '/campfire-streak.gif';
-const POSTER_SRC = '/campfire-streak-poster.png';
+const VIDEO_SRC = `${import.meta.env.BASE_URL}campfire-streak.webm`;
+const GIF_SRC = `${import.meta.env.BASE_URL}campfire-streak.gif`;
+const POSTER_SRC = `${import.meta.env.BASE_URL}campfire-streak-poster.png`;
 
 /**
  * Original Baccalaureate Study Hub Campfire Animation

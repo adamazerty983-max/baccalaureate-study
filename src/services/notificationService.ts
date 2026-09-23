@@ -583,7 +583,7 @@ class NotificationService {
 
     // 3. Dispatch Windows Desktop / Browser System notification (if not in quiet hours and permission granted)
     if (!quiet && this.isSupported() && Notification.permission === 'granted') {
-      const iconUrl = '/original_icon_512.png';
+      const iconUrl = `${import.meta.env.BASE_URL}original_icon_512.png`;
       const notificationData = {
         tab,
         itemId,
