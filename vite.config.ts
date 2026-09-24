@@ -15,11 +15,48 @@ export default defineConfig(() => {
       dedupe: ['react', 'react-dom'],
     },
     build: {
+      target: 'es2020',
+      cssCodeSplit: true,
+      minify: 'esbuild',
+      sourcemap: false,
+      reportCompressedSize: false,
+      chunkSizeWarningLimit: 600,
       rollupOptions: {
         output: {
           manualChunks(id) {
+            // Firebase ecosystem
             if (id.includes('node_modules/firebase') || id.includes('node_modules/@firebase')) {
               return 'vendor-firebase';
+            }
+
+            // Supabase
+            if (id.includes('node_modules/@supabase')) {
+              return 'vendor-supabase';
+            }
+
+            // React ecosystem
+            if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
+              return 'vendor-react';
+            }
+
+            // Animation libraries
+            if (id.includes('node_modules/motion') || id.includes('node_modules/canvas-confetti')) {
+              return 'vendor-animations';
+            }
+
+            // Lucide icons
+            if (id.includes('node_modules/lucide-react')) {
+              return 'vendor-icons';
+            }
+
+            // Google AI
+            if (id.includes('node_modules/@google/genai')) {
+              return 'vendor-ai';
+            }
+
+            // Other node_modules
+            if (id.includes('node_modules/')) {
+              return 'vendor-misc';
             }
           },
         },
