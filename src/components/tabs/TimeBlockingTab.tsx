@@ -1527,9 +1527,9 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                 </span>
               </div>
 
-              {/* Center Floating Duration Pill */}
+              {/* Center Floating Time Range Pill */}
               <div className="px-3.5 py-1.5 rounded-full bg-teal-600 text-white font-mono text-xs font-black shadow-lg shadow-teal-900/30 border border-teal-300/40 animate-pulse">
-                {formatDurationLabel(dragDurationMins)}
+                {minutesToTime(dragMinMins)} - {minutesToTime(dragMaxMins)}
               </div>
 
               {/* Bottom Circular Drag Handle Following Cursor */}
