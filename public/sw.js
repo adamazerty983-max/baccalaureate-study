@@ -1,5 +1,5 @@
 const BASE = '/baccalaureate-study';
-const CACHE_NAME = 'mybac-offline-v4';
+const CACHE_NAME = 'mybac-offline-v5';
 
 const STATIC_ASSETS = [
   BASE + '/',
@@ -14,6 +14,12 @@ const STATIC_ASSETS = [
   BASE + '/campfire-streak-cold.gif',
   BASE + '/campfire-streak-cold-poster.png'
 ];
+
+// Dynamic cache for JS/CSS bundles
+const DYNAMIC_CACHE = 'mybac-dynamic-v5';
+
+// API cache for offline data
+const API_CACHE = 'mybac-api-v5';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -30,7 +36,9 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
-        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+        keys
+          .filter((key) => key !== CACHE_NAME && key !== DYNAMIC_CACHE && key !== API_CACHE)
+          .map((key) => caches.delete(key))
       );
     })
   );
@@ -74,7 +82,43 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 2. Everything else (hashed bundles, media, icons): stale-while-revalidate.
+  // 2. JS/CSS bundles: cache-first with dynamic cache for better offline support
+  if (url.pathname.includes('/assets/')) {
+    event.respondWith(
+      caches.match(event.request).then((cachedResponse) => {
+        if (cachedResponse) {
+          // Return cached, but update in background
+          fetch(event.request)
+            .then((res) => {
+              if (res && res.status === 200 && res.type !== 'opaque') {
+                const clone = res.clone();
+                caches.open(DYNAMIC_CACHE).then((cache) => cache.put(event.request, clone));
+              }
+            })
+            .catch(() => {});
+          return cachedResponse;
+        }
+
+        // Not in cache, fetch and cache
+        return fetch(event.request).then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200 && networkResponse.type !== 'opaque') {
+            const clone = networkResponse.clone();
+            caches.open(DYNAMIC_CACHE).then((cache) => cache.put(event.request, clone));
+          }
+          return networkResponse;
+        }).catch(() => {
+          // Network failed and not in cache
+          return new Response('Offline - Resource not available', {
+            status: 503,
+            statusText: 'Service Unavailable'
+          });
+        });
+      })
+    );
+    return;
+  }
+
+  // 3. Everything else: stale-while-revalidate
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) {

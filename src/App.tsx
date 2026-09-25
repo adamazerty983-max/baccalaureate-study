@@ -27,6 +27,7 @@ import { NotificationCenterModal } from './components/shared/NotificationCenterM
 import { NotificationPermissionBanner } from './components/shared/NotificationPermissionBanner';
 import { DesktopUpdateBanner } from './components/shared/DesktopUpdateBanner';
 import { PlannerCursor } from './components/shared/PlannerCursor';
+import { OfflineBanner } from './components/shared/OfflineBanner';
 import { notificationService } from './services/notificationService';
 import { auth } from './lib/firebase';
 import {
@@ -1158,6 +1159,9 @@ export default function App() {
 
         {/* Proactive Notification Permission Banner (non-blocking, dismissible) */}
         <NotificationPermissionBanner language={language} />
+
+        {/* Offline Mode Banner */}
+        <OfflineBanner language={language} />
 
         {/* Tab View Container with View Transitions API isolation */}
         <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 main-tab-content">
