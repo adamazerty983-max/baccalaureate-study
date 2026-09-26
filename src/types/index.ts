@@ -121,6 +121,8 @@ export interface TimeBlock {
   completedAt?: string;
   /** Item-level change stamp: makes deliberate toggles/edits beat stale whole-blob writers. */
   updatedAt?: string;
+  /** Present only on a render-time merged view of two adjacent same-subject blocks. */
+  _merged?: boolean;
 }
 
 export interface GradeItem {

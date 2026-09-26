@@ -605,6 +605,44 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
   const [originalSnapshot, setOriginalSnapshot] = useState<{ id: string; startTime: string; endTime: string }[] | null>(null);
   const isSmartDistributed = originalSnapshot !== null;
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // CONSECUTIVE TASK MERGING (_tbMerge) — App V3 Feature
+  // Merges adjacent blocks with same subject/title into single larger block
+  // ─────────────────────────────────────────────────────────────────────────────
+  const [isMergeMode, setIsMergeMode] = useState(false);
+
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // REAL-TIME CURRENT TIME TRACKING (Now Line) — App V3 Feature
+  // Live horizontal line at current time, updates every minute
+  // ─────────────────────────────────────────────────────────────────────────────
+  const [currentTimeMinutes, setCurrentTimeMinutes] = useState<number>(() => {
+    const now = new Date();
+    return now.getHours() * 60 + now.getMinutes();
+  });
+
+  useEffect(() => {
+    const updateNow = () => {
+      const now = new Date();
+      setCurrentTimeMinutes(now.getHours() * 60 + now.getMinutes());
+    };
+    updateNow();
+    const interval = setInterval(updateNow, 60000); // Update every minute
+    return () => clearInterval(interval);
+  }, []);
+
+  // Check if a block is currently in progress (for live highlighting)
+  const isBlockActive = (block: TimeBlock): boolean => {
+    const startM = timeToMinutes(block.startTime);
+    const endM = timeToMinutes(block.endTime);
+    return currentTimeMinutes >= startM && currentTimeMinutes < endM;
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // TASK OVERLAP DETECTION — App V3 Feature
+  // Checks for time conflicts and displays warning badges
+  // ─────────────────────────────────────────────────────────────────────────────
+
 
   // Subject display name localization helper
   const getSubjectDisplayName = (name: string) => {
@@ -649,6 +687,78 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
       .sort((a, b) => a.startTime.localeCompare(b.startTime));
   }, [timeBlocks, selectedDay]);
 
+  /**
+   * App V3 _tbMerge algorithm: merges consecutive tasks sharing same subject or title
+   * when cur.endTime === next.startTime (adjacent time slots).
+   * Render-time only — nothing is written back to storage, so toggling the
+   * feature off restores every original block untouched.
+   */
+  const mergedDayBlocks = useMemo(() => {
+    if (!isMergeMode || dayBlocks.length === 0) return dayBlocks;
+
+    const sorted = [...dayBlocks].sort((a, b) => a.startTime.localeCompare(b.startTime));
+    const out: TimeBlock[] = [];
+    let i = 0;
+
+    while (i < sorted.length) {
+      const cur: TimeBlock = { ...sorted[i] };
+
+      while (i + 1 < sorted.length) {
+        const nxt = sorted[i + 1];
+        const sameKey = Boolean(
+          (cur.subject && cur.subject === nxt.subject) || cur.title === nxt.title
+        );
+
+        if (sameKey && cur.endTime === nxt.startTime) {
+          cur.endTime = nxt.endTime;
+          cur._merged = true; // Render-time flag for the dashed-border styling
+          i++;
+        } else {
+          break;
+        }
+      }
+
+      out.push(cur);
+      i++;
+    }
+
+    return out;
+  }, [dayBlocks, isMergeMode]);
+
+  // Display blocks: use merged version when merge mode is on
+  const displayBlocks = isMergeMode ? mergedDayBlocks : dayBlocks;
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // TASK OVERLAP DETECTION — App V3 Feature
+  // Checks for time conflicts between study blocks on the active day.
+  // Stickers are excluded: a meal during a maths block is a break in the day,
+  // not a scheduling mistake.
+  // ─────────────────────────────────────────────────────────────────────────────
+  const getOverlappingBlocks = useMemo(() => {
+    const overlaps: string[] = [];
+    const studyBlocks = displayBlocks.filter((b) => b.type === 'study');
+
+    for (let i = 0; i < studyBlocks.length; i++) {
+      for (let j = i + 1; j < studyBlocks.length; j++) {
+        const a = studyBlocks[i];
+        const b = studyBlocks[j];
+        const startA = timeToMinutes(a.startTime);
+        const endA = timeToMinutes(a.endTime);
+        const startB = timeToMinutes(b.startTime);
+        const endB = timeToMinutes(b.endTime);
+
+        // Half-open interval overlap: startA < endB && endA > startB
+        if (startA < endB && endA > startB) {
+          if (!overlaps.includes(a.id)) overlaps.push(a.id);
+          if (!overlaps.includes(b.id)) overlaps.push(b.id);
+        }
+      }
+    }
+    return overlaps;
+  }, [displayBlocks]);
+
+  const isOverlapping = (blockId: string) => getOverlappingBlocks.includes(blockId);
+
   // Statistics: Total planned study hours and sessions count
   const plannedStudyMinutes = useMemo(() => {
     return dayBlocks
@@ -677,6 +787,45 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
   }, [dayBlocks]);
 
   const totalSessionsCount = dayBlocks.length;
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // DAILY SUMMARY & PROGRESS ENGINE — App V3 Feature
+  // Aggregates the day's study load, ignoring activity stickers entirely so
+  // rest / prayer / meals never inflate the study numbers.
+  // ─────────────────────────────────────────────────────────────────────────────
+  const summaryBlocks = useMemo(
+    () => displayBlocks.filter((b) => b.type === 'study'),
+    [displayBlocks]
+  );
+
+  const totalStudyMinutes = useMemo(
+    () =>
+      summaryBlocks.reduce(
+        (acc, b) => acc + Math.max(0, timeToMinutes(b.endTime) - timeToMinutes(b.startTime)),
+        0
+      ),
+    [summaryBlocks]
+  );
+
+  const doneStudyCount = useMemo(
+    () => summaryBlocks.filter((b) => b.isCompleted).length,
+    [summaryBlocks]
+  );
+
+  const studyProgressPct =
+    summaryBlocks.length > 0 ? Math.round((doneStudyCount / summaryBlocks.length) * 100) : 0;
+
+  // Minutes of study already in the past for the selected day (for the "live" readout)
+  const elapsedStudyMinutes = useMemo(() => {
+    if (selectedDay !== new Date().getDay()) return 0;
+    return summaryBlocks.reduce((acc, b) => {
+      const s = timeToMinutes(b.startTime);
+      const e = timeToMinutes(b.endTime);
+      return acc + Math.max(0, Math.min(currentTimeMinutes, e) - s);
+    }, 0);
+  }, [summaryBlocks, selectedDay, currentTimeMinutes]);
+
+  const remainingStudyMinutes = Math.max(0, totalStudyMinutes - elapsedStudyMinutes);
 
   // Convert pixel offset from top of timetable grid to minutes from midnight
   const pixelOffsetToMinutes = (y: number): number => {
@@ -1301,6 +1450,24 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
             <span>{isAr ? 'توزيع ذكي' : 'Optimiser'}</span>
           </button>
 
+          {/* Consecutive Task Merge Mode Toggle — App V3 Feature */}
+          <button
+            type="button"
+            onClick={() => {
+              setIsMergeMode(!isMergeMode);
+              chimePlayer.playChime('click');
+            }}
+            title={isAr ? 'دمج الحصص المتتالية ذات نفس المادة' : 'Fusionner les séances consécutives (même matière)'}
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 shadow-md cursor-pointer ${
+              isMergeMode
+                ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-500/25'
+                : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>{isAr ? 'دمج' : 'Fusion'}</span>
+          </button>
+
           {/* Revert to original button — visible only after smart redistribution */}
           {isSmartDistributed && (
             <button
@@ -1389,6 +1556,48 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* 2.5 DAILY SUMMARY & PROGRESS ENGINE (App V3) */}
+      <div className="bg-white/90 dark:bg-[#111827]/95 p-3.5 sm:p-4 rounded-3xl border border-slate-200/80 dark:border-white/[0.08] shadow-xs space-y-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+            <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
+            {isAr ? 'ملخص اليوم' : 'Résumé du jour'}
+          </span>
+
+          <div className="flex items-center gap-2 text-[11px] font-bold">
+            <span className="px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 font-mono">
+              {formatDurationLabel(totalStudyMinutes)} {isAr ? 'مخطط' : 'planifiées'}
+            </span>
+            <span className="px-2 py-1 rounded-lg bg-teal-500/10 text-teal-700 dark:text-teal-300 border border-teal-500/20 font-mono">
+              {doneStudyCount}/{summaryBlocks.length} {isAr ? 'منجزة' : 'terminées'}
+            </span>
+            {selectedDay === new Date().getDay() && remainingStudyMinutes > 0 && (
+              <span className="px-2 py-1 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 font-mono">
+                {formatDurationLabel(remainingStudyMinutes)} {isAr ? 'متبقية' : 'restantes'}
+              </span>
+            )}
+            {getOverlappingBlocks.length > 0 && (
+              <span className="px-2 py-1 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/25 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" />
+                {isAr ? 'تعارض في الجدول' : 'Conflit détecté'}
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="w-full h-2.5 rounded-full bg-slate-100 dark:bg-white/[0.06] overflow-hidden border border-slate-200/60 dark:border-white/5">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-teal-500 via-emerald-500 to-emerald-400 transition-all duration-500 ease-out shadow-sm"
+            style={{ width: `${studyProgressPct}%` }}
+          />
+        </div>
+
+        <div className="flex items-center justify-between text-[10px] font-mono text-slate-500 dark:text-slate-400">
+          <span>{isAr ? 'التقدم' : 'Progression'}</span>
+          <span className="font-bold text-emerald-600 dark:text-emerald-400">{studyProgressPct}%</span>
         </div>
       </div>
 
@@ -1482,6 +1691,26 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
               </div>
             );
           })}
+
+          {/* ─── REAL-TIME "NOW LINE" CURRENT TIME MARKER (App V3) ─── */}
+          {currentTimeMinutes >= TIMETABLE_START_HOUR * 60 && currentTimeMinutes < TIMETABLE_END_HOUR * 60 && (
+            <div
+              style={{ top: `${minutesToPixelOffset(currentTimeMinutes)}px` }}
+              className="absolute inset-x-0 flex items-center pointer-events-none z-25 -translate-y-1/2"
+            >
+              {/* Left: Current time badge */}
+              <div className="w-16 shrink-0 text-right pr-2">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-500 text-white font-mono text-[10px] font-black shadow-md animate-pulse">
+                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+                  {minutesToTime(currentTimeMinutes)}
+                </span>
+              </div>
+              {/* Red glowing dot */}
+              <div className="w-2.5 h-2.5 -ml-1.5 rounded-full bg-rose-500 border-2 border-white dark:border-[#111827] ring-2 ring-rose-500/50 shadow-lg shadow-rose-500/40" />
+              {/* Horizontal now line */}
+              <div className="flex-1 h-0.5 bg-gradient-to-r from-rose-500/80 via-rose-500/40 to-transparent" />
+            </div>
+          )}
 
           {/* DYNAMIC HOVER TIME TAG & GUIDELINE */}
           {hoverY !== null && !isDragging && !activeMove && !draggingSticker && (
@@ -1590,8 +1819,10 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
           )}
 
           {/* RENDERED TIME BLOCKS ON TIMETABLE */}
-          {dayBlocks.map((block) => {
+          {displayBlocks.map((block) => {
             const isBeingMoved = activeMove?.blockId === block.id;
+            const activeNow = isBlockActive(block);
+            const hasOverlap = isOverlapping(block.id);
 
             const startM = isBeingMoved
               ? activeMove.currentStartMinutes
@@ -1642,9 +1873,29 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                 } overflow-hidden group cursor-grab active:cursor-grabbing shadow-sm hover:shadow-md ${
                   isBeingMoved
                     ? 'z-40 ring-2 ring-teal-500 shadow-2xl scale-[1.01] opacity-95 bg-white dark:bg-slate-800'
+                    : activeNow
+                    ? 'ring-2 ring-rose-500/80 shadow-lg shadow-rose-500/20 animate-pulse'
+                    : hasOverlap
+                    ? 'border-amber-500/80 ring-1 ring-amber-500/40'
                     : `${cardTheme.bg} ${cardTheme.border} hover:border-teal-500/60`
-                }`}
+                } ${block._merged ? 'border-dashed border-2' : ''}`}
               >
+                {/* Active in-progress indicator badge */}
+                {activeNow && (
+                  <div className="absolute top-1 right-2 z-20 flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-rose-500 text-white text-[9px] font-extrabold shadow-sm animate-bounce">
+                    <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+                    <span>{isAr ? 'جارية الآن' : 'En cours'}</span>
+                  </div>
+                )}
+
+                {/* Overlap warning badge */}
+                {hasOverlap && !activeNow && (
+                  <div className="absolute top-1 right-2 z-20 flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-500/90 text-white text-[9px] font-bold shadow-sm" title={isAr ? 'تداخل في الوقت مع حصة أخرى' : 'Conflit horaire'}>
+                    <AlertCircle className="w-2.5 h-2.5" />
+                    <span className="hidden sm:inline">{isAr ? 'تداخل' : 'Conflit'}</span>
+                  </div>
+                )}
+
                 {/* Top Resize Drag Handle */}
                 <div
                   onMouseDown={(e) => handleStartMoveBlock(e, block, 'resize-top')}
