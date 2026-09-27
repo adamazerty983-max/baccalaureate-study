@@ -261,9 +261,11 @@
     </div>
     <script type="module" src="/src/main.tsx"></script>
     <script>
-      if ('serviceWorker' in navigator) {
+      if ('serviceWorker' in navigator && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+        const swUrl = window.location.pathname.startsWith('/baccalaureate-study') ? '/baccalaureate-study/sw.js' : '/sw.js';
+        const swScope = window.location.pathname.startsWith('/baccalaureate-study') ? '/baccalaureate-study/' : '/';
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/baccalaureate-study/sw.js', { scope: '/baccalaureate-study/' }).catch(() => {});
+          navigator.serviceWorker.register(swUrl, { scope: swScope }).catch(() => {});
         });
       }
     </script>

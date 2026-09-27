@@ -4,9 +4,9 @@ import path from 'path';
 import { defineConfig } from 'vite';
 import { cloudSyncPlugin } from './server/dev-sync-plugin';
 
-export default defineConfig(() => {
+export default defineConfig(({ command }) => {
   return {
-    base: '/baccalaureate-study/',
+    base: command === 'build' ? '/baccalaureate-study/' : '/',
     plugins: [react(), tailwindcss(), cloudSyncPlugin()],
     resolve: {
       alias: {
