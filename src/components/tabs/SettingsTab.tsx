@@ -51,6 +51,7 @@ import { getT } from '../../utils/i18n';
 import { DatabaseSyncState, logoutUser } from '../../services/firestoreService';
 import { GoogleAuthButton } from '../shared/GoogleAuthButton';
 import { notificationService } from '../../services/notificationService';
+import { WebPushSettings } from '../shared/WebPushSettings';
 import firebaseConfig from '../../../firebase-applet-config.json';
 
 interface SettingsTabProps {
@@ -1123,6 +1124,19 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
           <p className="text-[11px] text-slate-500 dark:text-slate-400">
             {t('notif_platform_limits')}
           </p>
+        </div>
+
+        {/* Web Push Background Notifications */}
+        <div className="pt-4 border-t border-slate-200 dark:border-slate-800">
+          <WebPushSettings
+            language={language}
+            userId={syncState?.user?.email || 'guest'}
+            onTestNotification={async () => {
+              await notificationService.sendTestNotification(fullData);
+              setTestSent(true);
+              setTimeout(() => setTestSent(false), 3000);
+            }}
+          />
         </div>
       </section>
 

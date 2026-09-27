@@ -175,6 +175,10 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
+/**
+ * Push event: display notification even when app is fully closed
+ * This is the core of background push notifications
+ */
 self.addEventListener('push', (event) => {
   let title = 'MyBac Tracker';
   let options = {
@@ -185,7 +189,8 @@ self.addEventListener('push', (event) => {
     vibrate: [200, 100, 200],
     requireInteraction: false,
     actions: [
-      { action: 'open', title: 'Ouvrir / فتح' }
+      { action: 'open', title: 'Ouvrir / فتح' },
+      { action: 'dismiss', title: 'Fermer / إغلاق' }
     ]
   };
 
@@ -194,9 +199,14 @@ self.addEventListener('push', (event) => {
       const json = event.data.json();
       if (json.title) title = json.title;
       if (json.body) options.body = json.body;
+      if (json.icon) options.icon = json.icon;
+      if (json.badge) options.badge = json.badge;
       if (json.data) options.data = json.data;
       if (json.requireInteraction !== undefined) options.requireInteraction = json.requireInteraction;
-    } catch {
+      if (json.vibrate) options.vibrate = json.vibrate;
+      if (json.actions) options.actions = json.actions;
+    } catch (err) {
+      console.error('Failed to parse push data:', err);
       options.body = event.data.text();
     }
   }
