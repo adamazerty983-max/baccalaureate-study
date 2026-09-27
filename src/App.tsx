@@ -19,6 +19,7 @@ const WeeklyReviewTab = lazy(() => tabLoaders.review().then((m: any) => ({ defau
 const SettingsTab = lazy(() => tabLoaders.settings().then((m: any) => ({ default: m.SettingsTab })));
 
 import { FocusModeModal } from './components/shared/FocusModeModal';
+import { isBlockActiveNow, loadActiveFocusSession, saveActiveFocusSession, clearActiveFocusSession } from './utils/focusSession';
 import { KeyboardShortcutsModal } from './components/shared/KeyboardShortcutsModal';
 import { QuickAddModal } from './components/shared/QuickAddModal';
 import { DatabaseModal } from './components/shared/DatabaseModal';
@@ -1011,20 +1012,33 @@ export default function App() {
     [appData.quizzes, appData.homework, appData.tasks, dueRevisionsCount]
   );
 
-  // Active timeblock for Focus Mode
+  // Restore persisted active focus session on mount if one is running
+  useEffect(() => {
+    const saved = loadActiveFocusSession();
+    if (saved && (Date.now() < saved.endTimestamp + 60000 || saved.isPaused)) {
+      const now = new Date(saved.startTimestamp);
+      const end = new Date(saved.endTimestamp);
+      const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`);
+      setCustomFocusBlock({
+        id: saved.id,
+        title: saved.title,
+        subject: saved.subject,
+        type: 'study',
+        startTime: `${pad(now.getHours())}:${pad(now.getMinutes())}`,
+        endTime: `${pad(end.getHours())}:${pad(end.getMinutes())}`,
+        dayOfWeek: now.getDay(),
+        dateKey: now.toISOString().slice(0, 10),
+        isCompleted: false,
+        createdAt: new Date(saved.startTimestamp).toISOString(),
+      });
+    }
+  }, []);
+
+  // Active timeblock for Focus Mode: checks real-time status and date/day validity
   const activeFocusBlock = useMemo(() => {
     if (customFocusBlock) return customFocusBlock;
     const now = new Date();
-    const currentMins = now.getHours() * 60 + now.getMinutes();
-    return (
-      appData.timeBlocks.find((b) => {
-        const [sh, sm] = b.startTime.split(':').map(Number);
-        const [eh, em] = b.endTime.split(':').map(Number);
-        const start = sh * 60 + sm;
-        const end = eh * 60 + em;
-        return currentMins >= start && currentMins < end && !b.isCompleted;
-      }) || null
-    );
+    return appData.timeBlocks.find((b) => isBlockActiveNow(b, now)) || null;
   }, [appData.timeBlocks, customFocusBlock]);
 
   // Start Focus Mode with optional preset subject
@@ -1038,7 +1052,7 @@ export default function App() {
       const eh = pad(Math.floor(endTotal / 60) % 24);
       const em = pad(endTotal % 60);
 
-      setCustomFocusBlock({
+      const block: TimeBlock = {
         id: `focus-${Date.now()}`,
         title: `Focus Session — ${subjectName}`,
         subject: subjectName,
@@ -1049,9 +1063,25 @@ export default function App() {
         dateKey: now.toISOString().slice(0, 10),
         isCompleted: false,
         createdAt: now.toISOString(),
+      };
+      setCustomFocusBlock(block);
+      saveActiveFocusSession({
+        id: block.id,
+        title: block.title,
+        subject: block.subject,
+        startTimestamp: Date.now(),
+        durationSeconds: 25 * 60,
+        endTimestamp: Date.now() + 25 * 60 * 1000,
+        isPaused: false,
+        pausedAt: null,
+        totalPausedMs: 0,
       });
     } else {
-      setCustomFocusBlock(null);
+      // Clear custom block so activeFocusBlock can resolve timetable block or empty state
+      const saved = loadActiveFocusSession();
+      if (!saved) {
+        setCustomFocusBlock(null);
+      }
     }
     chimePlayer.playChime('modal_open');
     setIsFocusMinimized(false);
@@ -1081,6 +1111,7 @@ export default function App() {
       completedAt: now.toISOString(),
       createdAt: now.toISOString(),
     });
+    clearActiveFocusSession();
     setCustomFocusBlock(null);
   };
 
@@ -1371,11 +1402,19 @@ export default function App() {
         onClose={() => {
           chimePlayer.playChime('modal_close');
           setIsFocusModeOpen(false);
-          setCustomFocusBlock(null);
         }}
         onToggleMinimize={() => setIsFocusMinimized(!isFocusMinimized)}
         onCompleteBlock={handleToggleBlockComplete}
         onLogCustomSession={handleLogCustomSession}
+        onStartCustomSession={(block) => setCustomFocusBlock(block)}
+        onDiscardSession={() => {
+          setCustomFocusBlock(null);
+          clearActiveFocusSession();
+        }}
+        onNavigateToPlanning={() => {
+          setIsFocusModeOpen(false);
+          handleNavigateTab('timeblocking');
+        }}
       />
 
       {/* 4. Keyboard Shortcuts Modal */}
