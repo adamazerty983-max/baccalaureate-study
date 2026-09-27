@@ -90,17 +90,33 @@ const minutesToTime = (minutes: number): string => {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 };
 
-// Helper to format duration string: "2h 45min" or "45 min" or "1h"
+// Helper to format duration string: "2h 45min" or "45 min" or "1h" or "1h 05min"
 const formatDurationLabel = (totalMins: number): string => {
   const hours = Math.floor(totalMins / 60);
   const mins = totalMins % 60;
   if (hours > 0 && mins > 0) {
-    return `${hours}h ${mins}min`;
+    const formattedMins = mins < 10 ? `0${mins}` : `${mins}`;
+    return `${hours}h ${formattedMins}min`;
   }
   if (hours > 0) {
     return `${hours}h`;
   }
   return `${mins} min`;
+};
+
+// Helper to format natural Arabic duration string: e.g. "ساعة و 5 دقائق" or "ساعتان" or "ساعة واحدة"
+const formatDurationArabic = (totalMins: number): string => {
+  const hours = Math.floor(totalMins / 60);
+  const mins = totalMins % 60;
+  if (hours > 0 && mins > 0) {
+    const hStr = hours === 1 ? 'ساعة' : hours === 2 ? 'ساعتان' : hours <= 10 ? `${hours} ساعات` : `${hours} ساعة`;
+    const mStr = mins === 1 ? 'دقيقة' : mins === 2 ? 'دقيقتان' : mins <= 10 ? `${mins} دقائق` : `${mins} دقيقة`;
+    return `${hStr} و ${mStr}`;
+  }
+  if (hours > 0) {
+    return hours === 1 ? 'ساعة واحدة' : hours === 2 ? 'ساعتان' : hours <= 10 ? `${hours} ساعات` : `${hours} ساعة`;
+  }
+  return mins === 1 ? 'دقيقة واحدة' : mins === 2 ? 'دقيقتان' : mins <= 10 ? `${mins} دقائق` : `${mins} دقيقة`;
 };
 
 // Helper to compute YYYY-MM-DD dateKey for a dayOfWeek in the current active week
@@ -1302,7 +1318,7 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
   // Calculate live drag box geometry for creating
   const dragMinMins = Math.min(dragStartMinutes, dragCurrentMinutes);
   const dragMaxMins = Math.max(dragStartMinutes, dragCurrentMinutes);
-  const dragDurationMins = Math.max(1, dragMaxMins - dragMinMins);
+  const dragDurationMins = Math.max(0, dragMaxMins - dragMinMins);
   const dragTopPx = minutesToPixelOffset(dragMinMins);
   const dragHeightPx = Math.max(8, minutesToPixelOffset(dragMaxMins) - dragTopPx);
 
@@ -1757,12 +1773,23 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
               </div>
 
               {/* Center Floating Time Range Pill */}
-              <div className="px-3.5 py-1.5 rounded-full bg-teal-600 text-white font-mono text-xs font-black shadow-lg shadow-teal-900/30 border border-teal-300/40 animate-pulse">
-                {minutesToTime(dragMinMins)} - {minutesToTime(dragMaxMins)}
+              <div className="px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full bg-teal-600 text-white font-mono text-[11px] sm:text-xs font-black shadow-lg shadow-teal-900/30 border border-teal-300/40 animate-pulse flex items-center gap-1.5">
+                <span>{minutesToTime(dragMinMins)} - {minutesToTime(dragMaxMins)}</span>
               </div>
 
-              {/* Bottom Circular Drag Handle Following Cursor */}
-              <div className="absolute bottom-2 left-6 w-6 h-6 rounded-full border-2 border-teal-500 bg-teal-500/20 flex items-center justify-center animate-bounce">
+              {/* Right Floating Calculated Duration Badge (matches user specification & visual mockup) */}
+              <div
+                className="absolute right-3 sm:right-6 top-1/2 -translate-y-1/2 px-2.5 py-1 sm:px-3.5 sm:py-1.5 rounded-full bg-teal-600 text-white font-mono text-[11px] sm:text-xs font-black shadow-lg shadow-teal-900/30 border border-teal-300/40 flex items-center gap-1.5 animate-pulse"
+                title={isAr ? formatDurationArabic(dragDurationMins) : formatDurationLabel(dragDurationMins)}
+              >
+                <Clock className="w-3.5 h-3.5 text-teal-200 stroke-[2.5]" />
+                <span>{formatDurationLabel(dragDurationMins)}</span>
+              </div>
+
+              {/* Circular Drag Handle Following Cursor */}
+              <div
+                className={`absolute ${dragCurrentMinutes < dragStartMinutes ? 'top-2' : 'bottom-2'} left-4 sm:left-6 w-6 h-6 rounded-full border-2 border-teal-500 bg-teal-500/20 flex items-center justify-center animate-bounce`}
+              >
                 <div className="w-2 h-2 rounded-full bg-teal-500" />
               </div>
             </div>

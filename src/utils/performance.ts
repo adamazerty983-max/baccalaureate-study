@@ -30,12 +30,17 @@ export const preloadCriticalChunks = () => {
  */
 export const reportWebVitals = (onPerfEntry?: (metric: any) => void) => {
   if (onPerfEntry && onPerfEntry instanceof Function) {
-    import('web-vitals').then(({ getCLS, getFID, getFCP, getLCP, getTTFB }) => {
-      getCLS(onPerfEntry);
-      getFID(onPerfEntry);
-      getFCP(onPerfEntry);
-      getLCP(onPerfEntry);
-      getTTFB(onPerfEntry);
+    import('web-vitals').then((wv: any) => {
+      const cls = wv.onCLS || wv.getCLS;
+      const fid = wv.onFID || wv.getFID;
+      const fcp = wv.onFCP || wv.getFCP;
+      const lcp = wv.onLCP || wv.getLCP;
+      const ttfb = wv.onTTFB || wv.getTTFB;
+      if (cls) cls(onPerfEntry);
+      if (fid) fid(onPerfEntry);
+      if (fcp) fcp(onPerfEntry);
+      if (lcp) lcp(onPerfEntry);
+      if (ttfb) ttfb(onPerfEntry);
     }).catch(() => {
       // web-vitals not available, skip reporting
     });
