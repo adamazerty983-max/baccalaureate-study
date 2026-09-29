@@ -26,6 +26,7 @@ import { DatabaseModal } from './components/shared/DatabaseModal';
 import { LoadingScreen } from './components/shared/LoadingScreen';
 import { NotificationCenterModal } from './components/shared/NotificationCenterModal';
 import { NotificationPermissionBanner } from './components/shared/NotificationPermissionBanner';
+import { SystemNotificationHUD } from './components/shared/SystemNotificationHUD';
 import { DesktopUpdateBanner } from './components/shared/DesktopUpdateBanner';
 import { PlannerCursor } from './components/shared/PlannerCursor';
 import { OfflineBanner } from './components/shared/OfflineBanner';
@@ -150,6 +151,8 @@ export default function App() {
   // Notification Center State
   const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false);
   const [inAppNotifications, setInAppNotifications] = useState<InAppNotification[]>([]);
+  // Live On-Screen System Notification HUD Queue
+  const [hudQueue, setHudQueue] = useState<InAppNotification[]>([]);
 
   // Initialize Notification Service and background scheduler loop
   useEffect(() => {
@@ -157,6 +160,13 @@ export default function App() {
 
     const unsubscribe = notificationService.subscribe((list) => {
       setInAppNotifications(list);
+    });
+
+    const unsubHUD = notificationService.onHUD((item) => {
+      setHudQueue((prev) => {
+        if (prev.some((n) => n.id === item.id)) return prev;
+        return [...prev, item];
+      });
     });
 
     notificationService.startScheduler(appData);
@@ -177,6 +187,7 @@ export default function App() {
 
     return () => {
       unsubscribe();
+      unsubHUD();
       notificationService.stopScheduler();
       if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
         navigator.serviceWorker.removeEventListener('message', handleSwMessage);
@@ -1467,7 +1478,15 @@ export default function App() {
         onNavigateTab={(tab) => handleNavigateTab(tab)}
       />
 
-      {/* 8. Initial App Boot Splash with TwinOrbit */}
+      {/* 8. On-Screen Floating System Notification HUD (Dynamic Island Banner) */}
+      <SystemNotificationHUD
+        queue={hudQueue}
+        language={language}
+        onDismiss={(id) => setHudQueue((prev) => prev.filter((n) => n.id !== id))}
+        onNavigate={(tab) => handleNavigateTab(tab)}
+      />
+
+      {/* 9. Initial App Boot Splash with TwinOrbit */}
       {showSplash && (
         <LoadingScreen
           isArabic={language === 'ar'}

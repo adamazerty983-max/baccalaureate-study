@@ -322,8 +322,11 @@ export const INITIAL_NOTIFICATIONS_PREFERENCES: NotificationPreferences = {
     lessons: true,
     goals: true,
     habits: true,
+    timeblocking: true,
   },
   leadTimeMinutes: 30,
+  advanceDaysReminders: true,
+  timeblockLeadMinutes: 10,
   habitReminderTime: '20:00',
   quietHours: {
     enabled: true,

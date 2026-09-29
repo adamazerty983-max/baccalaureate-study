@@ -7,6 +7,7 @@ import {
   CheckSquare,
   Award,
   BookOpen,
+  CalendarDays,
   Brain,
   Target,
   Flame,
@@ -33,6 +34,12 @@ const TYPE_CONFIG: Record<
   InAppNotification['type'],
   { icon: React.ComponentType<{ className?: string }>; color: string; border: string; bg: string }
 > = {
+  timeblocking: {
+    icon: CalendarDays,
+    color: 'text-cyan-500 dark:text-cyan-400',
+    border: 'border-cyan-500/30',
+    bg: 'bg-cyan-500/10',
+  },
   tasks: {
     icon: CheckSquare,
     color: 'text-teal-500 dark:text-teal-400',
@@ -275,6 +282,11 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
                       </h3>
 
                       <div className="flex items-center gap-1.5 shrink-0 text-[10px] text-slate-400 font-mono">
+                        {item.badge && (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                            {item.badge}
+                          </span>
+                        )}
                         <Clock className="w-2.5 h-2.5 opacity-60" />
                         <span>{formatRelativeTime(item.timestamp)}</span>
                       </div>

@@ -903,6 +903,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
             {[
+              { id: 'timeblocking', label: t('notif_module_timeblocking'), icon: Calendar, color: 'text-cyan-500' },
               { id: 'tasks', label: t('notif_module_tasks'), icon: CheckSquare, color: 'text-teal-500' },
               { id: 'quizzes', label: t('notif_module_quizzes'), icon: Award, color: 'text-amber-500' },
               { id: 'homework', label: t('notif_module_homework'), icon: BookOpen, color: 'text-indigo-500' },
@@ -956,6 +957,45 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
                 </button>
               );
             })}
+          </div>
+
+          {/* Advance Days Reminders Switch (J-2 and J-1) */}
+          <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-900 dark:text-white">
+                  {t('notif_advance_days_title')}
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20">
+                  J-2 & J-1
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 max-w-xl leading-relaxed">
+                {t('notif_advance_days_desc')}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                const currentNotifs = settings.notifications || INITIAL_NOTIFICATIONS_PREFERENCES;
+                const nextVal = currentNotifs.advanceDaysReminders === false;
+                onUpdateSettings({
+                  notifications: {
+                    ...currentNotifs,
+                    advanceDaysReminders: nextVal,
+                  },
+                });
+                chimePlayer.playChime('click');
+              }}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer border ${
+                (settings.notifications?.advanceDaysReminders ?? true)
+                  ? 'bg-teal-600 border-teal-600 text-white shadow-sm shadow-teal-600/30'
+                  : 'bg-slate-200 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400'
+              }`}
+            >
+              {(settings.notifications?.advanceDaysReminders ?? true) ? (isAr ? 'مفعل ✓' : 'Activé ✓') : (isAr ? 'معطل' : 'Désactivé')}
+            </button>
           </div>
         </div>
 

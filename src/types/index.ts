@@ -223,7 +223,14 @@ export type MainTabType =
   | 'review'
   | 'settings';
 
-export type NotificationModule = 'tasks' | 'quizzes' | 'homework' | 'lessons' | 'goals' | 'habits';
+export type NotificationModule =
+  | 'tasks'
+  | 'quizzes'
+  | 'homework'
+  | 'lessons'
+  | 'goals'
+  | 'habits'
+  | 'timeblocking';
 
 export interface NotificationPreferences {
   enabled: boolean;
@@ -234,8 +241,11 @@ export interface NotificationPreferences {
     lessons: boolean;
     goals: boolean;
     habits: boolean;
+    timeblocking: boolean;
   };
   leadTimeMinutes: number; // e.g. 15, 30, 60, 120
+  advanceDaysReminders?: boolean; // J-2 (2 days before) & J-1 (Eve/tomorrow) reminders for homework and exams
+  timeblockLeadMinutes?: number; // Advance warning for study timetable sessions (default 10)
   habitReminderTime: string; // HH:mm e.g. "20:00"
   quietHours: {
     enabled: boolean;
@@ -246,13 +256,23 @@ export interface NotificationPreferences {
 
 export interface InAppNotification {
   id: string;
-  type: 'tasks' | 'quizzes' | 'homework' | 'lessons' | 'goals' | 'habits' | 'system';
+  type:
+    | 'tasks'
+    | 'quizzes'
+    | 'homework'
+    | 'lessons'
+    | 'goals'
+    | 'habits'
+    | 'timeblocking'
+    | 'system';
   title: string;
   message: string;
   timestamp: string;
   tab: MainTabType;
   itemId?: string;
   read: boolean;
+  badge?: string; // e.g. 'Dans 10 min', 'J-2', 'Demain', 'Maintenant'
+  urgency?: 'normal' | 'soon' | 'imminent';
 }
 
 export interface AppSettings {
