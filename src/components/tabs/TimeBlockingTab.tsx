@@ -1111,7 +1111,7 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
     setTaskSubject(block.subject || '');
     setSubjectError('');
     setTaskNotes(block.notes || '');
-    setNaturalInput('');
+    setNaturalInput(block.title);
 
     const startM = timeToMinutes(block.startTime);
     const endM = timeToMinutes(block.endTime);
@@ -1140,9 +1140,11 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
   // MODAL QUICK ACTIONS
   // -------------------------------------------------------------
   const handleApplyNaturalLanguage = () => {
-    if (!naturalInput.trim()) return;
-    const parsed = parseNaturalLanguageTask(naturalInput);
-    if (parsed.title) setTaskTitle(parsed.title);
+    const raw = naturalInput.trim();
+    if (!raw) return;
+    const parsed = parseNaturalLanguageTask(raw);
+    const adoptedTitle = parsed.title || raw;
+    setTaskTitle(adoptedTitle);
     if (parsed.subject) {
       setTaskSubject(parsed.subject);
       setSubjectError('');
@@ -1150,6 +1152,10 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
     if (parsed.durationMins) setModalDurationMinutes(parsed.durationMins);
     if (parsed.dayOffset === 1) setModalDayOption('tomorrow');
     chimePlayer.playChime('click');
+    toast.success(
+      isAr ? 'تم اعتماد العنوان ✓' : 'Titre validé ✓',
+      adoptedTitle,
+    );
   };
 
   const handleDurationPresetClick = (minutes: number) => {
@@ -1177,12 +1183,23 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
     }
   };
 
-  const handleSaveModalTask = (e?: React.FormEvent, overrideSubject?: string) => {
+  const handleSaveModalTask = (
+    e?: React.FormEvent,
+    overrideSubject?: string,
+    overrideTitle?: string,
+  ) => {
     if (e && typeof e.preventDefault === 'function') {
       e.preventDefault();
     }
 
-    const subjectToValidate = (overrideSubject !== undefined ? overrideSubject : taskSubject).trim();
+    const rawNatural = naturalInput.trim();
+    const parsedNatural = rawNatural ? parseNaturalLanguageTask(rawNatural) : null;
+
+    const subjectToValidate = (
+      overrideSubject !== undefined
+        ? overrideSubject
+        : taskSubject || parsedNatural?.subject || ''
+    ).trim();
 
     // Subject is MANDATORY (إجباري للمادة فقط)
     if (!subjectToValidate) {
@@ -1204,8 +1221,20 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
 
     const startStr = minutesToTime(modalStartMinutes);
     const endStr = minutesToTime(modalStartMinutes + modalDurationMinutes);
-    // Title is OPTIONAL - falls back to selected subject name if empty
-    const finalTitle = taskTitle.trim() || subjectToValidate;
+
+    // Title determination with full fallback:
+    // 1. Explicit overrideTitle
+    // 2. taskTitle state
+    // 3. parsedNatural.title
+    // 4. raw naturalInput
+    // 5. fallback to subject name
+    const finalTitle = (
+      overrideTitle ||
+      taskTitle.trim() ||
+      parsedNatural?.title ||
+      rawNatural ||
+      subjectToValidate
+    ).trim();
 
     const targetDateKey = computeDateKeyForDay(targetDay);
 
@@ -1245,7 +1274,7 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
     chimePlayer.playChime('add');
     toast.success(
       isAr ? 'تم الحفظ بنجاح ✓' : editingBlockId ? 'Bloc mis à jour ✓' : 'Bloc ajouté ✓',
-      isAr ? 'تم تسجيل الكتلة في جدولك' : `${subjectToValidate || taskTitle} · ${startStr} – ${endStr}`,
+      `${finalTitle} · ${startStr} – ${endStr}`,
     );
   };
 
@@ -2318,26 +2347,64 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
               </button>
             </div>
 
-            {/* Quick Natural Language Bar */}
+            {/* Quick Natural Language & Title Bar */}
             <div className="relative">
               <div className="flex items-center gap-2">
                 <div className="relative flex-1">
                   <input
                     type="text"
                     value={naturalInput}
-                    onChange={(e) => setNaturalInput(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setNaturalInput(val);
+                      setTaskTitle(val);
+                    }}
+                    onBlur={() => {
+                      const raw = naturalInput.trim();
+                      if (raw) {
+                        const parsed = parseNaturalLanguageTask(raw);
+                        if (parsed.title) setTaskTitle(parsed.title);
+                        if (parsed.subject && !taskSubject) {
+                          setTaskSubject(parsed.subject);
+                          setSubjectError('');
+                        }
+                      }
+                    }}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault();
-                        if (naturalInput.trim()) {
-                          const parsed = parseNaturalLanguageTask(naturalInput);
-                          if (parsed.title) setTaskTitle(parsed.title);
-                          if (parsed.durationMins) setModalDurationMinutes(parsed.durationMins);
-                          if (parsed.dayOffset === 1) setModalDayOption('tomorrow');
+                        const raw = naturalInput.trim();
+                        if (raw) {
+                          const parsed = parseNaturalLanguageTask(raw);
+                          const effectiveTitle = parsed.title || raw;
+                          const effectiveSubject = (parsed.subject || taskSubject).trim();
+
+                          setTaskTitle(effectiveTitle);
+                          if (parsed.durationMins) {
+                            setModalDurationMinutes(parsed.durationMins);
+                          }
+                          if (parsed.dayOffset === 1) {
+                            setModalDayOption('tomorrow');
+                          }
                           if (parsed.subject) {
                             setTaskSubject(parsed.subject);
                             setSubjectError('');
-                            handleSaveModalTask(e, parsed.subject);
+                          }
+
+                          if (effectiveSubject) {
+                            handleSaveModalTask(e, effectiveSubject, effectiveTitle);
+                            return;
+                          } else {
+                            setSubjectError(
+                              isAr
+                                ? 'تم اعتماد العنوان! يرجى اختيار المادة لإتمام الحفظ.'
+                                : 'Titre validé ! Veuillez choisir la matière pour enregistrer.'
+                            );
+                            chimePlayer.playChime('click');
+                            toast.info(
+                              isAr ? 'تم اعتماد العنوان ✓' : 'Titre validé ✓',
+                              effectiveTitle
+                            );
                             return;
                           }
                         }
@@ -2346,8 +2413,8 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                     }}
                     placeholder={
                       isAr
-                        ? 'اكتب مثلاً: رياضيات 45 دقيقة غداً...'
-                        : 'Ex : maths 45min demain 1h30...'
+                        ? 'اكتب عنوان الحصة أو مثلاً: رياضيات 45 دقيقة...'
+                        : 'Titre de la tâche ou ex : maths 45min demain...'
                     }
                     className="w-full pl-9 pr-4 rtl:pl-4 rtl:pr-9 py-2.5 rounded-2xl bg-slate-50 dark:bg-[#182030] border border-slate-200 dark:border-white/10 text-xs font-medium text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-teal-500 transition-colors"
                   />
@@ -2356,13 +2423,25 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                 <button
                   type="button"
                   onClick={handleApplyNaturalLanguage}
-                  className="px-3.5 py-2.5 rounded-2xl bg-teal-600 hover:bg-teal-500 text-white transition-transform active:scale-95 cursor-pointer shadow-sm text-xs font-bold flex items-center gap-1 shrink-0"
-                  title={isAr ? 'تطبيق التحليل' : 'Appliquer'}
+                  className="px-3.5 py-2.5 rounded-2xl bg-teal-600 hover:bg-teal-500 text-white transition-transform active:scale-95 cursor-pointer shadow-sm text-xs font-bold flex items-center gap-1.5 shrink-0"
+                  title={isAr ? 'تأكيد واعتماد العنوان (OK)' : 'Valider le titre (OK)'}
                 >
                   <Check className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">{isAr ? 'تطبيق' : 'OK'}</span>
+                  <span className="inline">{isAr ? 'تأكيد' : 'OK'}</span>
                 </button>
               </div>
+
+              {/* Live confirmation badge when title is typed or adopted */}
+              {(taskTitle.trim() || naturalInput.trim()) && (
+                <div className="flex items-center gap-1.5 text-[11px] text-teal-600 dark:text-teal-400 font-semibold mt-1 px-1">
+                  <Check className="w-3 h-3 text-teal-500 shrink-0" />
+                  <span className="truncate">
+                    {isAr
+                      ? `العنوان المعتمد: "${taskTitle.trim() || naturalInput.trim()}"`
+                      : `Titre retenu : "${taskTitle.trim() || naturalInput.trim()}"`}
+                  </span>
+                </div>
+              )}
             </div>
 
             <form onSubmit={handleSaveModalTask} onKeyDown={handleFormKeyDown} className="space-y-4 text-xs">
@@ -2917,7 +2996,10 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                                 : 'Ex: Résolution exercices nombres complexes...'
                             }
                             value={taskTitle}
-                            onChange={(e) => setTaskTitle(e.target.value)}
+                            onChange={(e) => {
+                              setTaskTitle(e.target.value);
+                              setNaturalInput(e.target.value);
+                            }}
                             className="w-full px-3.5 py-2 rounded-xl bg-white dark:bg-[#111827] border border-slate-200 dark:border-white/10 text-slate-900 dark:text-slate-100 font-medium text-xs placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-teal-500 transition-colors"
                           />
                           <p className="mt-1 text-[10px] text-slate-400 dark:text-slate-500">
