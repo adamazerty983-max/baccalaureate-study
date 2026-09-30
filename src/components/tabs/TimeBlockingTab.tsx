@@ -26,6 +26,7 @@ import {
   ArrowDown,
   Move,
   Plus,
+  Minus,
   AlertCircle,
   Timer,
   Flame,
@@ -135,13 +136,19 @@ const computeDateKeyForDay = (dayOfWeek: number): string => {
 };
 
 // Natural language fast parser for the top input
-const parseNaturalLanguageTask = (text: string) => {
+export const parseNaturalLanguageTask = (text: string) => {
   let title = text.trim();
   let subject = '';
-  let durationMins = 60;
+  let durationMins: number | null = null;
   let dayOffset = 0; // 0 = today, 1 = tomorrow
 
   const lower = text.toLowerCase();
+  // Normalized Arabic text for robust pattern matching
+  const normalizedAr = lower
+    .replace(/[\u064B-\u065F]/g, '') // strip tashkeel
+    .replace(/[إأآا]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/[\s\-_]+/g, ' ');
 
   // Match subjects (French and Arabic)
   const ARABIC_SUBJECT_MAP: Record<string, string> = {
@@ -190,28 +197,127 @@ const parseNaturalLanguageTask = (text: string) => {
   }
 
   // Match day
-  if (lower.includes('demain') || lower.includes('tomorrow') || lower.includes('غدا') || lower.includes('غداً')) {
+  if (
+    lower.includes('demain') ||
+    lower.includes('tomorrow') ||
+    normalizedAr.includes('غدا')
+  ) {
     dayOffset = 1;
   }
 
-  // Match duration: "1h30", "2h", "45min", "1h", "45 دقيقة", "ساعة"
-  const hMatch = lower.match(/(\d+)\s*h\s*(\d+)?/);
-  if (hMatch) {
-    const h = parseInt(hMatch[1], 10);
-    const m = hMatch[2] ? parseInt(hMatch[2], 10) : 0;
+  // Match duration:
+  // 1. Compound French/Standard: "1h30", "1h 30", "1h30min", "2h", "1.5h", "1,5h"
+  const compoundH = lower.match(/(\d+)\s*h\s*(\d+)?(?:\s*min|\s*m)?/);
+  const decimalH = lower.match(/(\d+[.,]\d+)\s*h(?:eures?)?/);
+  if (compoundH && compoundH[2]) {
+    const h = parseInt(compoundH[1], 10);
+    const m = parseInt(compoundH[2], 10);
     durationMins = h * 60 + m;
-  } else {
-    const minMatch = lower.match(/(\d+)\s*(?:min|دقيقة)/);
+  } else if (decimalH) {
+    const val = parseFloat(decimalH[1].replace(',', '.'));
+    if (!isNaN(val)) durationMins = Math.round(val * 60);
+  } else if (compoundH && !compoundH[2]) {
+    durationMins = parseInt(compoundH[1], 10) * 60;
+  }
+
+  // 2. Arabic compound expressions (ordered from longest to shortest)
+  if (durationMins === null) {
+    if (
+      normalizedAr.includes('ساعتين ونصف') ||
+      normalizedAr.includes('ساعتين و نصف') ||
+      normalizedAr.includes('ساعتان ونصف') ||
+      normalizedAr.includes('ساعتان و نصف') ||
+      normalizedAr.includes('ساعتين ونص') ||
+      normalizedAr.includes('ساعتان ونص')
+    ) {
+      durationMins = 150;
+    } else if (
+      normalizedAr.includes('ساعتين وربع') ||
+      normalizedAr.includes('ساعتين و ربع') ||
+      normalizedAr.includes('ساعتان وربع')
+    ) {
+      durationMins = 135;
+    } else if (
+      normalizedAr.includes('ساعتين وثلث') ||
+      normalizedAr.includes('ساعتين و ثلث') ||
+      normalizedAr.includes('ساعتين وتلت') ||
+      normalizedAr.includes('ساعتان وثلث')
+    ) {
+      durationMins = 140;
+    } else if (
+      normalizedAr.includes('ساعتين') ||
+      normalizedAr.includes('ساعتان') ||
+      normalizedAr.includes('2 ساعه') ||
+      normalizedAr.includes('2 ساعات')
+    ) {
+      durationMins = 120;
+    } else if (
+      normalizedAr.includes('ساعه ونصف') ||
+      normalizedAr.includes('ساعه و نصف') ||
+      normalizedAr.includes('ساعه ونص') ||
+      normalizedAr.includes('ساعه و نص')
+    ) {
+      durationMins = 90;
+    } else if (
+      normalizedAr.includes('ساعه وربع') ||
+      normalizedAr.includes('ساعه و ربع')
+    ) {
+      durationMins = 75;
+    } else if (
+      normalizedAr.includes('ساعه وثلث') ||
+      normalizedAr.includes('ساعه و ثلث') ||
+      normalizedAr.includes('ساعه وتلت')
+    ) {
+      durationMins = 80;
+    } else if (
+      normalizedAr.includes('نصف ساعه') ||
+      normalizedAr.includes('نص ساعه')
+    ) {
+      durationMins = 30;
+    } else if (
+      normalizedAr.includes('ثلث ساعه') ||
+      normalizedAr.includes('تلت ساعه')
+    ) {
+      durationMins = 20;
+    } else if (
+      normalizedAr.includes('ربع ساعه')
+    ) {
+      durationMins = 15;
+    }
+  }
+
+  // 3. Arabic "ساعة و X دقيقة"
+  if (durationMins === null) {
+    const arHourAndM = normalizedAr.match(/ساعه\s*و\s*(\d+)\s*(?:دقيقه|دقائق|د)?/);
+    if (arHourAndM) {
+      durationMins = 60 + parseInt(arHourAndM[1], 10);
+    }
+  }
+
+  // 4. Arabic "X ساعات"
+  if (durationMins === null) {
+    const arMultiHours = normalizedAr.match(/(\d+)\s*(?:ساعات|ساعه)/);
+    if (arMultiHours) {
+      durationMins = parseInt(arMultiHours[1], 10) * 60;
+    }
+  }
+
+  // 5. Standalone single hour
+  if (durationMins === null) {
+    if (
+      normalizedAr.includes('ساعه واحده') ||
+      /\bساعه\b/.test(normalizedAr) ||
+      lower.includes('1h')
+    ) {
+      durationMins = 60;
+    }
+  }
+
+  // 6. Direct minutes: "45min", "45 دقيقة", "35 د", "15 دقائق"
+  if (durationMins === null) {
+    const minMatch = lower.match(/(\d+)\s*(?:min|mins|دقيقه|دقيقة|دقائق|د\b)/);
     if (minMatch) {
       durationMins = parseInt(minMatch[1], 10);
-    } else if (lower.includes('ساعتين') || lower.includes('ساعتان') || lower.includes('2h')) {
-      durationMins = 120;
-    } else if (lower.includes('ساعة ونصف') || lower.includes('1h30')) {
-      durationMins = 90;
-    } else if (lower.includes('ساعة') || lower.includes('1h')) {
-      durationMins = 60;
-    } else if (lower.includes('نصف ساعة')) {
-      durationMins = 30;
     }
   }
 
@@ -1149,17 +1255,38 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
       setTaskSubject(parsed.subject);
       setSubjectError('');
     }
-    if (parsed.durationMins) setModalDurationMinutes(parsed.durationMins);
+    if (parsed.durationMins !== null && parsed.durationMins > 0) {
+      setModalDurationMinutes(parsed.durationMins);
+    }
     if (parsed.dayOffset === 1) setModalDayOption('tomorrow');
     chimePlayer.playChime('click');
     toast.success(
-      isAr ? 'تم اعتماد العنوان ✓' : 'Titre validé ✓',
+      isAr ? 'تم اعتماد البيانات ✓' : 'Données validées ✓',
       adoptedTitle,
     );
   };
 
   const handleDurationPresetClick = (minutes: number) => {
     setModalDurationMinutes(minutes);
+  };
+
+  const handleSetHours = (newHours: number) => {
+    const h = Math.max(0, Math.min(12, newHours));
+    const m = modalDurationMinutes % 60;
+    const total = Math.max(1, h * 60 + m);
+    setModalDurationMinutes(total);
+  };
+
+  const handleSetMinutes = (newMins: number) => {
+    const h = Math.floor(modalDurationMinutes / 60);
+    const m = Math.max(0, Math.min(59, newMins));
+    const total = Math.max(1, h * 60 + m);
+    setModalDurationMinutes(total);
+  };
+
+  const handleAdjustMinutesDelta = (delta: number) => {
+    setModalDurationMinutes((prev) => Math.max(1, Math.min(24 * 60, prev + delta)));
+    chimePlayer.playChime('click');
   };
 
   const handleRapidPeriodClick = (period: 'matin' | 'milieu' | 'aprem' | 'soir' | 'nuit') => {
@@ -2380,7 +2507,7 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                           const effectiveSubject = (parsed.subject || taskSubject).trim();
 
                           setTaskTitle(effectiveTitle);
-                          if (parsed.durationMins) {
+                          if (parsed.durationMins !== null && parsed.durationMins > 0) {
                             setModalDurationMinutes(parsed.durationMins);
                           }
                           if (parsed.dayOffset === 1) {
@@ -2533,25 +2660,151 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                     </div>
                   </div>
 
-                  {/* 3. ONE Single Duration Control (Presets Only) */}
+                  {/* 3. Comprehensive Precision Duration Control (Hours, Minutes, Stepper, Slider & Presets) */}
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
                         <Timer className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
-                        <span>{isAr ? 'المدة' : 'DURÉE'}</span>
+                        <span>{isAr ? 'المدة الزمنية (بالساعات والدقائق بدقة)' : 'DURÉE DE LA SÉANCE (PRÉCISION)'}</span>
                       </label>
-                      <span className="font-mono text-xs font-bold text-teal-700 dark:text-teal-300 px-2 py-0.5 rounded-lg bg-teal-500/10 border border-teal-500/20">
-                        {formatDurationLabel(modalDurationMinutes)}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-white/5 px-2 py-0.5 rounded-lg border border-slate-200/60 dark:border-white/10 hidden sm:inline">
+                          {minutesToTime(modalStartMinutes)} ➔ {minutesToTime(modalStartMinutes + modalDurationMinutes)}
+                        </span>
+                        <span className="font-mono text-xs font-black text-teal-700 dark:text-teal-300 px-2 py-0.5 rounded-lg bg-teal-500/10 border border-teal-500/20">
+                          {isAr ? formatDurationArabic(modalDurationMinutes) : formatDurationLabel(modalDurationMinutes)}
+                        </span>
+                      </div>
                     </div>
 
-                    <div className="grid grid-cols-5 gap-1.5">
+                    {/* Direct Numeric Steppers for Hours and Exact Minutes */}
+                    <div className="grid grid-cols-2 gap-2 mb-2">
+                      {/* Hours Stepper & Direct Input */}
+                      <div className="p-2 rounded-xl bg-slate-50 dark:bg-[#182030] border border-slate-200 dark:border-white/10 flex items-center justify-between">
+                        <button
+                          type="button"
+                          onClick={() => handleSetHours(Math.floor(modalDurationMinutes / 60) - 1)}
+                          className="w-7 h-7 rounded-lg bg-white dark:bg-[#111827] border border-slate-200 dark:border-white/10 hover:border-teal-500/40 text-slate-700 dark:text-slate-200 font-black text-sm flex items-center justify-center transition-all active:scale-90 cursor-pointer shadow-xs"
+                          title={isAr ? 'إنقاص ساعة' : '-1h'}
+                        >
+                          <Minus className="w-3.5 h-3.5" />
+                        </button>
+                        <div className="flex items-center justify-center gap-1">
+                          <input
+                            type="number"
+                            min={0}
+                            max={12}
+                            value={Math.floor(modalDurationMinutes / 60)}
+                            onChange={(e) => handleSetHours(parseInt(e.target.value, 10) || 0)}
+                            className="w-10 text-center font-mono font-bold text-sm text-slate-900 dark:text-white bg-transparent focus:outline-none focus:ring-1 focus:ring-teal-500 rounded-md"
+                          />
+                          <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                            {isAr ? 'ساعات' : 'heures'}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleSetHours(Math.floor(modalDurationMinutes / 60) + 1)}
+                          className="w-7 h-7 rounded-lg bg-white dark:bg-[#111827] border border-slate-200 dark:border-white/10 hover:border-teal-500/40 text-slate-700 dark:text-slate-200 font-black text-sm flex items-center justify-center transition-all active:scale-90 cursor-pointer shadow-xs"
+                          title={isAr ? 'زيادة ساعة' : '+1h'}
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      {/* Minutes Stepper with exact 1-minute manual input */}
+                      <div className="p-2 rounded-xl bg-slate-50 dark:bg-[#182030] border border-slate-200 dark:border-white/10 flex items-center justify-between">
+                        <button
+                          type="button"
+                          onClick={() => handleAdjustMinutesDelta(-5)}
+                          className="w-7 h-7 rounded-lg bg-white dark:bg-[#111827] border border-slate-200 dark:border-white/10 hover:border-teal-500/40 text-slate-700 dark:text-slate-200 font-black text-sm flex items-center justify-center transition-all active:scale-90 cursor-pointer shadow-xs"
+                          title={isAr ? 'إنقاص 5 دقائق' : '-5m'}
+                        >
+                          <Minus className="w-3.5 h-3.5" />
+                        </button>
+                        <div className="flex items-center justify-center gap-1">
+                          <input
+                            type="number"
+                            min={0}
+                            max={59}
+                            value={modalDurationMinutes % 60}
+                            onChange={(e) => handleSetMinutes(parseInt(e.target.value, 10) || 0)}
+                            className="w-10 text-center font-mono font-bold text-sm text-slate-900 dark:text-white bg-transparent focus:outline-none focus:ring-1 focus:ring-teal-500 rounded-md"
+                          />
+                          <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                            {isAr ? 'دقائق' : 'minutes'}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleAdjustMinutesDelta(+5)}
+                          className="w-7 h-7 rounded-lg bg-white dark:bg-[#111827] border border-slate-200 dark:border-white/10 hover:border-teal-500/40 text-slate-700 dark:text-slate-200 font-black text-sm flex items-center justify-center transition-all active:scale-90 cursor-pointer shadow-xs"
+                          title={isAr ? 'زيادة 5 دقائق' : '+5m'}
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Fine-Tuning Minute Adjustment Chips */}
+                    <div className="flex items-center justify-between gap-1 mb-2">
                       {[
-                        { mins: 25, label: '25m', sub: 'Pomo' },
-                        { mins: 45, label: '45m', sub: null },
-                        { mins: 60, label: '1h', sub: '60m' },
-                        { mins: 90, label: '1h30', sub: '90m' },
-                        { mins: 120, label: '2h', sub: '120m' },
+                        { delta: -15, label: '-15د' },
+                        { delta: -5, label: '-5د' },
+                        { delta: -1, label: '-1د' },
+                        { delta: +1, label: '+1د' },
+                        { delta: +5, label: '+5د' },
+                        { delta: +15, label: '+15د' },
+                        { delta: +30, label: '+30د' },
+                      ].map((b) => (
+                        <button
+                          key={b.label}
+                          type="button"
+                          onClick={() => handleAdjustMinutesDelta(b.delta)}
+                          className="flex-1 py-1 px-0.5 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-teal-50 dark:hover:bg-teal-950/50 border border-slate-200/60 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:text-teal-700 dark:hover:text-teal-300 font-mono text-[10px] font-bold text-center transition-all active:scale-95 cursor-pointer shadow-2xs"
+                          title={isAr ? `تعديل ${b.label}` : `${b.delta} min`}
+                        >
+                          {b.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Continuous 1-Minute Precision Slider */}
+                    <div className="space-y-1 mb-2 px-0.5">
+                      <input
+                        type="range"
+                        min={1}
+                        max={360}
+                        step={1}
+                        value={modalDurationMinutes}
+                        onChange={(e) => setModalDurationMinutes(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                        className="w-full accent-teal-600 cursor-pointer h-1.5 bg-slate-200 dark:bg-slate-800 rounded-lg"
+                      />
+                      <div className="flex items-center justify-between text-[9px] font-mono text-slate-400 dark:text-slate-500">
+                        <span>1د</span>
+                        <span>25د</span>
+                        <span>45د</span>
+                        <span>1س</span>
+                        <span>1س30</span>
+                        <span>2س</span>
+                        <span>3س</span>
+                        <span>6س</span>
+                      </div>
+                    </div>
+
+                    {/* Quick Presets Row */}
+                    <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+                      {[
+                        { mins: 15, label: '15m' },
+                        { mins: 25, label: '25m (Pomo)' },
+                        { mins: 30, label: '30m' },
+                        { mins: 45, label: '45m' },
+                        { mins: 60, label: '1h' },
+                        { mins: 75, label: '1h15' },
+                        { mins: 90, label: '1h30' },
+                        { mins: 120, label: '2h' },
+                        { mins: 150, label: '2h30' },
+                        { mins: 180, label: '3h' },
                       ].map((p) => {
                         const isSelected = modalDurationMinutes === p.mins;
                         return (
@@ -2562,17 +2815,12 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                               handleDurationPresetClick(p.mins);
                               chimePlayer.playChime('click');
                             }}
-                            className={`py-2 px-1 rounded-2xl font-mono text-center transition-all cursor-pointer border flex flex-col items-center justify-center ${isSelected
-                              ? 'bg-teal-600 text-white border-teal-500 shadow-md ring-2 ring-teal-500/30 scale-[1.02]'
-                              : 'bg-slate-50 dark:bg-[#182030] border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:border-teal-500/30'
-                              }`}
+                            className={`px-2.5 py-1 rounded-xl font-mono text-[11px] font-bold transition-all cursor-pointer border whitespace-nowrap shrink-0 ${isSelected
+                              ? 'bg-teal-600 text-white border-teal-500 shadow-sm ring-1 ring-teal-400'
+                              : 'bg-white dark:bg-[#182030] border-slate-200/80 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                            }`}
                           >
-                            <span className="text-xs font-bold">{p.label}</span>
-                            {p.sub && (
-                              <span className={`text-[9px] ${isSelected ? 'text-teal-100' : 'text-slate-400 dark:text-slate-500'}`}>
-                                {p.sub}
-                              </span>
-                            )}
+                            {p.label}
                           </button>
                         );
                       })}
@@ -2931,6 +3179,28 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                                 className="w-full px-2 py-1 rounded-lg bg-slate-50 dark:bg-[#182030] text-center font-mono font-bold text-teal-700 dark:text-teal-300 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
                               />
                             </div>
+                          </div>
+                          {/* Fine-Tuning Minute Adjustment Chips */}
+                          <div className="flex items-center justify-between gap-1 pt-1">
+                            {[
+                              { delta: -15, label: '-15د' },
+                              { delta: -5, label: '-5د' },
+                              { delta: -1, label: '-1د' },
+                              { delta: +1, label: '+1د' },
+                              { delta: +5, label: '+5د' },
+                              { delta: +15, label: '+15د' },
+                              { delta: +30, label: '+30د' },
+                            ].map((b) => (
+                              <button
+                                key={b.label}
+                                type="button"
+                                onClick={() => handleAdjustMinutesDelta(b.delta)}
+                                className="flex-1 py-1 px-0.5 rounded-lg bg-white dark:bg-[#111827] hover:bg-teal-50 dark:hover:bg-teal-950/50 border border-slate-200/60 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:text-teal-700 dark:hover:text-teal-300 font-mono text-[10px] font-bold text-center transition-all active:scale-95 cursor-pointer shadow-2xs"
+                                title={isAr ? `تعديل ${b.label}` : `${b.delta} min`}
+                              >
+                                {b.label}
+                              </button>
+                            ))}
                           </div>
 
                           {/* Interactive Duration Slider */}
