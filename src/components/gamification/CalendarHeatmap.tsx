@@ -113,7 +113,10 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({
     // TimeBlocks completed
     timeBlocks.forEach((b) => {
       if (b.isCompleted) {
-        const d = b.dateKey || (b.completedAt ? b.completedAt.slice(0, 10) : null);
+        const completedDate = b.completedAt ? new Date(b.completedAt) : null;
+        const d = completedDate && !Number.isNaN(completedDate.getTime())
+          ? getLocalDateStr(completedDate)
+          : b.dateKey || null;
         if (d) {
           const entry = getEntry(d);
           entry.studySessions += 1;

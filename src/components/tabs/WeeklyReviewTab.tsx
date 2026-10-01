@@ -89,6 +89,10 @@ function getBlockDurationHours(b: TimeBlock): number {
 
 // Resolve the date string (YYYY-MM-DD) for a timeblock
 function getBlockDateStr(b: TimeBlock): string {
+  if (b.isCompleted && b.completedAt) {
+    const completedDate = new Date(b.completedAt);
+    if (!Number.isNaN(completedDate.getTime())) return getLocalDateStr(completedDate);
+  }
   if (b.dateKey && b.dateKey.length === 10) return b.dateKey;
   if (b.completedAt && b.completedAt.length >= 10) return b.completedAt.slice(0, 10);
   if (b.createdAt && b.createdAt.length >= 10) return b.createdAt.slice(0, 10);
