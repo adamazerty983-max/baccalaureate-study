@@ -951,35 +951,43 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
               </span>
               {currentWeekOffset === 0 && (
                 <span className="px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-600 dark:text-teal-400 text-[10px] font-bold">
-                  {isAr ? 'هذا الأسبوع' : 'Actuelle'}
+                  {isAr ? 'هذا الأسبوع' : language === 'en' ? 'This week' : 'Actuelle'}
                 </span>
               )}
             </div>
 
             <div className="flex items-center gap-2">
               <button
+                type="button"
                 onClick={() => setCurrentWeekOffset((prev) => prev - 1)}
-                className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors"
-                title="Semaine précédente"
+                className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors text-[11px] font-bold"
+                aria-label={isAr ? 'الأسبوع السابق' : language === 'en' ? 'Previous week' : 'Semaine précédente'}
+                title={isAr ? 'الأسبوع السابق' : language === 'en' ? 'Previous week' : 'Semaine précédente'}
               >
-                <ChevronLeft className="w-4 h-4" />
+                {isAr ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+                <span>{isAr ? 'الأسبوع السابق' : language === 'en' ? 'Previous week' : 'Semaine précédente'}</span>
               </button>
 
               {currentWeekOffset !== 0 && (
                 <button
+                  type="button"
                   onClick={() => setCurrentWeekOffset(0)}
                   className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-teal-500/10 hover:text-teal-600 text-xs font-bold transition-colors"
+                  aria-label={isAr ? 'العودة إلى هذا الأسبوع' : language === 'en' ? 'Return to this week' : 'Revenir à cette semaine'}
                 >
-                  {isAr ? 'اليوم' : 'Aujourd\'hui'}
+                  {isAr ? 'هذا الأسبوع' : language === 'en' ? 'This week' : 'Cette semaine'}
                 </button>
               )}
 
               <button
+                type="button"
                 onClick={() => setCurrentWeekOffset((prev) => prev + 1)}
-                className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors"
-                title="Semaine suivante"
+                className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors text-[11px] font-bold"
+                aria-label={isAr ? 'الأسبوع التالي' : language === 'en' ? 'Next week' : 'Semaine suivante'}
+                title={isAr ? 'الأسبوع التالي' : language === 'en' ? 'Next week' : 'Semaine suivante'}
               >
-                <ChevronRight className="w-4 h-4" />
+                <span>{isAr ? 'الأسبوع التالي' : language === 'en' ? 'Next week' : 'Semaine suivante'}</span>
+                {isAr ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
               </button>
             </div>
           </div>
@@ -1629,35 +1637,43 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
               </span>
               {currentMonthOffset === 0 && (
                 <span className="px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-600 dark:text-teal-400 text-[10px] font-bold">
-                  {isAr ? 'الشهر الحالي' : 'En cours'}
+                  {isAr ? 'الشهر الحالي' : language === 'en' ? 'This month' : 'En cours'}
                 </span>
               )}
             </div>
 
             <div className="flex items-center gap-2">
               <button
+                type="button"
                 onClick={() => setCurrentMonthOffset((prev) => prev - 1)}
-                className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors"
-                title="Mois précédent"
+                className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors text-[11px] font-bold"
+                aria-label={isAr ? 'الشهر السابق' : language === 'en' ? 'Previous month' : 'Mois précédent'}
+                title={isAr ? 'الشهر السابق' : language === 'en' ? 'Previous month' : 'Mois précédent'}
               >
-                <ChevronLeft className="w-4 h-4" />
+                {isAr ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+                <span>{isAr ? 'الشهر السابق' : language === 'en' ? 'Previous month' : 'Mois précédent'}</span>
               </button>
 
               {currentMonthOffset !== 0 && (
                 <button
+                  type="button"
                   onClick={() => setCurrentMonthOffset(0)}
                   className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-teal-500/10 hover:text-teal-600 text-xs font-bold transition-colors"
+                  aria-label={isAr ? 'العودة إلى هذا الشهر' : language === 'en' ? 'Return to this month' : 'Revenir à ce mois'}
                 >
-                  {isAr ? 'هذا الشهر' : 'Ce mois'}
+                  {isAr ? 'هذا الشهر' : language === 'en' ? 'This month' : 'Ce mois'}
                 </button>
               )}
 
               <button
+                type="button"
                 onClick={() => setCurrentMonthOffset((prev) => prev + 1)}
-                className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors"
-                title="Mois suivant"
+                className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors text-[11px] font-bold"
+                aria-label={isAr ? 'الشهر التالي' : language === 'en' ? 'Next month' : 'Mois suivant'}
+                title={isAr ? 'الشهر التالي' : language === 'en' ? 'Next month' : 'Mois suivant'}
               >
-                <ChevronRight className="w-4 h-4" />
+                <span>{isAr ? 'الشهر التالي' : language === 'en' ? 'Next month' : 'Mois suivant'}</span>
+                {isAr ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
               </button>
             </div>
           </div>
