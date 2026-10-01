@@ -803,11 +803,16 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
   };
 
   // Filter blocks for active day
+  const selectedDateKey = computeDateKeyForDay(selectedDay);
   const dayBlocks = useMemo(() => {
     return timeBlocks
-      .filter((b) => b.dayOfWeek === selectedDay)
+      .filter(
+        (b) =>
+          b.dayOfWeek === selectedDay &&
+          (!b.dateKey || b.dateKey === selectedDateKey),
+      )
       .sort((a, b) => a.startTime.localeCompare(b.startTime));
-  }, [timeBlocks, selectedDay]);
+  }, [timeBlocks, selectedDay, selectedDateKey]);
 
   /**
    * App V3 _tbMerge algorithm: merges consecutive tasks sharing same subject or title
@@ -1373,7 +1378,7 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
           title: finalTitle,
           subject: subjectToValidate,
           dayOfWeek: targetDay,
-          dateKey: existing.dateKey || targetDateKey,
+          dateKey: targetDateKey,
           startTime: startStr,
           endTime: endStr,
           notes: taskNotes.trim(),
