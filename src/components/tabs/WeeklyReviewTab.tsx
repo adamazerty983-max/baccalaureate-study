@@ -233,9 +233,11 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
 
   // Selected Day in Bar chart (0..6, where 0=Monday)
   const [selectedDayIdx, setSelectedDayIdx] = useState<number | null>(null);
+  const [subjectBreakdownPeriod, setSubjectBreakdownPeriod] = useState<'week' | 'month'>('week');
+  const [expandedMonthlySubject, setExpandedMonthlySubject] = useState<string | null>(null);
+  const [expandedMonthlyWeek, setExpandedMonthlyWeek] = useState<number | null>(null);
 
   // Show More / Show Less for Subject Breakdown Tables (default 3 subjects visible)
-  const [isSubjectsExpanded, setIsSubjectsExpanded] = useState<boolean>(false);
   const [isMonthlySubjectsExpanded, setIsMonthlySubjectsExpanded] = useState<boolean>(false);
   const DEFAULT_VISIBLE_SUBJECTS = 3;
 
@@ -258,6 +260,16 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
     return d;
   }, [selectedMonday]);
   const weekSundayKey = useMemo(() => formatMondayKey(weekSundayDate), [weekSundayDate]);
+  const weekRangeDisplay = useMemo(() => {
+    const locale = isAr ? 'ar-MA' : language === 'en' ? 'en-US' : 'fr-FR';
+    const start = selectedMonday.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
+    const end = weekSundayDate.toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' });
+    return `${start} – ${end}`;
+  }, [selectedMonday, weekSundayDate, isAr, language]);
+
+  React.useEffect(() => {
+    setSelectedDayIdx(null);
+  }, [weekMondayKey]);
 
   // Weekly stats aggregated strictly from completed Planner tasks / TimeBlocks
   const weeklyStats = useMemo(() => {
@@ -317,7 +329,9 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
     // Day by day distribution (Monday to Sunday)
     const dayNames = isAr
       ? ['الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت', 'الأحد']
-      : ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+      : language === 'en'
+        ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+        : ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
     const dayHours = [0, 0, 0, 0, 0, 0, 0];
     completedBlocks.forEach((b) => {
@@ -343,7 +357,17 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
       dayNames,
       dayHours,
     };
-  }, [appData.timeBlocks, weekMondayKey, weekSundayKey, isAr]);
+  }, [appData.timeBlocks, weekMondayKey, weekSundayKey, isAr, language]);
+
+  const weeklyHomeworkStats = useMemo(() => {
+    const dueThisWeek = (appData.homework || []).filter((item) => item.dueDate >= weekMondayKey && item.dueDate <= weekSundayKey);
+    const completed = dueThisWeek.filter((item) => item.status === 'submitted').length;
+    return {
+      total: dueThisWeek.length,
+      completed,
+      completionRate: dueThisWeek.length > 0 ? Math.round((completed / dueThisWeek.length) * 100) : 0,
+    };
+  }, [appData.homework, weekMondayKey, weekSundayKey]);
 
   // Donut chart segments calculation for Weekly Review
   const weeklyDonutSegments = useMemo(() => {
@@ -631,6 +655,80 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
     };
   }, [appData.timeBlocks, selectedMonthKey, selectedMonthDate, isAr]);
 
+  // Completed sessions for the reference-style monthly drilldown. Completed work
+  // is attributed to the actual completion date, matching the review totals above.
+  const monthlyCompletedBlocks = useMemo(() => {
+    return (appData.timeBlocks || [])
+      .filter((block) => block.type === 'study' && block.isCompleted && getBlockDateStr(block).startsWith(selectedMonthKey))
+      .sort((a, b) => {
+        const dateOrder = getBlockDateStr(a).localeCompare(getBlockDateStr(b));
+        return dateOrder || a.startTime.localeCompare(b.startTime);
+      });
+  }, [appData.timeBlocks, selectedMonthKey]);
+
+  const monthlySubjectEntries = useMemo(() => {
+    return (Object.entries(monthlyStats.subjectHoursMap) as [string, number][])
+      .filter(([, hours]) => hours > 0)
+      .sort((a, b) => b[1] - a[1]);
+  }, [monthlyStats]);
+
+  const monthlyWeekDetails = useMemo(() => {
+    const ranges: [number, number][] = [[1, 7], [8, 14], [15, 21], [22, 28], [29, monthlyStats.daysInMonth]];
+    return monthlyStats.weekBuckets.map((bucket, index) => {
+      const [startDay, endDay] = ranges[index];
+      const blocks = monthlyCompletedBlocks.filter((block) => {
+        const day = Number(getBlockDateStr(block).slice(8, 10));
+        return day >= startDay && day <= endDay;
+      });
+      return { ...bucket, startDay, endDay, blocks };
+    });
+  }, [monthlyStats.weekBuckets, monthlyStats.daysInMonth, monthlyCompletedBlocks]);
+
+  const gradeProgress = useMemo(() => {
+    const gradesBySubject = new Map<string, typeof appData.grades>();
+    (appData.grades || []).forEach((grade) => {
+      const subjectGrades = gradesBySubject.get(grade.subject) || [];
+      subjectGrades.push(grade);
+      gradesBySubject.set(grade.subject, subjectGrades);
+    });
+
+    return Array.from(gradesBySubject.entries())
+      .map(([subject, grades]) => {
+        const orderedGrades = [...grades].sort((a, b) => a.date.localeCompare(b.date));
+        const coefficientTotal = orderedGrades.reduce((sum, grade) => sum + (grade.coeff || 1), 0);
+        const average = coefficientTotal > 0
+          ? orderedGrades.reduce((sum, grade) => sum + grade.grade * (grade.coeff || 1), 0) / coefficientTotal
+          : 0;
+        const previous = orderedGrades[orderedGrades.length - 2];
+        const latest = orderedGrades[orderedGrades.length - 1];
+        const delta = latest && previous ? latest.grade - previous.grade : null;
+        return {
+          subject,
+          average,
+          delta,
+          count: orderedGrades.length,
+          color: BAC_SUBJECTS.find((item) => item.name === subject)?.hexColor || '#14B8A6',
+        };
+      })
+      .sort((a, b) => {
+        const aIndex = BAC_SUBJECTS.findIndex((subject) => subject.name === a.subject);
+        const bIndex = BAC_SUBJECTS.findIndex((subject) => subject.name === b.subject);
+        return (aIndex === -1 ? Number.MAX_SAFE_INTEGER : aIndex) - (bIndex === -1 ? Number.MAX_SAFE_INTEGER : bIndex);
+      });
+  }, [appData.grades]);
+
+  const weeklyReviewArchive = useMemo(() => {
+    return Object.entries(appData.weeklyReviews || {}).sort(([a], [b]) => b.localeCompare(a));
+  }, [appData.weeklyReviews]);
+
+  const jumpToArchivedWeek = (weekKey: string) => {
+    const targetMonday = new Date(`${weekKey}T12:00:00`);
+    const currentMonday = getMonday(new Date());
+    const dayDifference = Math.round((targetMonday.getTime() - currentMonday.getTime()) / 86400000);
+    setCurrentWeekOffset(Math.round(dayDifference / 7));
+    setActiveReviewView('weekly');
+  };
+
   // Donut chart segments for Monthly Review
   const monthlyDonutSegments = useMemo(() => {
     const entries = (Object.entries(monthlyStats.subjectHoursMap) as [string, number][]).filter(
@@ -669,6 +767,25 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
     str += ')';
     return str;
   }, [monthlyDonutSegments]);
+
+  const subjectBreakdown = subjectBreakdownPeriod === 'week'
+    ? {
+      subjectHoursMap: weeklyStats.subjectHoursMap,
+      subjectPlannedMap: weeklyStats.subjectPlannedMap,
+      totalHours: weeklyStats.totalCompletedHours,
+      conicGradient: weeklyConicGradientStr,
+    }
+    : {
+      subjectHoursMap: monthlyStats.subjectHoursMap,
+      subjectPlannedMap: monthlyStats.subjectPlannedMap,
+      totalHours: monthlyStats.totalMonthlyHours,
+      conicGradient: monthlyConicGradientStr,
+    };
+
+  React.useEffect(() => {
+    setExpandedMonthlySubject(null);
+    setExpandedMonthlyWeek(null);
+  }, [selectedMonthKey]);
 
   // Form states for the monthly review reflection
   const existingMonthlyReview = appData.monthlyReviews?.[selectedMonthKey];
@@ -937,17 +1054,17 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
       {/* 2. VIEW 1: WEEKLY REVIEW (BILAN HEBDOMADAIRE) */}
       {/* ========================================================================= */}
       {activeReviewView === 'weekly' && (
-        <div className="space-y-6">
+        <div className="flex flex-col gap-5">
           {/* Week Selector Bar */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-[#1A2535] p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+          <div className="order-1 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-[#1A2535] p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
                 {isAr ? 'الفترة المعروضة:' : 'Période analysée :'}
               </span>
               <span className="text-sm font-black text-slate-900 dark:text-white">
                 {isAr
-                  ? `أسبوع ${weekMondayKey} إلى ${weekSundayKey}`
-                  : `Semaine du ${weekMondayKey} au ${weekSundayKey}`}
+                ? `أسبوع ${weekRangeDisplay}`
+                  : language === 'en' ? `Week of ${weekRangeDisplay}` : `Semaine du ${weekRangeDisplay}`}
               </span>
               {currentWeekOffset === 0 && (
                 <span className="px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-600 dark:text-teal-400 text-[10px] font-bold">
@@ -993,9 +1110,9 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
           </div>
 
           {/* 4 Weekly Stat KPI Tiles */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="order-2 grid grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Total Hours across all subjects */}
-            <div className="bg-white dark:bg-[#1A2535] p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+            <div className="relative overflow-hidden bg-white dark:bg-[#1A2535] p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
               <span className="text-xs font-bold uppercase text-slate-500">
                 {t('wr_total_hours_all') || (isAr ? 'مجموع الساعات (كافة المواد)' : 'Heures totales')}
               </span>
@@ -1021,10 +1138,11 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
                       : 'Complétez des blocs pour enregistrer'}
                 </span>
               </span>
+              <div className="absolute inset-x-0 bottom-0 h-[3px] bg-teal-500/10" aria-hidden="true"><div className="h-full bg-teal-500/70" style={{ width: `${Math.min(100, weeklyStats.totalCompletedHours / 25 * 100)}%` }} /></div>
             </div>
 
             {/* Completed Sessions Rate */}
-            <div className="bg-white dark:bg-[#1A2535] p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+            <div className="relative overflow-hidden bg-white dark:bg-[#1A2535] p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
               <span className="text-xs font-bold uppercase text-slate-500">{t('wr_sessions_done')}</span>
               <div className="my-2">
                 <span className="text-3xl font-black font-['Outfit'] text-teal-600 dark:text-teal-400">
@@ -1035,24 +1153,26 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
               <span className="text-[11px] text-slate-400 font-medium">
                 {weeklyStats.sessionRate}% {isAr ? 'نسبة الإنجاز' : 'taux de complétion'}
               </span>
+              <div className="absolute inset-x-0 bottom-0 h-[3px] bg-teal-500/10" aria-hidden="true"><div className="h-full bg-teal-500/70" style={{ width: `${weeklyStats.sessionRate}%` }} /></div>
             </div>
 
             {/* Completed Tasks & HW */}
-            <div className="bg-white dark:bg-[#1A2535] p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+            <div className="relative overflow-hidden bg-white dark:bg-[#1A2535] p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
               <span className="text-xs font-bold uppercase text-slate-500">{t('wr_hw_done')}</span>
               <div className="my-2">
                 <span className="text-3xl font-black font-['Outfit'] text-indigo-600 dark:text-indigo-400">
-                  {appData.homework.filter((h) => h.status === 'submitted').length}
+                  {weeklyHomeworkStats.completed}
                 </span>
-                <span className="text-xs text-slate-400"> / {appData.homework.length}</span>
+                <span className="text-xs text-slate-400"> / {weeklyHomeworkStats.total}</span>
               </div>
               <span className="text-[11px] text-slate-400">
-                {isAr ? 'واجبات ومشاريع منجزة' : 'Devoirs & exercices validés'}
+                {isAr ? 'واجبات مستحقة هذا الأسبوع' : language === 'en' ? 'Homework due this week' : 'Devoirs dus cette semaine'} · {weeklyHomeworkStats.completionRate}%
               </span>
+              <div className="absolute inset-x-0 bottom-0 h-[3px] bg-indigo-500/10" aria-hidden="true"><div className="h-full bg-indigo-500/70" style={{ width: `${weeklyHomeworkStats.completionRate}%` }} /></div>
             </div>
 
             {/* Top Studied Subject */}
-            <div className="bg-white dark:bg-[#1A2535] p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+            <div className="relative overflow-hidden bg-white dark:bg-[#1A2535] p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
               <span className="text-xs font-bold uppercase text-slate-500">{t('wr_top_subj')}</span>
               <div className="my-2 truncate">
                 <span className="text-lg font-black font-['Outfit'] text-amber-600 dark:text-amber-400 truncate block">
@@ -1062,11 +1182,12 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
               <span className="text-[11px] text-slate-400">
                 {isAr ? 'المادة الأكثر تركيزاً هذا الأسبوع' : 'Focus majeur de la semaine'}
               </span>
+              <div className="absolute inset-x-0 bottom-0 h-[3px] bg-amber-500/10" aria-hidden="true"><div className="h-full bg-amber-500/70" style={{ width: `${weeklyStats.totalCompletedHours > 0 ? 100 : 0}%` }} /></div>
             </div>
           </div>
 
           {/* Weekly Target Goal Pace & BAC Balance Bar */}
-          <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-[#12232B] text-white p-5 rounded-2xl border border-teal-500/30 shadow-md space-y-4">
+          <div className="order-3 bg-gradient-to-br from-slate-900 via-slate-900 to-[#12232B] text-white p-5 rounded-xl border border-teal-500/30 shadow-md space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <span className="p-2 rounded-xl bg-teal-500/20 text-teal-400">
@@ -1119,30 +1240,52 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
             </div>
           </div>
 
-          {/* Subject-by-Subject Hours Breakdown (Charts & Table) */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Subject-by-Subject Hours Breakdown and Grade Progression */}
+          <div className="order-5 grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Left: Conic Donut Chart + Subject List */}
-            <div className="lg:col-span-5 bg-white dark:bg-[#1A2535] p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
+            <div className="lg:col-span-5 bg-white dark:bg-[#1A2535] p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
                   <PieChart className="w-4 h-4 text-teal-500" />
-                  <span>{t('wr_hours_per_subj')}</span>
+                  <span>
+                    {subjectBreakdownPeriod === 'week'
+                      ? (isAr ? 'ساعات الأسبوع حسب المادة' : language === 'en' ? 'Weekly hours by subject' : 'Heures par matière cette semaine')
+                      : (isAr ? 'ساعات الشهر حسب المادة' : language === 'en' ? 'Monthly hours by subject' : 'Heures par matière ce mois')}
+                  </span>
                 </h3>
-                <span className="text-xs font-black text-slate-900 dark:text-white">
-                  {weeklyStats.totalCompletedHours.toFixed(1)}h total
-                </span>
+                <div className="flex items-center gap-1 rounded-lg bg-slate-100 dark:bg-slate-800 p-1" role="group" aria-label={isAr ? 'فترة توزيع الساعات' : 'Study hours period'}>
+                  <button
+                    type="button"
+                    onClick={() => setSubjectBreakdownPeriod('week')}
+                    aria-pressed={subjectBreakdownPeriod === 'week'}
+                    className={`min-h-8 px-3 rounded-md text-[11px] font-bold transition-colors ${subjectBreakdownPeriod === 'week' ? 'bg-teal-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700'}`}
+                  >
+                    {isAr ? 'أسبوعي' : language === 'en' ? 'Week' : 'Semaine'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSubjectBreakdownPeriod('month')}
+                    aria-pressed={subjectBreakdownPeriod === 'month'}
+                    className={`min-h-8 px-3 rounded-md text-[11px] font-bold transition-colors ${subjectBreakdownPeriod === 'month' ? 'bg-teal-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700'}`}
+                  >
+                    {isAr ? 'شهري' : language === 'en' ? 'Month' : 'Mois'}
+                  </button>
+                </div>
+              </div>
+              <div className="text-right text-xs font-black text-slate-900 dark:text-white" aria-live="polite">
+                {subjectBreakdown.totalHours.toFixed(1)}h {subjectBreakdownPeriod === 'month' ? `· ${monthDisplayName}` : (isAr ? 'هذا الأسبوع' : language === 'en' ? 'this week' : 'cette semaine')}
               </div>
 
               {/* Donut graphic */}
               <div className="flex flex-col items-center justify-center py-3">
                 <div
                   className="relative w-36 h-36 rounded-full flex items-center justify-center shadow-inner transition-transform hover:scale-105"
-                  style={{ background: weeklyConicGradientStr }}
+                  style={{ background: subjectBreakdown.conicGradient }}
                 >
                   <div className="w-24 h-24 rounded-full bg-white dark:bg-[#1A2535] flex flex-col items-center justify-center text-center p-2 shadow-sm">
                     <span className="text-xs font-bold text-slate-400">{isAr ? 'المجموع' : 'Total'}</span>
                     <span className="text-xl font-black font-['Outfit'] text-slate-900 dark:text-white">
-                      {weeklyStats.totalCompletedHours.toFixed(1)}h
+                      {subjectBreakdown.totalHours.toFixed(1)}h
                     </span>
                   </div>
                 </div>
@@ -1151,16 +1294,18 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
               {/* List of active subjects */}
               <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
                 {BAC_SUBJECTS.map((subj) => {
-                  const hrs = weeklyStats.subjectHoursMap[subj.name] || 0;
-                  const planned = weeklyStats.subjectPlannedMap[subj.name] || 0;
-                  const pct = weeklyStats.totalCompletedHours > 0 ? Math.round((hrs / weeklyStats.totalCompletedHours) * 100) : 0;
+                  const hrs = subjectBreakdown.subjectHoursMap[subj.name] || 0;
+                  const planned = subjectBreakdown.subjectPlannedMap[subj.name] || 0;
+                  const pct = subjectBreakdown.totalHours > 0 ? Math.round((hrs / subjectBreakdown.totalHours) * 100) : 0;
                   if (hrs === 0 && planned === 0) return null;
 
                   return (
-                    <div
+                    <button
+                      type="button"
                       key={subj.id}
                       onClick={() => setSelectedSubjectDetail(subj)}
-                      className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/50 hover:bg-teal-500/10 dark:hover:bg-teal-500/10 border border-slate-200/60 dark:border-slate-800 cursor-pointer transition-all text-xs group"
+                      aria-label={`${isAr ? 'تفاصيل مادة' : language === 'en' ? 'Subject details' : 'Détails de la matière'} ${subj.name}`}
+                      className="w-full text-left flex items-center justify-between p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900/50 hover:bg-teal-500/10 dark:hover:bg-teal-500/10 border border-slate-200/60 dark:border-slate-800 cursor-pointer transition-all text-xs group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: subj.hexColor }} />
@@ -1176,276 +1321,64 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
                         <span className="text-[10px] text-slate-400">({pct}%)</span>
                         <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-teal-500 transition-transform group-hover:translate-x-0.5" />
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
-                {weeklyStats.totalCompletedHours === 0 && (
+                {subjectBreakdown.totalHours === 0 && (
                   <p className="text-center text-xs text-slate-400 py-3">
-                    {isAr ? 'لم يتم تسجيل ساعات مكتملة لهذا الأسبوع بعد.' : 'Aucune heure enregistrée pour cette semaine.'}
+                    {subjectBreakdownPeriod === 'week'
+                      ? (isAr ? 'لم تُسجّل ساعات مكتملة لهذا الأسبوع بعد.' : language === 'en' ? 'No completed study hours for this week yet.' : 'Aucune heure enregistrée pour cette semaine.')
+                      : (isAr ? 'لم تُسجّل ساعات مكتملة لهذا الشهر بعد.' : language === 'en' ? 'No completed study hours for this month yet.' : 'Aucune heure enregistrée pour ce mois.')}
                   </p>
                 )}
               </div>
             </div>
 
-            {/* Right: Daily Distribution Bar Chart (Lun to Dim) */}
-            <div className="lg:col-span-7 bg-white dark:bg-[#1A2535] p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
+            {/* Grade progression */}
+            <div className="lg:col-span-7 bg-white dark:bg-[#1A2535] p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+              <div className="flex items-center justify-between gap-3 mb-4">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-teal-500" />
-                  <span>{isAr ? 'توزيع الساعات حسب أيام الأسبوع' : 'Répartition quotidienne (Heures par jour)'}</span>
+                  <TrendingUp className="w-4 h-4 text-teal-500" />
+                  <span>{isAr ? 'تطور العلامات حسب المادة' : language === 'en' ? 'Grade progression by subject' : 'Évolution des notes par matière'}</span>
                 </h3>
-                <span className="text-[11px] text-slate-400">
-                  {isAr ? 'انقر على أي يوم لتفاصيل الحصص' : 'Cliquez sur un jour pour le détail'}
-                </span>
+                <span className="text-[10px] text-slate-400">{isAr ? 'المعدل الموزون وآخر تغير' : language === 'en' ? 'Weighted average and latest change' : 'Moyenne pondérée et dernière évolution'}</span>
               </div>
-
-              {/* Bar visualization */}
-              <div className="grid grid-cols-7 gap-2 pt-6 items-end h-44 border-b border-slate-200 dark:border-slate-800 pb-3">
-                {weeklyStats.dayNames.map((dName, idx) => {
-                  const hrs = weeklyStats.dayHours[idx];
-                  const maxDay = Math.max(...weeklyStats.dayHours, 4);
-                  const heightPct = Math.min(100, Math.round((hrs / maxDay) * 100));
-                  const isSelected = selectedDayIdx === idx;
-
-                  return (
-                    <button
-                      key={dName}
-                      type="button"
-                      onClick={() => setSelectedDayIdx(isSelected ? null : idx)}
-                      className={`flex flex-col items-center gap-2 h-full justify-end group transition-transform focus:outline-none ${isSelected ? 'scale-105' : 'hover:scale-102'
-                        }`}
-                    >
-                      <span
-                        className={`text-[11px] font-bold transition-colors ${isSelected
-                          ? 'text-teal-600 dark:text-teal-400 font-black'
-                          : 'text-slate-700 dark:text-slate-300 group-hover:text-teal-500'
-                          }`}
-                      >
-                        {hrs > 0 ? `${hrs.toFixed(1)}h` : '-'}
-                      </span>
-                      <div
-                        className={`w-full max-w-[28px] rounded-t-lg overflow-hidden flex items-end h-28 transition-all ${isSelected
-                          ? 'bg-teal-500/20 ring-2 ring-teal-500 ring-offset-1 dark:ring-offset-slate-900'
-                          : 'bg-slate-100 dark:bg-slate-800 group-hover:bg-slate-200 dark:group-hover:bg-slate-700'
-                          }`}
-                      >
-                        <div
-                          className={`w-full rounded-t-lg transition-all duration-500 ${isSelected
-                            ? 'bg-gradient-to-t from-teal-600 to-teal-400'
-                            : 'bg-teal-500 dark:bg-teal-400 group-hover:bg-teal-400'
-                            }`}
-                          style={{ height: `${Math.max(4, heightPct)}%` }}
-                        />
+              {gradeProgress.length === 0 ? (
+                <div className="py-8 text-center text-xs text-slate-400">
+                  <BarChart3 className="w-6 h-6 mx-auto mb-2 opacity-50" />
+                  {isAr ? 'أضف علامات لعرض تطورها هنا.' : language === 'en' ? 'Add grades to see their progression here.' : 'Ajoutez des notes pour voir leur évolution ici.'}
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {gradeProgress.map((item) => (
+                    <div key={item.subject} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 py-3 first:pt-0 last:pb-0">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
+                          <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">{item.subject}</span>
+                          <span className="text-[10px] text-slate-400">{item.count} {isAr ? 'علامات' : language === 'en' ? 'grades' : 'notes'}</span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden" aria-label={`${item.average.toFixed(1)} / 20`}>
+                          <div className="h-full rounded-full transition-[width] duration-500" style={{ width: `${Math.min(100, Math.max(0, item.average * 5))}%`, backgroundColor: item.color }} />
+                        </div>
                       </div>
-                      <span
-                        className={`text-[10px] font-bold transition-colors ${isSelected
-                          ? 'text-teal-600 dark:text-teal-400 font-black underline'
-                          : 'text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200'
-                          }`}
-                      >
-                        {dName}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Day Drilldown Panel (Active when day clicked) */}
-              {selectedDayIdx !== null && (
-                <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-teal-500/30 space-y-2 animate-fadeIn">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-xs text-slate-900 dark:text-white">
-                        {weeklyStats.dayNames[selectedDayIdx]} ({weekDates[selectedDayIdx]})
-                      </span>
-                      <span className="px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-600 dark:text-teal-400 font-bold text-[10px]">
-                        {weeklyStats.dayHours[selectedDayIdx].toFixed(1)}h {isAr ? 'دراسة' : 'd\'étude'}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {onAddTimeBlock && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setQuickLogDate(weekDates[selectedDayIdx]);
-                            setIsQuickLogOpen(true);
-                          }}
-                          className="px-2.5 py-1 rounded-lg bg-teal-600 hover:bg-teal-500 text-white font-bold text-[11px] flex items-center gap-1 transition-transform active:scale-95"
-                        >
-                          <Plus className="w-3 h-3" />
-                          <span>{isAr ? 'إضافة حصة' : 'Ajouter une session'}</span>
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => setSelectedDayIdx(null)}
-                        className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs px-1.5 py-0.5"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* List sessions on this day */}
-                  {(() => {
-                    const targetDateStr = weekDates[selectedDayIdx];
-                    const dayBlocks = (appData.timeBlocks || []).filter(
-                      (b) => getBlockDateStr(b) === targetDateStr && b.type === 'study'
-                    );
-
-                    if (dayBlocks.length === 0) {
-                      return (
-                        <p className="text-[11px] text-slate-400 py-1">
-                          {isAr
-                            ? 'لا توجد حصص مسجلة في هذا اليوم. يمكنك إضافة حصة بالزر أعلاه.'
-                            : 'Aucune session enregistrée pour ce jour. Utilisez le bouton ci-dessus pour ajouter des heures.'}
-                        </p>
-                      );
-                    }
-
-                    return (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                        {dayBlocks.map((b) => (
-                          <div
-                            key={b.id}
-                            className={`p-2 rounded-lg border text-[11px] flex items-center justify-between ${b.isCompleted
-                              ? 'bg-emerald-500/10 border-emerald-500/20 text-slate-900 dark:text-slate-200'
-                              : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500'
-                              }`}
-                          >
-                            <div className="min-w-0 pr-2">
-                              <span className="font-bold block truncate">{b.title || b.subject}</span>
-                              <span className="text-[10px] text-slate-400">
-                                {b.startTime} - {b.endTime} ({getBlockDurationHours(b).toFixed(1)}h) • {b.subject}
-                              </span>
-                            </div>
-                            <span
-                              className={`text-[10px] font-bold px-1.5 py-0.5 rounded-sm shrink-0 ${b.isCompleted
-                                ? 'bg-emerald-500 text-white'
-                                : 'bg-slate-300 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-                                }`}
-                            >
-                              {b.isCompleted ? (isAr ? 'مكتمل ✓' : 'Fait ✓') : (isAr ? 'مخطط' : 'Prévu')}
-                            </span>
-                          </div>
-                        ))}
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className="text-sm font-black" style={{ color: item.color }}>{item.average.toFixed(1)}<span className="text-[10px] text-slate-400">/20</span></span>
+                        <span className={`min-w-12 text-right text-[11px] font-bold ${item.delta === null ? 'text-slate-400' : item.delta >= 0 ? 'text-teal-600 dark:text-teal-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                          {item.delta === null ? '—' : `${item.delta > 0 ? '+' : ''}${item.delta.toFixed(1)}`}
+                        </span>
                       </div>
-                    );
-                  })()}
+                    </div>
+                  ))}
                 </div>
               )}
-
-              {/* Full Subject Breakdown Table */}
-              <div className="space-y-2 pt-2">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                    <ListOrdered className="w-4 h-4 text-teal-500" />
-                    <span>{t('wr_subject_table_title') || (isAr ? 'جدول التفاصيل لكل مادة' : 'Détail complet par matière')}</span>
-                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-teal-500/10 text-teal-600 dark:text-teal-400">
-                      {isSubjectsExpanded ? BAC_SUBJECTS.length : Math.min(DEFAULT_VISIBLE_SUBJECTS, BAC_SUBJECTS.length)} / {BAC_SUBJECTS.length}
-                    </span>
-                  </h4>
-                  <span className="text-[11px] text-slate-400">
-                    {isAr ? 'انقر على المادة للخيارات السريعة' : 'Cliquez pour voir les actions'}
-                  </span>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-400 text-[11px]">
-                        <th className="py-2 px-2">{isAr ? 'المادة' : 'Matière'}</th>
-                        <th className="py-2 px-2 text-center">{isAr ? 'المعامل' : 'Coef'}</th>
-                        <th className="py-2 px-2 text-center">{isAr ? 'الساعات المنجزة' : 'Heures faites'}</th>
-                        <th className="py-2 px-2 text-center">{isAr ? 'الحصص' : 'Sessions'}</th>
-                        <th className="py-2 px-2 text-center">{isAr ? 'النسبة' : 'Part'}</th>
-                        <th className="py-2 px-2 text-center">{isAr ? 'إجراء سريع' : 'Action rapide'}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(isSubjectsExpanded ? BAC_SUBJECTS : BAC_SUBJECTS.slice(0, DEFAULT_VISIBLE_SUBJECTS)).map((s) => {
-                        const hrs = weeklyStats.subjectHoursMap[s.name] || 0;
-                        const sess = weeklyStats.subjectSessionsMap[s.name] || 0;
-                        const pct = weeklyStats.totalCompletedHours > 0 ? Math.round((hrs / weeklyStats.totalCompletedHours) * 100) : 0;
-                        return (
-                          <tr
-                            key={s.id}
-                            onClick={() => setSelectedSubjectDetail(s)}
-                            className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-teal-500/5 cursor-pointer transition-colors group"
-                          >
-                            <td className="py-2 px-2 flex items-center gap-2 font-bold text-slate-800 dark:text-slate-200 group-hover:text-teal-600 dark:group-hover:text-teal-400">
-                              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.hexColor }} />
-                              <span>{s.name}</span>
-                            </td>
-                            <td className="py-2 px-2 text-center">
-                              <span className="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-[10px]">
-                                {s.coefficient}
-                              </span>
-                            </td>
-                            <td className="py-2 px-2 text-center font-bold text-teal-600 dark:text-teal-400">
-                              {hrs.toFixed(1)}h
-                            </td>
-                            <td className="py-2 px-2 text-center text-slate-500">{sess}</td>
-                            <td className="py-2 px-2 text-center font-semibold text-slate-400">{pct}%</td>
-                            <td className="py-2 px-2 text-center" onClick={(e) => e.stopPropagation()}>
-                              <div className="flex items-center justify-center gap-1">
-                                {onAddTimeBlock && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleAddOneHourToSubject(s.name)}
-                                    title={isAr ? 'إضافة 1 ساعة دراسة لهذه المادة فوراً' : 'Ajouter 1 heure de révision'}
-                                    className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-teal-600 hover:text-white text-teal-600 dark:text-teal-400 text-[10px] font-bold transition-colors"
-                                  >
-                                    +1h
-                                  </button>
-                                )}
-                                {onStartFocusMode && (
-                                  <button
-                                    type="button"
-                                    onClick={() => onStartFocusMode(s.name)}
-                                    title={isAr ? 'بدء مؤقت تركيز لهذه المادة' : 'Lancer un Focus Timer'}
-                                    className="p-1 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-amber-500 hover:text-white text-amber-500 transition-colors"
-                                  >
-                                    <Play className="w-3 h-3 fill-current" />
-                                  </button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-
-                {BAC_SUBJECTS.length > DEFAULT_VISIBLE_SUBJECTS && (
-                  <button
-                    type="button"
-                    onClick={() => setIsSubjectsExpanded(!isSubjectsExpanded)}
-                    className="w-full mt-2 py-2 px-4 rounded-xl border border-dashed border-teal-500/30 hover:border-teal-500/60 bg-teal-500/5 hover:bg-teal-500/10 text-teal-600 dark:text-teal-400 font-bold text-xs flex items-center justify-center gap-2 transition-all duration-200 group cursor-pointer shadow-xs"
-                  >
-                    {isSubjectsExpanded ? (
-                      <>
-                        <ChevronUp className="w-4 h-4 transition-transform group-hover:-translate-y-0.5" />
-                        <span>{isAr ? 'عرض أقل — Show Less' : 'Afficher moins — Show Less'}</span>
-                      </>
-                    ) : (
-                      <>
-                        <ChevronDown className="w-4 h-4 transition-transform group-hover:translate-y-0.5" />
-                        <span>
-                          {isAr
-                            ? `عرض المزيد (+${BAC_SUBJECTS.length - DEFAULT_VISIBLE_SUBJECTS} مواد متبقية) — Show More`
-                            : `Afficher plus (+${BAC_SUBJECTS.length - DEFAULT_VISIBLE_SUBJECTS} autres) — Show More`}
-                        </span>
-                      </>
-                    )}
-                  </button>
-                )}
-              </div>
             </div>
+
+
           </div>
 
           {/* 13-Week Activity Heatmap */}
-          <div className="bg-white dark:bg-[#1A2535] p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
+          <div className="order-4 bg-white dark:bg-[#1A2535] p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
@@ -1476,9 +1409,11 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
                   <div key={wIdx} className="flex flex-col gap-1.5">
                     {week.map((day) => (
                       <button
+                        type="button"
                         key={day.dateStr}
                         onClick={() => setSelectedHeatmapDay(day)}
                         title={`${day.dateStr}: ${day.studyHours > 0 ? `${day.studyHours.toFixed(1)}h d'étude` : '0h'} (${day.studySessionsCount} sessions, ${day.tasksCount} tâches, ${day.habitsCount} habitudes)`}
+                        aria-label={`${day.dateStr}: ${day.studyHours.toFixed(1)}h, ${day.studySessionsCount} ${isAr ? 'حصص' : 'sessions'}`}
                         className={`w-3.5 h-3.5 rounded-xs transition-transform hover:scale-125 focus:outline-none ${getHeatmapColor(
                           day.studyHours,
                           day.count
@@ -1503,6 +1438,8 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
                   </span>
                 </div>
                 <button
+                  type="button"
+                  aria-label={isAr ? 'إغلاق تفاصيل اليوم' : language === 'en' ? 'Close day details' : 'Fermer le détail du jour'}
                   onClick={() => setSelectedHeatmapDay(null)}
                   className="self-end sm:self-auto text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs font-bold px-2 py-1 rounded-md hover:bg-slate-200/50 dark:hover:bg-slate-800"
                 >
@@ -1513,15 +1450,15 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
           </div>
 
           {/* Weekly Reflection Journal Form */}
-          <div className="bg-white dark:bg-[#1A2535] p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+          <div className="order-6 bg-white dark:bg-[#1A2535] p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-5">
             <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <BookOpen className="w-4 h-4 text-teal-500" />
-              <span>{isAr ? 'دفتر التقييم والمراجعة الأسبوعية' : 'Journal de Réflexion & Objectifs Hebdo'}</span>
+              <span>{isAr ? 'التأمل الأسبوعي' : language === 'en' ? 'Weekly reflection' : 'Réflexion hebdomadaire'}</span>
             </h3>
 
-            <form onSubmit={handleSaveWeekly} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
+            <form onSubmit={handleSaveWeekly} className="space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-4">
                   <label className="block text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 mb-1">
                     ✓ {t('wr_went_well')}
                   </label>
@@ -1538,7 +1475,7 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
                   />
                 </div>
 
-                <div>
+                <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-4">
                   <label className="block text-[11px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400 mb-1">
                     ⚠️ {t('wr_went_bad')}
                   </label>
@@ -1554,9 +1491,8 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
                     className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white font-medium focus:outline-none focus:border-teal-500 resize-none text-xs"
                   />
                 </div>
-              </div>
 
-              <div>
+                <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-4">
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-teal-600 dark:text-teal-400 mb-1">
                   🎯 {t('wr_improve')}
                 </label>
@@ -1572,8 +1508,13 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white font-medium focus:outline-none focus:border-teal-500 resize-none text-xs"
                 />
               </div>
+              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+              <div className="border-t border-slate-200 dark:border-slate-800 pt-4">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  {isAr ? 'أهداف الأسبوع القادم' : language === 'en' ? 'Goals for next week' : 'Objectifs pour la semaine prochaine'}
+                </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_220px] gap-4 pt-3">
                 <div>
                   <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
                     {t('wr_target_hrs')}
@@ -1605,18 +1546,339 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
                     ))}
                   </select>
                 </div>
+                <div className="flex items-end">
+                  <button
+                    type="submit"
+                    className="w-full min-h-11 rounded-lg bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{t('wr_save')}</span>
+                  </button>
+                </div>
               </div>
-
-              <div className="pt-2">
-                <button
-                  type="submit"
-                  className="w-full py-3 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs shadow-md shadow-teal-500/20 flex items-center justify-center gap-2 transition-transform active:scale-98"
-                >
-                  <Save className="w-4 h-4" />
-                  <span>{t('wr_save')}</span>
-                </button>
               </div>
             </form>
+          </div>
+
+          {/* Weekly activity heatmap and study-hours chart */}
+          <div className="order-7 bg-white dark:bg-[#1A2535] p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                <CalendarDays className="w-4 h-4 text-teal-500" />
+                <span>{isAr ? 'نشاط الدراسة خلال الأسبوع' : language === 'en' ? 'Weekly study activity' : 'Activité hebdomadaire'}</span>
+              </h3>
+              <span className="text-[11px] font-bold text-teal-600 dark:text-teal-400">{weeklyStats.totalCompletedHours.toFixed(1)}h {isAr ? 'مكتملة' : language === 'en' ? 'completed' : 'terminées'}</span>
+            </div>
+
+            <div className="grid grid-cols-7 gap-2" aria-label={isAr ? 'ساعات الدراسة لكل يوم' : 'Study hours by day'}>
+              {weeklyStats.dayNames.map((dayName, index) => {
+                const hours = weeklyStats.dayHours[index];
+                const isSelected = selectedDayIdx === index;
+                return (
+                  <button
+                    key={`week-heat-${weekDates[index]}`}
+                    type="button"
+                    onClick={() => setSelectedDayIdx(isSelected ? null : index)}
+                    aria-pressed={isSelected}
+                    aria-label={`${dayName} ${weekDates[index]}, ${hours.toFixed(1)}h`}
+                    className={`flex min-h-20 flex-col items-center justify-center gap-2 rounded-lg border p-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 ${getHeatmapColor(hours, 0)} ${isSelected ? 'ring-2 ring-teal-500 ring-offset-1 dark:ring-offset-slate-900' : 'hover:border-teal-400'}`}
+                  >
+                    <span className="text-sm font-black text-slate-800 dark:text-slate-100">{hours > 0 ? `${hours.toFixed(1)}h` : '—'}</span>
+                    <span className="text-[10px] font-bold text-slate-500 dark:text-slate-300">{dayName}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div>
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                  <BarChart3 className="w-4 h-4 text-teal-500" />
+                  <span>{isAr ? 'ساعات الدراسة لكل يوم' : language === 'en' ? 'Study hours per day' : 'Heures d’étude par jour'}</span>
+                </h4>
+                <span className="text-[10px] text-slate-400">{isAr ? 'اضغط على يوم لرؤية حصصه' : language === 'en' ? 'Select a day to see its sessions' : 'Choisissez un jour pour voir ses sessions'}</span>
+              </div>
+              <div className="grid grid-cols-7 gap-2 items-end h-40 border-b border-slate-200 dark:border-slate-800 pb-2">
+                {weeklyStats.dayNames.map((dayName, index) => {
+                  const hours = weeklyStats.dayHours[index];
+                  const maxHours = Math.max(...weeklyStats.dayHours, 1);
+                  const height = Math.max(4, Math.round((hours / maxHours) * 100));
+                  const isSelected = selectedDayIdx === index;
+                  return (
+                    <button
+                      key={`week-bars-${weekDates[index]}`}
+                      type="button"
+                      onClick={() => setSelectedDayIdx(isSelected ? null : index)}
+                      aria-pressed={isSelected}
+                      aria-label={`${dayName}: ${hours.toFixed(1)}h`}
+                      className="group flex min-w-0 h-full flex-col items-center justify-end gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+                    >
+                      <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300">{hours > 0 ? `${hours.toFixed(1)}h` : '—'}</span>
+                      <span className={`flex h-24 w-full max-w-8 items-end overflow-hidden rounded-t-md ${isSelected ? 'bg-teal-500/20 ring-1 ring-teal-500' : 'bg-slate-100 dark:bg-slate-800'}`}>
+                        <span className="w-full rounded-t-md bg-teal-500 transition-[height] duration-500 group-hover:bg-teal-400" style={{ height: `${height}%` }} />
+                      </span>
+                      <span className={`text-[9px] font-bold ${isSelected ? 'text-teal-600 dark:text-teal-400' : 'text-slate-400'}`}>{dayName}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {selectedDayIdx !== null && (
+              <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 p-4" aria-live="polite">
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">{weeklyStats.dayNames[selectedDayIdx]}</h4>
+                    <p className="text-[10px] text-slate-400">{weekDates[selectedDayIdx]} · {weeklyStats.dayHours[selectedDayIdx].toFixed(1)}h</p>
+                  </div>
+                  <button type="button" onClick={() => setSelectedDayIdx(null)} aria-label={isAr ? 'إغلاق تفاصيل اليوم' : language === 'en' ? 'Close day details' : 'Fermer le détail du jour'} className="min-h-10 min-w-10 rounded-lg text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500">
+                    <X className="w-4 h-4 mx-auto" />
+                  </button>
+                </div>
+                {(() => {
+                  const selectedDate = weekDates[selectedDayIdx];
+                  const blocks = (appData.timeBlocks || []).filter((block) => block.type === 'study' && getBlockDateStr(block) === selectedDate);
+                  return blocks.length === 0 ? (
+                    <p className="text-xs text-slate-400">{isAr ? 'لا توجد حصص مسجلة لهذا اليوم.' : language === 'en' ? 'No study sessions recorded for this day.' : 'Aucune session enregistrée ce jour-là.'}</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {blocks.map((block) => (
+                        <div key={block.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 rounded-md bg-white dark:bg-[#1A2535] border border-slate-200 dark:border-slate-800 px-3 py-2 text-[11px]">
+                          <span className="font-semibold text-slate-700 dark:text-slate-200 truncate">{block.title || block.subject}</span>
+                          <span className="text-slate-400 shrink-0">{block.startTime}–{block.endTime} · {block.subject} · {getBlockDurationHours(block).toFixed(1)}h</span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+          </div>
+
+          {/* Achievements */}
+          <div className="order-8 bg-white dark:bg-[#1A2535] p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                <Trophy className="w-4 h-4 text-amber-500" />
+                <span>{isAr ? 'الإنجازات' : language === 'en' ? 'Achievements' : 'Succès'}</span>
+              </h3>
+              <span className="text-[10px] font-semibold text-slate-400">
+                {achievements.filter((item) => item.unlocked).length} / {achievements.length} {isAr ? 'مفتوحة' : language === 'en' ? 'unlocked' : 'débloqués'}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8 gap-3">
+              {achievements.map((achievement) => (
+                <div key={achievement.id} className={`min-w-0 rounded-lg border p-3 ${achievement.unlocked ? 'border-teal-500/30 bg-teal-500/5' : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50'}`}>
+                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center mb-2 text-lg ${achievement.unlocked ? 'bg-teal-500/10' : 'bg-slate-200 dark:bg-slate-800 grayscale opacity-60'}`} aria-hidden="true">{achievement.icon}</div>
+                  <h4 className="min-h-8 text-[10px] leading-4 font-bold text-slate-800 dark:text-slate-200 line-clamp-2">{achievement.title[language]}</h4>
+                  <div className="mt-2 h-1.5 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden" aria-hidden="true">
+                    <div className={`h-full rounded-full ${achievement.unlocked ? 'bg-teal-500' : 'bg-slate-400'}`} style={{ width: `${achievement.progress}%` }} />
+                  </div>
+                  <div className="mt-1 flex items-center justify-between text-[9px] font-semibold text-slate-400">
+                    <span>{achievement.unlocked ? (isAr ? 'مكتمل' : language === 'en' ? 'Complete' : 'Débloqué') : (isAr ? 'التقدم' : language === 'en' ? 'Progress' : 'En cours')}</span>
+                    <span>{achievement.progress}%</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Previous weekly reviews */}
+          <div className="order-9 bg-white dark:bg-[#1A2535] p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2 mb-3">
+              <Layers className="w-4 h-4 text-teal-500" />
+              <span>{isAr ? 'المراجعات الأسبوعية السابقة' : language === 'en' ? 'Previous weekly reviews' : 'Bilans précédents'}</span>
+            </h3>
+            {weeklyReviewArchive.length === 0 ? (
+              <div className="py-7 text-center text-xs text-slate-400">
+                <BookOpen className="w-6 h-6 mx-auto mb-2 opacity-50" />
+                {isAr ? 'احفظ أول مراجعة أسبوعية لتظهر هنا.' : language === 'en' ? 'Save a weekly review and it will appear here.' : 'Enregistrez un premier bilan pour le retrouver ici.'}
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                {weeklyReviewArchive.slice(0, 12).map(([weekKey, review]) => {
+                  const monday = new Date(`${weekKey}T12:00:00`);
+                  const sunday = new Date(monday);
+                  sunday.setDate(monday.getDate() + 6);
+                  const locale = isAr ? 'ar-MA' : language === 'en' ? 'en-US' : 'fr-FR';
+                  const range = `${monday.toLocaleDateString(locale, { day: 'numeric', month: 'short' })} – ${sunday.toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' })}`;
+                  return (
+                    <button
+                      key={weekKey}
+                      type="button"
+                      onClick={() => jumpToArchivedWeek(weekKey)}
+                      aria-label={`${isAr ? 'عرض مراجعة الأسبوع' : language === 'en' ? 'Open review for week' : 'Ouvrir le bilan de la semaine'} ${range}`}
+                      className="w-full min-h-14 flex items-center justify-between gap-3 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-900/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-500 rounded-md transition-colors"
+                    >
+                      <span className="min-w-0">
+                        <span className="block text-xs font-bold text-slate-800 dark:text-slate-200">{range}</span>
+                        <span className="block mt-1 text-[10px] text-slate-400 truncate">
+                          {review.prioritySubj ? `${isAr ? 'الأولوية' : language === 'en' ? 'Priority' : 'Priorité'}: ${review.prioritySubj} · ` : ''}
+                          {review.targetHours}h {isAr ? 'يوميًا' : language === 'en' ? 'per day' : '/ jour'}
+                        </span>
+                      </span>
+                      <span className="flex items-center gap-2 text-[10px] text-slate-400 shrink-0">
+                        {review.wentWell && <CheckCircle className="w-3.5 h-3.5 text-teal-500" aria-label={isAr ? 'إنجازات محفوظة' : 'Saved successes'} />}
+                        {review.improve && <Target className="w-3.5 h-3.5 text-amber-500" aria-label={isAr ? 'أهداف محفوظة' : 'Saved goals'} />}
+                        <span>{isAr ? 'عرض' : language === 'en' ? 'View' : 'Voir'}</span>
+                        <ChevronRight className={`w-3.5 h-3.5 ${isAr ? 'rotate-180' : ''}`} />
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Monthly history and drilldown */}
+          <div className="order-10 bg-white dark:bg-[#1A2535] p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                  <CalendarRange className="w-4 h-4 text-teal-500" />
+                  <span>{isAr ? 'إحصاءات الدراسة الشهرية' : language === 'en' ? 'Monthly study statistics' : 'Statistiques mensuelles'}</span>
+                </h3>
+                <p className="mt-1 text-xs font-bold text-slate-900 dark:text-white capitalize" aria-live="polite">{monthDisplayName}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                {currentMonthOffset !== 0 && (
+                  <button type="button" onClick={() => setCurrentMonthOffset(0)} className="min-h-10 px-3 rounded-lg bg-teal-500/10 text-teal-700 dark:text-teal-300 text-[11px] font-bold hover:bg-teal-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500">
+                    {isAr ? 'هذا الشهر' : language === 'en' ? 'This month' : 'Ce mois'}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setCurrentMonthOffset((offset) => offset - 1)}
+                  aria-label={isAr ? 'الشهر السابق' : language === 'en' ? 'Previous month' : 'Mois précédent'}
+                  title={isAr ? 'الشهر السابق' : language === 'en' ? 'Previous month' : 'Mois précédent'}
+                  className="min-h-10 min-w-10 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+                >
+                  {isAr ? <ChevronRight className="w-4 h-4 mx-auto" /> : <ChevronLeft className="w-4 h-4 mx-auto" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrentMonthOffset((offset) => Math.min(0, offset + 1))}
+                  disabled={currentMonthOffset >= 0}
+                  aria-label={isAr ? 'الشهر التالي' : language === 'en' ? 'Next month' : 'Mois suivant'}
+                  title={isAr ? 'الشهر التالي' : language === 'en' ? 'Next month' : 'Mois suivant'}
+                  className="min-h-10 min-w-10 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+                >
+                  {isAr ? <ChevronLeft className="w-4 h-4 mx-auto" /> : <ChevronRight className="w-4 h-4 mx-auto" />}
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 p-4">
+                <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">{isAr ? 'إجمالي الدراسة' : language === 'en' ? 'Study time' : 'Temps d’étude total'}</span>
+                <span className="block mt-1 text-xl font-black text-teal-600 dark:text-teal-400">{monthlyStats.totalMonthlyHours.toFixed(1)}h</span>
+              </div>
+              <div className="rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 p-4">
+                <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">{isAr ? 'الحصص المكتملة' : language === 'en' ? 'Completed sessions' : 'Sessions terminées'}</span>
+                <span className="block mt-1 text-xl font-black text-slate-900 dark:text-white">{monthlyStats.completedSessions}</span>
+              </div>
+              <div className="rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 p-4">
+                <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">{isAr ? 'المواد المدروسة' : language === 'en' ? 'Subjects studied' : 'Matières étudiées'}</span>
+                <span className="block mt-1 text-xl font-black text-slate-900 dark:text-white">{monthlySubjectEntries.length}</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              <section aria-label={isAr ? 'تفصيل ساعات الشهر حسب المادة' : 'Monthly study hours by subject'}>
+                <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 mb-3">{isAr ? 'حسب المادة' : language === 'en' ? 'By subject' : 'Par matière'}</h4>
+                {monthlySubjectEntries.length === 0 ? (
+                  <p className="py-6 text-center text-xs text-slate-400">{isAr ? 'لا توجد حصص مكتملة في هذا الشهر.' : language === 'en' ? 'No completed study sessions for this month.' : 'Aucune session terminée pour ce mois.'}</p>
+                ) : (
+                  <div className="space-y-2">
+                    {monthlySubjectEntries.map(([subject, hours], index) => {
+                      const color = BAC_SUBJECTS.find((item) => item.name === subject)?.hexColor || '#14B8A6';
+                      const percentage = monthlyStats.totalMonthlyHours > 0 ? Math.round((hours / monthlyStats.totalMonthlyHours) * 100) : 0;
+                      const subjectBlocks = monthlyCompletedBlocks.filter((block) => block.subject === subject);
+                      const isExpanded = expandedMonthlySubject === subject;
+                      return (
+                        <div key={subject} className="border-b border-slate-100 dark:border-slate-800 last:border-b-0 pb-2">
+                          <button
+                            type="button"
+                            onClick={() => setExpandedMonthlySubject(isExpanded ? null : subject)}
+                            aria-expanded={isExpanded}
+                            aria-controls={`monthly-subject-${index}`}
+                            className="w-full min-h-11 grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-900/40 rounded-md px-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+                          >
+                            <span className="flex items-center gap-2 min-w-0">
+                              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                              <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">{subject}</span>
+                            </span>
+                            <span className="text-xs font-bold text-teal-600 dark:text-teal-400">{hours.toFixed(1)}h</span>
+                            <span className="flex items-center gap-1 text-[10px] text-slate-400"><span>{percentage}%</span><ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} /></span>
+                          </button>
+                          <div className="h-1.5 mx-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden" aria-hidden="true">
+                            <div className="h-full rounded-full transition-[width] duration-500" style={{ width: `${percentage}%`, backgroundColor: color }} />
+                          </div>
+                          {isExpanded && (
+                            <div id={`monthly-subject-${index}`} className="mt-2 ml-4 pl-3 border-l-2 border-teal-500/30 space-y-2">
+                              {subjectBlocks.map((block) => {
+                                const date = new Date(`${getBlockDateStr(block)}T12:00:00`);
+                                const locale = isAr ? 'ar-MA' : language === 'en' ? 'en-US' : 'fr-FR';
+                                return (
+                                  <div key={block.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 rounded-md bg-slate-50 dark:bg-slate-900/50 px-3 py-2 text-[10px]">
+                                    <span className="font-semibold text-slate-700 dark:text-slate-300 truncate">{block.title || subject}</span>
+                                    <span className="text-slate-400 shrink-0">{date.toLocaleDateString(locale, { day: 'numeric', month: 'short' })} · {block.startTime}–{block.endTime} · {getBlockDurationHours(block).toFixed(1)}h</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+
+              <section aria-label={isAr ? 'تفصيل ساعات الشهر حسب الأسبوع' : 'Monthly study hours by week'}>
+                <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 mb-3">{isAr ? 'التوزيع حسب أسابيع الشهر' : language === 'en' ? 'Week-by-week' : 'Évolution par semaine'}</h4>
+                <div className="grid grid-cols-5 gap-2 items-end min-h-40 border-b border-slate-200 dark:border-slate-800 pb-3">
+                  {monthlyWeekDetails.map((bucket, index) => {
+                    const maxHours = Math.max(...monthlyWeekDetails.map((item) => item.hours), 1);
+                    const height = Math.max(4, Math.round((bucket.hours / maxHours) * 100));
+                    const isExpanded = expandedMonthlyWeek === index;
+                    return (
+                      <button
+                        key={bucket.range}
+                        type="button"
+                        onClick={() => setExpandedMonthlyWeek(isExpanded ? null : index)}
+                        aria-expanded={isExpanded}
+                        aria-label={`${bucket.label}: ${bucket.hours.toFixed(1)} ${isAr ? 'ساعة' : 'hours'}`}
+                        className="group flex min-h-32 flex-col items-center justify-end gap-2 rounded-md px-1 py-2 hover:bg-slate-50 dark:hover:bg-slate-900/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+                      >
+                        <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300">{bucket.hours > 0 ? `${bucket.hours.toFixed(1)}h` : '—'}</span>
+                        <span className="flex h-20 w-full max-w-10 items-end overflow-hidden rounded-t-md bg-slate-100 dark:bg-slate-800">
+                          <span className="w-full rounded-t-md bg-teal-500 transition-[height] duration-500 group-hover:bg-teal-400" style={{ height: `${height}%` }} />
+                        </span>
+                        <span className="text-[9px] font-bold text-slate-400">{bucket.label}</span>
+                        <span className="text-[9px] text-slate-400">{bucket.range}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {expandedMonthlyWeek !== null && (
+                  <div className="mt-3 space-y-2" aria-live="polite">
+                    {monthlyWeekDetails[expandedMonthlyWeek]?.blocks.length ? monthlyWeekDetails[expandedMonthlyWeek].blocks.map((block) => {
+                      const date = new Date(`${getBlockDateStr(block)}T12:00:00`);
+                      const locale = isAr ? 'ar-MA' : language === 'en' ? 'en-US' : 'fr-FR';
+                      return (
+                        <div key={block.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 rounded-md bg-slate-50 dark:bg-slate-900/50 px-3 py-2 text-[10px]">
+                          <span className="font-semibold text-slate-700 dark:text-slate-300 truncate">{block.title || block.subject}</span>
+                          <span className="text-slate-400 shrink-0">{date.toLocaleDateString(locale, { day: 'numeric', month: 'short' })} · {block.startTime}–{block.endTime} · {getBlockDurationHours(block).toFixed(1)}h</span>
+                        </div>
+                      );
+                    }) : (
+                      <p className="py-3 text-center text-[10px] text-slate-400">{isAr ? 'لا توجد حصص مكتملة في هذا الأسبوع.' : language === 'en' ? 'No completed sessions in this week.' : 'Aucune session terminée cette semaine.'}</p>
+                    )}
+                  </div>
+                )}
+              </section>
+            </div>
           </div>
         </div>
       )}
