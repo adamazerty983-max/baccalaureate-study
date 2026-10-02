@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Flame, Calendar, Sparkles, Trophy, Award, Clock, ChevronRight } from 'lucide-react';
 import { AppLanguage, FullAppData, HabitItem, TaskItem, TimeBlock, LessonItem } from '../../types';
-import { getLocalDateStr, calculateDailyStreak } from '../../utils/streak';
+import { getLocalDateStr, calculateDailyStreak, getTimeBlockCompletionOccurrences } from '../../utils/streak';
 
 interface CalendarHeatmapProps {
   appData?: FullAppData;
@@ -82,7 +82,10 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({
     // Tasks completed
     tasks.forEach((t) => {
       if (t.status === 'completed') {
-        const d = t.completedAt ? t.completedAt.slice(0, 10) : t.dueDate;
+        const completedAt = t.completedAt ? new Date(t.completedAt) : null;
+        const d = completedAt && !Number.isNaN(completedAt.getTime())
+          ? getLocalDateStr(completedAt)
+          : t.dueDate;
         if (d) {
           const entry = getEntry(d);
           entry.tasks += 1;
@@ -112,28 +115,22 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({
 
     // TimeBlocks completed
     timeBlocks.forEach((b) => {
-      if (b.isCompleted) {
-        const completedDate = b.completedAt ? new Date(b.completedAt) : null;
-        const d = completedDate && !Number.isNaN(completedDate.getTime())
-          ? getLocalDateStr(completedDate)
-          : b.dateKey || null;
-        if (d) {
-          const entry = getEntry(d);
-          entry.studySessions += 1;
-          entry.total += 1;
-          // compute duration
-          if (b.startTime && b.endTime) {
-            const [sh, sm] = b.startTime.split(':').map(Number);
-            const [eh, em] = b.endTime.split(':').map(Number);
-            const rawMins = (eh * 60 + em) - (sh * 60 + sm);
-            const diffMins = Math.max(1, rawMins > 0 ? rawMins : rawMins + 1440);
-            const dur = diffMins / 60;
-            entry.studyHours = Math.round((entry.studyHours + dur) * 10) / 10;
-          } else {
-            entry.studyHours = Math.round((entry.studyHours + 1) * 10) / 10;
-          }
+      getTimeBlockCompletionOccurrences(b).forEach(({ dateKey }) => {
+        const entry = getEntry(dateKey);
+        entry.studySessions += 1;
+        entry.total += 1;
+        // compute duration
+        if (b.startTime && b.endTime) {
+          const [sh, sm] = b.startTime.split(':').map(Number);
+          const [eh, em] = b.endTime.split(':').map(Number);
+          const rawMins = (eh * 60 + em) - (sh * 60 + sm);
+          const diffMins = Math.max(1, rawMins > 0 ? rawMins : rawMins + 1440);
+          const dur = diffMins / 60;
+          entry.studyHours = Math.round((entry.studyHours + dur) * 10) / 10;
+        } else {
+          entry.studyHours = Math.round((entry.studyHours + 1) * 10) / 10;
         }
-      }
+      });
     });
 
     // Lessons reviewed

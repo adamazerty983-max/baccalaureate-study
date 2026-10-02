@@ -68,6 +68,7 @@ import {
 } from './utils/storage';
 import { mergeAppData, stampNow } from './utils/merge';
 import { chimePlayer } from './utils/audio';
+import { getLocalDateStr, isTimeBlockOccurrenceCompleted } from './utils/streak';
 import { preloadCriticalChunks, runWhenIdle } from './utils/performance';
 
 export default function App() {
@@ -806,21 +807,42 @@ export default function App() {
     }));
   };
 
-  const handleToggleBlockComplete = (blockId: string) => {
+  const handleToggleBlockComplete = (
+    blockId: string,
+    occurrenceDateKey?: string,
+    nextOccurrenceCompleted?: boolean,
+  ) => {
     setAppData((prev) => {
-      const now = new Date().toISOString();
-      const today = new Date().toISOString().slice(0, 10);
+      const completedAt = new Date();
+      const now = completedAt.toISOString();
+      const today = getLocalDateStr(completedAt);
+      const completedDateKey = occurrenceDateKey || today;
       return {
         ...prev,
         timeBlocks: prev.timeBlocks.map((b) => {
           if (b.id !== blockId) return b;
-          const willBeCompleted = !b.isCompleted;
+          const occurrenceAlreadyCompleted = isTimeBlockOccurrenceCompleted(b, completedDateKey);
+          const willBeCompleted = nextOccurrenceCompleted ?? !occurrenceAlreadyCompleted;
+          const existingOccurrences = b.completedOccurrences || (b.isCompleted
+            ? [{
+                dateKey: b.dateKey || (b.completedAt ? getLocalDateStr(new Date(b.completedAt)) : today),
+                completedAt: b.completedAt || now,
+              }]
+            : []);
+          const completedOccurrences = willBeCompleted
+            ? [
+                ...existingOccurrences.filter((occurrence) => occurrence.dateKey !== completedDateKey),
+                { dateKey: completedDateKey, completedAt: now },
+              ]
+            : existingOccurrences.filter((occurrence) => occurrence.dateKey !== completedDateKey);
+          const mostRecentOccurrence = [...completedOccurrences]
+            .sort((a, b) => b.completedAt.localeCompare(a.completedAt))[0];
           return stampNow(
             {
               ...b,
-              isCompleted: willBeCompleted,
-              completedAt: willBeCompleted ? new Date().toISOString() : undefined,
-              dateKey: b.dateKey || today,
+              isCompleted: completedOccurrences.length > 0,
+              completedAt: mostRecentOccurrence?.completedAt,
+              completedOccurrences,
             },
             now
           );
@@ -1102,7 +1124,7 @@ export default function App() {
   // Log custom focus session directly to study hours & planner
   const handleLogCustomSession = (subject: string, minutes: number, title?: string) => {
     const now = new Date();
-    const today = now.toISOString().slice(0, 10);
+    const today = getLocalDateStr(now);
     const endHours = now.getHours();
     const endMinutes = now.getMinutes();
     const startTotalMins = Math.max(0, endHours * 60 + endMinutes - minutes);

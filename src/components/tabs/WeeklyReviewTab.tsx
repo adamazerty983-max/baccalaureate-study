@@ -46,6 +46,7 @@ import {
   calculateDailyStreak,
   getAllStreakDates,
   getLocalDateStr,
+  getTimeBlockCompletionOccurrences,
 } from '../../utils/streak';
 
 interface WeeklyReviewTabProps {
@@ -108,6 +109,39 @@ function getBlockDateStr(b: TimeBlock): string {
   return `${targetDate.getFullYear()}-${pad2(targetDate.getMonth() + 1)}-${pad2(targetDate.getDate())}`;
 }
 
+interface CompletedPlannerOccurrence {
+  block: TimeBlock;
+  date: string;
+  completedAt?: string;
+}
+
+function getCompletedPlannerOccurrences(block: TimeBlock): CompletedPlannerOccurrence[] {
+  return getTimeBlockCompletionOccurrences(block).map((occurrence) => ({
+    block,
+    date: occurrence.dateKey,
+    completedAt: occurrence.completedAt,
+  }));
+}
+
+function getBlockScheduledDateInWeek(block: TimeBlock, monday: Date): string {
+  if (block.dateKey) return block.dateKey;
+  const offset = block.dayOfWeek === 0 ? 6 : block.dayOfWeek - 1;
+  const scheduledDate = new Date(monday);
+  scheduledDate.setDate(monday.getDate() + offset);
+  return formatMondayKey(scheduledDate);
+}
+
+function getBlockScheduledDatesInMonth(block: TimeBlock, year: number, monthIndex: number): string[] {
+  if (block.dateKey) return block.dateKey.startsWith(`${year}-${pad2(monthIndex + 1)}`) ? [block.dateKey] : [];
+  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+  const dates: string[] = [];
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = new Date(year, monthIndex, day);
+    if (date.getDay() === block.dayOfWeek) dates.push(formatMondayKey(date));
+  }
+  return dates;
+}
+
 // Dynamic Achievements calculation
 function calculateAchievements(appData: FullAppData) {
   const completedTasks = (appData.tasks || []).filter((t) => t.status === 'completed');
@@ -118,8 +152,8 @@ function calculateAchievements(appData: FullAppData) {
   const highScores = (appData.quizzes || []).filter((q) => q.actualScore !== undefined && q.actualScore >= 18);
   const notesCount = (appData.notes || []).length;
   const totalStudyHours = (appData.timeBlocks || [])
-    .filter((b) => b.isCompleted && b.type === 'study')
-    .reduce((acc, b) => acc + getBlockDurationHours(b), 0);
+    .filter((b) => b.type === 'study')
+    .reduce((acc, b) => acc + getTimeBlockCompletionOccurrences(b).length * getBlockDurationHours(b), 0);
 
   return [
     {
@@ -275,13 +309,16 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
   const weeklyStats = useMemo(() => {
     const allStudyBlocks = (appData.timeBlocks || []).filter((b) => b.type === 'study');
 
-    // Filter study blocks that fall within selected Monday -> Sunday
+    // Planned blocks are weekly occurrences. Completed occurrences are separate
+    // records, so a recurring block can contribute once in every week it was done.
     const weekBlocks = allStudyBlocks.filter((b) => {
-      const bDate = getBlockDateStr(b);
+      const bDate = getBlockScheduledDateInWeek(b, selectedMonday);
       return bDate >= weekMondayKey && bDate <= weekSundayKey;
     });
 
-    const completedBlocks = weekBlocks.filter((b) => b.isCompleted);
+    const completedBlocks = allStudyBlocks
+      .flatMap(getCompletedPlannerOccurrences)
+      .filter((occurrence) => occurrence.date >= weekMondayKey && occurrence.date <= weekSundayKey);
 
     // Sum hours across all subjects
     let totalCompletedHours = 0;
@@ -305,16 +342,16 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
     });
 
     // Completed hours (every hour completed in Planner logs here!)
-    completedBlocks.forEach((b) => {
-      const dur = getBlockDurationHours(b);
+    completedBlocks.forEach(({ block }) => {
+      const dur = getBlockDurationHours(block);
       totalCompletedHours += dur;
-      subjectHoursMap[b.subject] = (subjectHoursMap[b.subject] || 0) + dur;
-      subjectSessionsMap[b.subject] = (subjectSessionsMap[b.subject] || 0) + 1;
+      subjectHoursMap[block.subject] = (subjectHoursMap[block.subject] || 0) + dur;
+      subjectSessionsMap[block.subject] = (subjectSessionsMap[block.subject] || 0) + 1;
     });
 
     const totalSessions = weekBlocks.length;
     const completedSessions = completedBlocks.length;
-    const sessionRate = totalSessions > 0 ? Math.round((completedSessions / totalSessions) * 100) : 0;
+    const sessionRate = totalSessions > 0 ? Math.min(100, Math.round((completedSessions / totalSessions) * 100)) : 0;
 
     // Determine top subject studied
     let topSubj = BAC_SUBJECTS[0].name;
@@ -334,13 +371,12 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
         : ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
     const dayHours = [0, 0, 0, 0, 0, 0, 0];
-    completedBlocks.forEach((b) => {
-      const bDate = getBlockDateStr(b);
-      const bObj = new Date(bDate + 'T12:00:00');
+    completedBlocks.forEach(({ date, block }) => {
+      const bObj = new Date(date + 'T12:00:00');
       const jsDay = bObj.getDay(); // 0 is Sun, 1 is Mon
       const monIdx = jsDay === 0 ? 6 : jsDay - 1;
       if (monIdx >= 0 && monIdx < 7) {
-        dayHours[monIdx] += getBlockDurationHours(b);
+        dayHours[monIdx] += getBlockDurationHours(block);
       }
     });
 
@@ -357,7 +393,7 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
       dayNames,
       dayHours,
     };
-  }, [appData.timeBlocks, weekMondayKey, weekSundayKey, isAr, language]);
+  }, [appData.timeBlocks, weekMondayKey, weekSundayKey, selectedMonday, isAr, language]);
 
   const weeklyHomeworkStats = useMemo(() => {
     const dueThisWeek = (appData.homework || []).filter((item) => item.dueDate >= weekMondayKey && item.dueDate <= weekSundayKey);
@@ -563,13 +599,13 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
   const monthlyStats = useMemo(() => {
     const allStudyBlocks = (appData.timeBlocks || []).filter((b) => b.type === 'study');
 
-    // Filter study blocks that start with selectedMonthKey (YYYY-MM)
-    const monthBlocks = allStudyBlocks.filter((b) => {
-      const bDate = getBlockDateStr(b);
-      return bDate.startsWith(selectedMonthKey);
-    });
-
-    const completedBlocks = monthBlocks.filter((b) => b.isCompleted);
+    const monthBlocks = allStudyBlocks.flatMap((block) =>
+      getBlockScheduledDatesInMonth(block, selectedMonthDate.getFullYear(), selectedMonthDate.getMonth())
+        .map((date) => ({ block, date }))
+    );
+    const completedBlocks = allStudyBlocks
+      .flatMap(getCompletedPlannerOccurrences)
+      .filter((occurrence) => occurrence.date.startsWith(selectedMonthKey));
 
     let totalMonthlyHours = 0;
     let totalMonthlyPlanned = 0;
@@ -583,17 +619,17 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
       subjectPlannedMap[s.name] = 0;
     });
 
-    monthBlocks.forEach((b) => {
-      const dur = getBlockDurationHours(b);
+    monthBlocks.forEach(({ block }) => {
+      const dur = getBlockDurationHours(block);
       totalMonthlyPlanned += dur;
-      subjectPlannedMap[b.subject] = (subjectPlannedMap[b.subject] || 0) + dur;
+      subjectPlannedMap[block.subject] = (subjectPlannedMap[block.subject] || 0) + dur;
     });
 
-    completedBlocks.forEach((b) => {
-      const dur = getBlockDurationHours(b);
+    completedBlocks.forEach(({ block }) => {
+      const dur = getBlockDurationHours(block);
       totalMonthlyHours += dur;
-      subjectHoursMap[b.subject] = (subjectHoursMap[b.subject] || 0) + dur;
-      subjectSessionsMap[b.subject] = (subjectSessionsMap[b.subject] || 0) + 1;
+      subjectHoursMap[block.subject] = (subjectHoursMap[block.subject] || 0) + dur;
+      subjectSessionsMap[block.subject] = (subjectSessionsMap[block.subject] || 0) + 1;
     });
 
     const totalSessions = monthBlocks.length;
@@ -628,10 +664,9 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
       { label: isAr ? 'الأسبوع 5' : 'Sem 5', range: '29+', hours: 0 },
     ];
 
-    completedBlocks.forEach((b) => {
-      const bDate = getBlockDateStr(b);
-      const dayNum = parseInt(bDate.slice(8, 10), 10);
-      const dur = getBlockDurationHours(b);
+    completedBlocks.forEach(({ block, date }) => {
+      const dayNum = parseInt(date.slice(8, 10), 10);
+      const dur = getBlockDurationHours(block);
       if (dayNum <= 7) weekBuckets[0].hours += dur;
       else if (dayNum <= 14) weekBuckets[1].hours += dur;
       else if (dayNum <= 21) weekBuckets[2].hours += dur;
@@ -659,7 +694,17 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
   // is attributed to the actual completion date, matching the review totals above.
   const monthlyCompletedBlocks = useMemo(() => {
     return (appData.timeBlocks || [])
-      .filter((block) => block.type === 'study' && block.isCompleted && getBlockDateStr(block).startsWith(selectedMonthKey))
+      .filter((block) => block.type === 'study')
+      .flatMap((block) => getCompletedPlannerOccurrences(block)
+        .filter((occurrence) => occurrence.date.startsWith(selectedMonthKey))
+        .map((occurrence) => ({
+          ...block,
+          id: `${block.id}-${occurrence.date}`,
+          dateKey: occurrence.date,
+          completedAt: occurrence.completedAt,
+          isCompleted: true,
+          completedOccurrences: undefined,
+        })))
       .sort((a, b) => {
         const dateOrder = getBlockDateStr(a).localeCompare(getBlockDateStr(b));
         return dateOrder || a.startTime.localeCompare(b.startTime);
@@ -826,7 +871,10 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
 
     (appData.tasks || []).forEach((t) => {
       if (t.status === 'completed') {
-        const dateStr = t.completedAt ? t.completedAt.slice(0, 10) : t.dueDate;
+        const completedAt = t.completedAt ? new Date(t.completedAt) : null;
+        const dateStr = completedAt && !Number.isNaN(completedAt.getTime())
+          ? getLocalDateStr(completedAt)
+          : t.dueDate;
         if (dateStr) {
           if (!activityMap[dateStr]) {
             activityMap[dateStr] = { tasks: 0, habits: 0, studySessions: 0, studyHours: 0 };
@@ -849,15 +897,14 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
     }
 
     (appData.timeBlocks || []).forEach((b) => {
-      if (b.isCompleted && b.type === 'study') {
-        const dKey = getBlockDateStr(b);
-        if (dKey) {
+      if (b.type === 'study') {
+        getCompletedPlannerOccurrences(b).forEach(({ date: dKey }) => {
           if (!activityMap[dKey]) {
             activityMap[dKey] = { tasks: 0, habits: 0, studySessions: 0, studyHours: 0 };
           }
           activityMap[dKey].studySessions++;
           activityMap[dKey].studyHours += getBlockDurationHours(b);
-        }
+        });
       }
     });
 
@@ -1637,7 +1684,11 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
                 </div>
                 {(() => {
                   const selectedDate = weekDates[selectedDayIdx];
-                  const blocks = (appData.timeBlocks || []).filter((block) => block.type === 'study' && getBlockDateStr(block) === selectedDate);
+                  const blocks = (appData.timeBlocks || [])
+                    .filter((block) => block.type === 'study')
+                    .flatMap((block) => getCompletedPlannerOccurrences(block)
+                      .filter((occurrence) => occurrence.date === selectedDate)
+                      .map((occurrence) => ({ ...block, id: `${block.id}-${occurrence.date}` })));
                   return blocks.length === 0 ? (
                     <p className="text-xs text-slate-400">{isAr ? 'لا توجد حصص مسجلة لهذا اليوم.' : language === 'en' ? 'No study sessions recorded for this day.' : 'Aucune session enregistrée ce jour-là.'}</p>
                   ) : (

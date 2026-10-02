@@ -30,6 +30,7 @@ import {
   saveNotifiedIds,
 } from '../utils/indexedDB';
 import { chimePlayer } from '../utils/audio';
+import { isTimeBlockOccurrenceCompleted } from '../utils/streak';
 
 type NotificationListener = (notifications: InAppNotification[]) => void;
 type HUDListener = (notification: InAppNotification) => void;
@@ -290,14 +291,13 @@ class NotificationService {
     // =========================================================================
     if (prefs.modules.timeblocking !== false && appData.timeBlocks) {
       for (const block of appData.timeBlocks) {
-        if (block.isCompleted) continue;
-
         // Verify if this block is scheduled for today
         const matchesDate = block.dateKey
           ? block.dateKey === todayStr
           : block.dayOfWeek === currentDayOfWeek;
 
         if (!matchesDate) continue;
+        if (isTimeBlockOccurrenceCompleted(block, todayStr)) continue;
 
         // Parse start time "HH:mm"
         const [sH, sM] = (block.startTime || '08:00').split(':').map(Number);

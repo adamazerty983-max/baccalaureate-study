@@ -26,6 +26,53 @@ export function getTimeBlockDurationHours(b: { startTime: string; endTime: strin
   return Math.round(((endM - startM) / 60) * 100) / 100;
 }
 
+/** Returns each completed Planner occurrence using its actual completion date. */
+export function getTimeBlockCompletionOccurrences(
+  block: TimeBlock
+): { dateKey: string; completedAt?: string }[] {
+  if (block.completedOccurrences) {
+    return block.completedOccurrences.map((occurrence) => {
+      const completed = new Date(occurrence.completedAt);
+      return {
+        dateKey: !Number.isNaN(completed.getTime()) ? getLocalDateStr(completed) : occurrence.dateKey,
+        completedAt: occurrence.completedAt,
+      };
+    });
+  }
+  if (!block.isCompleted) return [];
+  if (block.completedAt) {
+    const completed = new Date(block.completedAt);
+    if (!Number.isNaN(completed.getTime())) {
+      return [{ dateKey: getLocalDateStr(completed), completedAt: block.completedAt }];
+    }
+  }
+  if (block.dateKey) return [{ dateKey: block.dateKey }];
+  if (block.createdAt) {
+    const created = new Date(block.createdAt);
+    if (!Number.isNaN(created.getTime())) return [{ dateKey: getLocalDateStr(created) }];
+  }
+  if (block.dayOfWeek !== undefined) {
+    const today = new Date();
+    const todayMondayOffset = (today.getDay() + 6) % 7;
+    const targetMondayOffset = block.dayOfWeek === 0 ? 6 : block.dayOfWeek - 1;
+    today.setDate(today.getDate() + targetMondayOffset - todayMondayOffset);
+    return [{ dateKey: getLocalDateStr(today) }];
+  }
+  return [];
+}
+
+/** Checks whether a block's scheduled occurrence has been completed. */
+export function isTimeBlockOccurrenceCompleted(block: TimeBlock, scheduledDateKey: string): boolean {
+  if (block.completedOccurrences) {
+    return block.completedOccurrences.some((occurrence) => occurrence.dateKey === scheduledDateKey);
+  }
+  if (!block.isCompleted) return false;
+  const legacyDate = block.dateKey || (block.completedAt
+    ? getLocalDateStr(new Date(block.completedAt))
+    : undefined);
+  return legacyDate === scheduledDateKey;
+}
+
 /**
  * Extracts set of dates (YYYY-MM-DD) on which tasks or timeblocks were marked completed.
  * A day ONLY counts if at least one task or time block was explicitly marked completed.
@@ -39,36 +86,7 @@ export function getCompletedActivityDates(
 
   // 1. TimeBlocks from the Planner (the exact item list where user clicks [✓])
   timeBlocks.forEach((b) => {
-    if (b.isCompleted) {
-      if (b.completedAt) {
-        const d = new Date(b.completedAt);
-        if (!isNaN(d.getTime())) {
-          dates.add(getLocalDateStr(d));
-          return;
-        }
-      }
-      if (b.dateKey) {
-        dates.add(b.dateKey);
-        return;
-      }
-      if (b.createdAt) {
-        const d = new Date(b.createdAt);
-        if (!isNaN(d.getTime())) {
-          dates.add(getLocalDateStr(d));
-          return;
-        }
-      }
-      if (b.dayOfWeek !== undefined) {
-        const now = new Date();
-        const currentDay = now.getDay();
-        const currentMondayOffset = currentDay === 0 ? 6 : currentDay - 1;
-        const targetMondayOffset = b.dayOfWeek === 0 ? 6 : b.dayOfWeek - 1;
-        const diffDays = targetMondayOffset - currentMondayOffset;
-        const targetDate = new Date(now);
-        targetDate.setDate(now.getDate() + diffDays);
-        dates.add(getLocalDateStr(targetDate));
-      }
-    }
+    getTimeBlockCompletionOccurrences(b).forEach((occurrence) => dates.add(occurrence.dateKey));
   });
 
   // 2. Task items
@@ -180,33 +198,24 @@ export function calculateDailyStreak(
         (!t.completedAt && t.dueDate === todayStr))
   ).length;
 
-  const completedBlocksToday = timeBlocks.filter(
-    (b) =>
-      b.isCompleted &&
-      ((b.completedAt && getLocalDateStr(new Date(b.completedAt)) === todayStr) ||
-        (!b.completedAt && b.dateKey === todayStr) ||
-        (!b.completedAt && !b.dateKey && b.dayOfWeek === today.getDay()))
-  ).length;
+  const completedBlocksToday = timeBlocks.reduce(
+    (count, block) => count + getTimeBlockCompletionOccurrences(block).filter((occurrence) => occurrence.dateKey === todayStr).length,
+    0,
+  );
 
   const todayTasksCompletedCount = completedTasksToday + completedBlocksToday;
   const totalCompletedTasks =
     tasks.filter((t) => t.status === 'completed').length +
-    timeBlocks.filter((b) => b.isCompleted).length;
+    timeBlocks.reduce((count, block) => count + getTimeBlockCompletionOccurrences(block).length, 0);
 
   // Compute completed study hours
-  const completedStudyBlocks = timeBlocks.filter((b) => b.isCompleted && b.type === 'study');
-  const todayStudyHours = completedStudyBlocks
-    .filter(
-      (b) =>
-        (b.completedAt && getLocalDateStr(new Date(b.completedAt)) === todayStr) ||
-        (!b.completedAt && b.dateKey === todayStr)
-    )
-    .reduce((acc, b) => acc + getTimeBlockDurationHours(b), 0);
-
-  const totalStudyHours = completedStudyBlocks.reduce(
-    (acc, b) => acc + getTimeBlockDurationHours(b),
-    0
-  );
+  const completedStudyBlocks = timeBlocks.filter((block) => block.type === 'study');
+  const todayStudyHours = completedStudyBlocks.reduce((sum, block) =>
+    sum + getTimeBlockCompletionOccurrences(block)
+      .filter((occurrence) => occurrence.dateKey === todayStr)
+      .length * getTimeBlockDurationHours(block), 0);
+  const totalStudyHours = completedStudyBlocks.reduce((sum, block) =>
+    sum + getTimeBlockCompletionOccurrences(block).length * getTimeBlockDurationHours(block), 0);
 
   const bestStreak = calculateBestStreak(completedDates);
 
@@ -427,12 +436,10 @@ export function generateMonthCalendar(
       return false;
     }).length;
 
-    const blocksOnDate = timeBlocks.filter((b) => {
-      if (!b.isCompleted) return false;
-      if (b.completedAt && getLocalDateStr(new Date(b.completedAt)) === dateStr) return true;
-      if (!b.completedAt && b.dateKey === dateStr) return true;
-      return false;
-    }).length;
+    const blocksOnDate = timeBlocks.reduce(
+      (count, block) => count + getTimeBlockCompletionOccurrences(block).filter((occurrence) => occurrence.dateKey === dateStr).length,
+      0,
+    );
 
     // Count habits completed on this date
     const habitsLog = habitLogs[dateStr] || {};

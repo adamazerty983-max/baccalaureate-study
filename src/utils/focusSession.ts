@@ -1,4 +1,5 @@
 import { TimeBlock } from '../types';
+import { getLocalDateStr, isTimeBlockOccurrenceCompleted } from './streak';
 
 export const FOCUS_SESSION_STORAGE_KEY = 'bac_focus_mode_active_session';
 export const FOCUS_PAUSE_STORAGE_PREFIX = 'bac_focus_pause_';
@@ -70,12 +71,11 @@ export function getBlockTimestamps(block: TimeBlock, referenceDate = new Date())
  * 3. Current time is within [startMins, endMins).
  */
 export function isBlockActiveNow(block: TimeBlock, now = new Date()): boolean {
-  if (block.isCompleted) return false;
-
-  const todayDateKey = now.toISOString().slice(0, 10);
+  const todayDateKey = getLocalDateStr(now);
   const currentDay = now.getDay();
   const matchesDate = block.dateKey ? block.dateKey === todayDateKey : block.dayOfWeek === currentDay;
   if (!matchesDate) return false;
+  if (isTimeBlockOccurrenceCompleted(block, todayDateKey)) return false;
 
   const currentMins = now.getHours() * 60 + now.getMinutes();
   const [sh, sm] = (block.startTime || '00:00').split(':').map(Number);

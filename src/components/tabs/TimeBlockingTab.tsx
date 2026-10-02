@@ -17,6 +17,7 @@ import {
   Moon,
   Volume2,
   Calendar,
+  CalendarRange,
   Layers,
   ArrowRight,
   BookOpen,
@@ -38,7 +39,8 @@ import { ActivitySticker, AppLanguage, StickerActivityType, TaskItem, TimeBlock 
 import { ACTIVITY_STICKERS, BAC_SUBJECTS } from '../../utils/constants';
 import { useToast } from '../shared/Toast';
 import { chimePlayer } from '../../utils/audio';
-import { calculateDailyStreak, getLocalDateStr } from '../../utils/streak';
+import { calculateDailyStreak, getLocalDateStr, isTimeBlockOccurrenceCompleted } from '../../utils/streak';
+import { PlannerHistoryCalendar } from './PlannerHistoryCalendar';
 
 interface TimeBlockingTabProps {
   timeBlocks: TimeBlock[];
@@ -47,7 +49,7 @@ interface TimeBlockingTabProps {
   onAddTimeBlock: (block: Omit<TimeBlock, 'id'>) => void;
   onUpdateTimeBlock: (block: TimeBlock) => void;
   onDeleteTimeBlock: (blockId: string) => void;
-  onToggleComplete: (blockId: string) => void;
+  onToggleComplete: (blockId: string, occurrenceDateKey: string, isCompleted: boolean) => void;
 }
 
 // 05:00 to 24:00 (half-hour markers)
@@ -133,6 +135,10 @@ const computeDateKeyForDay = (dayOfWeek: number): string => {
   const m = String(targetDate.getMonth() + 1).padStart(2, '0');
   const d = String(targetDate.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
+};
+
+const isBlockCompletedOnDate = (block: TimeBlock, dateKey: string): boolean => {
+  return isTimeBlockOccurrenceCompleted(block, dateKey);
 };
 
 // Natural language fast parser for the top input
@@ -672,6 +678,7 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
   const [selectedDay, setSelectedDay] = useState<number>(() => {
     return new Date().getDay();
   });
+  const [isStudyHistoryOpen, setIsStudyHistoryOpen] = useState(false);
 
   // Timetable grid container reference
   const gridContainerRef = useRef<HTMLDivElement>(null);
@@ -811,6 +818,7 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
           b.dayOfWeek === selectedDay &&
           (!b.dateKey || b.dateKey === selectedDateKey),
       )
+      .map((block) => ({ ...block, isCompleted: isBlockCompletedOnDate(block, selectedDateKey) }))
       .sort((a, b) => a.startTime.localeCompare(b.startTime));
   }, [timeBlocks, selectedDay, selectedDateKey]);
 
@@ -1661,6 +1669,15 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
 
         {/* Right: Day Selector Pills */}
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+          <button
+            type="button"
+            onClick={() => setIsStudyHistoryOpen((open) => !open)}
+            aria-expanded={isStudyHistoryOpen}
+            className={`flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold transition-colors ${isStudyHistoryOpen ? 'border-teal-500/40 bg-teal-500/10 text-teal-700 dark:text-teal-300' : 'border-slate-200/80 bg-slate-100/80 text-slate-600 hover:bg-slate-200/70 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10'}`}
+          >
+            <CalendarRange className="h-3.5 w-3.5" />
+            {isAr ? 'سجل الدراسة' : language === 'en' ? 'Study history' : 'Historique'}
+          </button>
           {DAYS_OF_WEEK.map((d) => {
             const isSelected = selectedDay === d.id;
             return (
@@ -1678,6 +1695,8 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
           })}
         </div>
       </div>
+
+      {isStudyHistoryOpen && <PlannerHistoryCalendar timeBlocks={timeBlocks} language={language} />}
 
       {/* 2. "ACTIVITÉS" STICKERS BAR (DRAG & DROP TO TIMETABLE) */}
       <div className="bg-white/90 dark:bg-[#111827]/95 p-3 sm:p-3.5 rounded-3xl border border-slate-200/80 dark:border-white/[0.08] shadow-xs flex items-center justify-between gap-3 overflow-x-auto no-scrollbar">
@@ -2108,7 +2127,7 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          onToggleComplete(block.id);
+                          onToggleComplete(block.id, selectedDateKey, !block.isCompleted);
                           if (!block.isCompleted) {
                             chimePlayer.playChime('complete');
                             toast.success(
@@ -2216,7 +2235,7 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            onToggleComplete(block.id);
+                            onToggleComplete(block.id, selectedDateKey, !block.isCompleted);
                             if (!block.isCompleted) {
                               chimePlayer.playChime('complete');
                               toast.success(
