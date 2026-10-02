@@ -39,9 +39,30 @@
   stroke-width: 4;
 }
 
+@keyframes analytics-bar-enter {
+  from { opacity: .35; transform: scaleY(.78); }
+  to { opacity: 1; transform: scaleY(1); }
+}
+
+.analytics-bar-fill {
+  transform-origin: bottom;
+  animation: analytics-bar-enter 460ms cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.analytics-progress-fill {
+  transition: filter 180ms ease, box-shadow 180ms ease;
+}
+
+.group:hover .analytics-progress-fill,
+.group:focus-visible .analytics-progress-fill {
+  filter: brightness(1.18);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .analytics-donut-segment { animation: none; }
   .analytics-donut-path { transition: none; }
+  .analytics-bar-fill { animation: none; }
+  .analytics-progress-fill { transition: none; }
 }
 
 @layer base {

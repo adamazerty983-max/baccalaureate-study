@@ -68,6 +68,7 @@ const SUBJECT_CHART_COLORS: Record<string, string> = {
   philosophy: '#F472B6', islamic_studies: '#34D399', biology: '#A3E635', physics: '#F87171',
   history_geo: '#FBBF24', economics: '#38BDF8', computer_science: '#A78BFA', general: '#2DD4BF',
 };
+const CHART_SERIES_COLORS = ['#22D3EE', '#818CF8', '#F472B6', '#FB923C', '#34D399', '#A78BFA', '#FBBF24'];
 
 interface StudyHoursSegment {
   subject: string;
@@ -397,6 +398,7 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
   const [subjectBreakdownPeriod, setSubjectBreakdownPeriod] = useState<'week' | 'month'>('week');
   const [expandedMonthlySubject, setExpandedMonthlySubject] = useState<string | null>(null);
   const [expandedMonthlyWeek, setExpandedMonthlyWeek] = useState<number | null>(null);
+  const [activeMonthTrajectoryIndex, setActiveMonthTrajectoryIndex] = useState<number | null>(null);
 
   // Show More / Show Less for Subject Breakdown Tables (default 3 subjects visible)
   const [isMonthlySubjectsExpanded, setIsMonthlySubjectsExpanded] = useState<boolean>(false);
@@ -867,7 +869,7 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
           average,
           delta,
           count: orderedGrades.length,
-          color: BAC_SUBJECTS.find((item) => item.name === subject)?.hexColor || '#14B8A6',
+          color: SUBJECT_CHART_COLORS[BAC_SUBJECTS.find((item) => item.name === subject)?.id || ''] || '#14B8A6',
         };
       })
       .sort((a, b) => {
@@ -931,6 +933,7 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
   React.useEffect(() => {
     setExpandedMonthlySubject(null);
     setExpandedMonthlyWeek(null);
+    setActiveMonthTrajectoryIndex(null);
   }, [selectedMonthKey]);
 
   // Form states for the monthly review reflection
@@ -1034,7 +1037,7 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
     return weeks;
   }, [appData.tasks, appData.habitLogs, appData.timeBlocks]);
 
-  // Color intensities for heatmap: Progressively darker as study hours (and activity) increase
+  // Electric blue-violet intensity makes activity levels distinct in the dashboard palette.
   const getHeatmapColor = (studyHours: number, count: number = 0) => {
     // 0 hours and 0 activities: clean inactive background
     if (studyHours <= 0 && count <= 0) {
@@ -1043,26 +1046,26 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
 
     // Tier 1: Light (≤ 1.0h or 1 task/habit)
     if ((studyHours > 0 && studyHours <= 1.0) || (studyHours === 0 && count === 1)) {
-      return 'bg-emerald-200 text-emerald-950 dark:bg-emerald-950/90 dark:border-emerald-900/80 border border-emerald-300 dark:text-emerald-300';
+      return 'bg-cyan-200 text-cyan-950 dark:bg-cyan-950/90 dark:border-cyan-900/80 border border-cyan-300 dark:text-cyan-200';
     }
 
     // Tier 2: Medium-Light (1.0h < studyHours ≤ 2.5h or 2 activities)
     if ((studyHours > 1.0 && studyHours <= 2.5) || (studyHours === 0 && count === 2)) {
-      return 'bg-emerald-300 text-emerald-950 dark:bg-emerald-900 dark:border-emerald-800 border border-emerald-400 dark:text-emerald-200';
+      return 'bg-sky-300 text-sky-950 dark:bg-sky-900 dark:border-sky-800 border border-sky-400 dark:text-sky-100';
     }
 
     // Tier 3: Medium (2.5h < studyHours ≤ 4.0h or 3-4 activities)
     if ((studyHours > 2.5 && studyHours <= 4.0) || (studyHours === 0 && count <= 4)) {
-      return 'bg-emerald-500 text-white dark:bg-emerald-700 dark:border-emerald-600 border border-emerald-600';
+      return 'bg-blue-500 text-white dark:bg-blue-700 dark:border-blue-600 border border-blue-600';
     }
 
     // Tier 4: Dark (4.0h < studyHours ≤ 6.0h or 5-6 activities)
     if ((studyHours > 4.0 && studyHours <= 6.0) || (studyHours === 0 && count <= 6)) {
-      return 'bg-emerald-700 text-white dark:bg-emerald-600 dark:border-emerald-500 border border-emerald-800 shadow-xs font-bold';
+      return 'bg-indigo-600 text-white dark:bg-indigo-500 dark:border-indigo-400 border border-indigo-700 shadow-xs font-bold';
     }
 
-    // Tier 5: Deepest Darkest Forest Green (> 6.0h or 7+ activities)
-    return 'bg-emerald-950 text-emerald-100 dark:bg-emerald-400 dark:border-emerald-300 dark:text-emerald-950 border border-emerald-950 font-black shadow-sm ring-1 ring-emerald-900 dark:ring-emerald-300';
+    // Tier 5: Bright violet (> 6.0h or 7+ activities)
+    return 'bg-violet-700 text-white dark:bg-violet-400 dark:border-violet-300 dark:text-violet-950 border border-violet-800 font-black shadow-sm ring-1 ring-violet-900/50 dark:ring-violet-300/50';
   };
 
   // Handle Save Weekly Review
@@ -1492,15 +1495,22 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
               ) : (
                 <div className="divide-y divide-slate-100 dark:divide-slate-800">
                   {gradeProgress.map((item) => (
-                    <div key={item.subject} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 py-3 first:pt-0 last:pb-0">
+                    <button
+                      key={item.subject}
+                      type="button"
+                      onClick={() => setSelectedSubjectDetail(BAC_SUBJECTS.find((subject) => subject.name === item.subject) || null)}
+                      title={`${item.subject}: ${item.average.toFixed(1)}/20${item.delta === null ? '' : ` · ${item.delta > 0 ? '+' : ''}${item.delta.toFixed(1)}`}`}
+                      aria-label={`${item.subject}, ${isAr ? 'المعدل' : language === 'en' ? 'average' : 'moyenne'} ${item.average.toFixed(1)} / 20, ${item.count} ${isAr ? 'علامات' : language === 'en' ? 'grades' : 'notes'}`}
+                      className="group grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-4 rounded-lg py-3 text-left first:pt-0 last:pb-0 transition-colors hover:bg-slate-50 dark:hover:bg-slate-900/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+                    >
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 mb-2">
                           <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
                           <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">{item.subject}</span>
                           <span className="text-[10px] text-slate-400">{item.count} {isAr ? 'علامات' : language === 'en' ? 'grades' : 'notes'}</span>
                         </div>
-                        <div className="h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden" aria-label={`${item.average.toFixed(1)} / 20`}>
-                          <div className="h-full rounded-full transition-[width] duration-500" style={{ width: `${Math.min(100, Math.max(0, item.average * 5))}%`, backgroundColor: item.color }} />
+                        <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden" aria-hidden="true">
+                          <div className="analytics-progress-fill h-full rounded-full transition-[width] duration-700 group-hover:brightness-125" style={{ width: `${Math.min(100, Math.max(0, item.average * 5))}%`, background: `linear-gradient(90deg, ${item.color}88, ${item.color})`, boxShadow: `0 0 12px ${item.color}66` }} />
                         </div>
                       </div>
                       <div className="flex items-center gap-3 shrink-0">
@@ -1509,7 +1519,7 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
                           {item.delta === null ? '—' : `${item.delta > 0 ? '+' : ''}${item.delta.toFixed(1)}`}
                         </span>
                       </div>
-                    </div>
+                    </button>
                   ))}
                 </div>
               )}
@@ -1535,11 +1545,11 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
               <div className="flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400 font-bold shrink-0 flex-wrap">
                 <span>{isAr ? '0 س' : '0h'}</span>
                 <div className="w-3 h-3 rounded-xs bg-slate-100 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700/60" title="0h" />
-                <div className="w-3 h-3 rounded-xs bg-emerald-200 dark:bg-emerald-950/90 border border-emerald-300 dark:border-emerald-900" title="≤ 1h" />
-                <div className="w-3 h-3 rounded-xs bg-emerald-300 dark:bg-emerald-900 border border-emerald-400 dark:border-emerald-800" title="1 - 2.5h" />
-                <div className="w-3 h-3 rounded-xs bg-emerald-500 dark:bg-emerald-700 border border-emerald-600 dark:border-emerald-600" title="2.5 - 4h" />
-                <div className="w-3 h-3 rounded-xs bg-emerald-700 dark:bg-emerald-600 border border-emerald-800 dark:border-emerald-500" title="4 - 6h" />
-                <div className="w-3 h-3 rounded-xs bg-emerald-950 dark:bg-emerald-400 border border-emerald-950 dark:border-emerald-300 ring-1 ring-emerald-900/50 dark:ring-emerald-300/50" title="> 6h" />
+                <div className="w-3 h-3 rounded-xs bg-cyan-200 dark:bg-cyan-950/90 border border-cyan-300 dark:border-cyan-900" title="≤ 1h" />
+                <div className="w-3 h-3 rounded-xs bg-sky-300 dark:bg-sky-900 border border-sky-400 dark:border-sky-800" title="1 - 2.5h" />
+                <div className="w-3 h-3 rounded-xs bg-blue-500 dark:bg-blue-700 border border-blue-600 dark:border-blue-600" title="2.5 - 4h" />
+                <div className="w-3 h-3 rounded-xs bg-indigo-600 dark:bg-indigo-500 border border-indigo-700 dark:border-indigo-400" title="4 - 6h" />
+                <div className="w-3 h-3 rounded-xs bg-violet-700 dark:bg-violet-400 border border-violet-800 dark:border-violet-300 ring-1 ring-violet-900/50 dark:ring-violet-300/50" title="> 6h" />
                 <span>{isAr ? '+ 6 س' : '> 6h'}</span>
               </div>
             </div>
@@ -1555,7 +1565,7 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
                         onClick={() => setSelectedHeatmapDay(day)}
                         title={`${day.dateStr}: ${day.studyHours > 0 ? `${day.studyHours.toFixed(1)}h d'étude` : '0h'} (${day.studySessionsCount} sessions, ${day.tasksCount} tâches, ${day.habitsCount} habitudes)`}
                         aria-label={`${day.dateStr}: ${day.studyHours.toFixed(1)}h, ${day.studySessionsCount} ${isAr ? 'حصص' : 'sessions'}`}
-                        className={`w-3.5 h-3.5 rounded-xs transition-transform hover:scale-125 focus:outline-none ${getHeatmapColor(
+                        className={`w-3.5 h-3.5 rounded-xs motion-safe:transition-transform motion-safe:duration-200 hover:scale-125 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 ${getHeatmapColor(
                           day.studyHours,
                           day.count
                         )}`}
@@ -1745,6 +1755,7 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
                   const maxHours = Math.max(...weeklyStats.dayHours, 1);
                   const height = Math.max(4, Math.round((hours / maxHours) * 100));
                   const isSelected = selectedDayIdx === index;
+                  const barColor = CHART_SERIES_COLORS[index];
                   return (
                     <button
                       key={`week-bars-${weekDates[index]}`}
@@ -1752,11 +1763,12 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
                       onClick={() => setSelectedDayIdx(isSelected ? null : index)}
                       aria-pressed={isSelected}
                       aria-label={`${dayName}: ${hours.toFixed(1)}h`}
-                      className="group flex min-w-0 h-full flex-col items-center justify-end gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+                      title={`${dayName} · ${weekDates[index]} · ${hours.toFixed(1)}h`}
+                      className="group flex min-w-0 h-full flex-col items-center justify-end gap-2 rounded-md motion-safe:transition-colors hover:bg-slate-50 dark:hover:bg-slate-900/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
                     >
                       <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300">{hours > 0 ? `${hours.toFixed(1)}h` : '—'}</span>
-                      <span className={`flex h-24 w-full max-w-8 items-end overflow-hidden rounded-t-md ${isSelected ? 'bg-teal-500/20 ring-1 ring-teal-500' : 'bg-slate-100 dark:bg-slate-800'}`}>
-                        <span className="w-full rounded-t-md bg-teal-500 transition-[height] duration-500 group-hover:bg-teal-400" style={{ height: `${height}%` }} />
+                        <span className={`flex h-24 w-full max-w-8 items-end overflow-hidden rounded-t-md ${isSelected ? 'bg-white/10 ring-1 ring-white/30' : 'bg-slate-100 dark:bg-slate-800'}`}>
+                        <span className="analytics-bar-fill w-full rounded-t-md transition-[height,filter] duration-500 group-hover:brightness-125 group-focus-visible:brightness-125" style={{ height: `${height}%`, background: `linear-gradient(180deg, ${barColor}, ${barColor}66)`, boxShadow: `0 0 14px ${barColor}66` }} />
                       </span>
                       <span className={`text-[9px] font-bold ${isSelected ? 'text-teal-600 dark:text-teal-400' : 'text-slate-400'}`}>{dayName}</span>
                     </button>
@@ -1936,12 +1948,12 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
                 ) : (
                   <div className="space-y-2">
                     {monthlySubjectEntries.map(([subject, hours], index) => {
-                      const color = BAC_SUBJECTS.find((item) => item.name === subject)?.hexColor || '#14B8A6';
+                      const color = SUBJECT_CHART_COLORS[BAC_SUBJECTS.find((item) => item.name === subject)?.id || ''] || '#14B8A6';
                       const percentage = monthlyStats.totalMonthlyHours > 0 ? Math.round((hours / monthlyStats.totalMonthlyHours) * 100) : 0;
                       const subjectBlocks = monthlyCompletedBlocks.filter((block) => block.subject === subject);
                       const isExpanded = expandedMonthlySubject === subject;
                       return (
-                        <div key={subject} className="border-b border-slate-100 dark:border-slate-800 last:border-b-0 pb-2">
+                        <div key={subject} className="group border-b border-slate-100 dark:border-slate-800 last:border-b-0 pb-2">
                           <button
                             type="button"
                             onClick={() => setExpandedMonthlySubject(isExpanded ? null : subject)}
@@ -1957,7 +1969,7 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
                             <span className="flex items-center gap-1 text-[10px] text-slate-400"><span>{percentage}%</span><ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} /></span>
                           </button>
                           <div className="h-1.5 mx-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden" aria-hidden="true">
-                            <div className="h-full rounded-full transition-[width] duration-500" style={{ width: `${percentage}%`, backgroundColor: color }} />
+                            <div className="analytics-progress-fill h-full rounded-full motion-safe:transition-[width,filter] motion-safe:duration-500 group-hover:brightness-125" style={{ width: `${percentage}%`, background: `linear-gradient(90deg, ${color}88, ${color})`, boxShadow: `0 0 10px ${color}55` }} />
                           </div>
                           {isExpanded && (
                             <div id={`monthly-subject-${index}`} className="mt-2 ml-4 pl-3 border-l-2 border-teal-500/30 space-y-2">
@@ -1987,18 +1999,20 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
                     const maxHours = Math.max(...monthlyWeekDetails.map((item) => item.hours), 1);
                     const height = Math.max(4, Math.round((bucket.hours / maxHours) * 100));
                     const isExpanded = expandedMonthlyWeek === index;
+                    const barColor = CHART_SERIES_COLORS[index];
                     return (
                       <button
                         key={bucket.range}
                         type="button"
                         onClick={() => setExpandedMonthlyWeek(isExpanded ? null : index)}
                         aria-expanded={isExpanded}
-                        aria-label={`${bucket.label}: ${bucket.hours.toFixed(1)} ${isAr ? 'ساعة' : 'hours'}`}
-                        className="group flex min-h-32 flex-col items-center justify-end gap-2 rounded-md px-1 py-2 hover:bg-slate-50 dark:hover:bg-slate-900/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+                        aria-label={`${bucket.label} (${bucket.range}), ${bucket.hours.toFixed(1)} ${isAr ? 'ساعة' : 'hours'}, ${bucket.blocks.length} ${isAr ? 'حصص' : 'sessions'}`}
+                        title={`${bucket.label} (${bucket.range}): ${bucket.hours.toFixed(1)}h · ${bucket.blocks.length} ${isAr ? 'حصص' : 'sessions'}`}
+                        className={`group flex min-h-32 flex-col items-center justify-end gap-2 rounded-md px-1 py-2 motion-safe:transition-colors hover:bg-slate-50 dark:hover:bg-slate-900/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 ${isExpanded ? 'bg-cyan-500/10 ring-1 ring-cyan-400/60' : ''}`}
                       >
                         <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300">{bucket.hours > 0 ? `${bucket.hours.toFixed(1)}h` : '—'}</span>
                         <span className="flex h-20 w-full max-w-10 items-end overflow-hidden rounded-t-md bg-slate-100 dark:bg-slate-800">
-                          <span className="w-full rounded-t-md bg-teal-500 transition-[height] duration-500 group-hover:bg-teal-400" style={{ height: `${height}%` }} />
+                          <span className="analytics-bar-fill w-full rounded-t-md motion-safe:transition-[height,filter] motion-safe:duration-500 group-hover:brightness-125" style={{ height: `${height}%`, background: `linear-gradient(180deg, ${barColor}, ${barColor}55)`, boxShadow: `0 0 12px ${barColor}55` }} />
                         </span>
                         <span className="text-[9px] font-bold text-slate-400">{bucket.label}</span>
                         <span className="text-[9px] text-slate-400">{bucket.range}</span>
@@ -2226,28 +2240,35 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
               </div>
 
               {/* Trajectory Bar Chart */}
-              <div className="grid grid-cols-5 gap-3 pt-6 items-end h-44 border-b border-slate-200 dark:border-slate-800 pb-3">
-                {monthlyStats.weekBuckets.map((bucket) => {
+              <div className="grid grid-cols-5 gap-1 sm:gap-3 pt-6 items-end h-44 border-b border-slate-200 dark:border-slate-800 pb-3">
+                {monthlyStats.weekBuckets.map((bucket, index) => {
                   const maxW = Math.max(...monthlyStats.weekBuckets.map((b) => b.hours), 8);
                   const heightPct = Math.min(100, Math.round((bucket.hours / maxW) * 100));
+                  const barColor = CHART_SERIES_COLORS[index];
+                  const isSelected = activeMonthTrajectoryIndex === index;
 
                   return (
-                    <div key={bucket.label} className="flex flex-col items-center gap-2 h-full justify-end">
-                      <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                    <button key={bucket.label} type="button" onClick={() => setActiveMonthTrajectoryIndex(isSelected ? null : index)} aria-pressed={isSelected} aria-label={`${bucket.label}, ${bucket.range}, ${bucket.hours.toFixed(1)}h, ${monthlyWeekDetails[index]?.blocks.length || 0} sessions`} title={`${bucket.label} (${bucket.range}): ${bucket.hours.toFixed(1)}h`} className={`group flex min-w-0 flex-col items-center gap-2 h-full justify-end rounded-lg px-1 pb-1 motion-safe:transition-colors hover:bg-slate-100/70 dark:hover:bg-slate-800/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 ${isSelected ? 'bg-slate-100 dark:bg-slate-800 ring-1 ring-cyan-400/70' : ''}`}>
+                      <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 group-hover:text-slate-950 dark:group-hover:text-white">
                         {bucket.hours > 0 ? `${bucket.hours.toFixed(1)}h` : '-'}
                       </span>
                       <div className="w-full max-w-[40px] bg-slate-100 dark:bg-slate-800 rounded-t-lg overflow-hidden flex items-end h-28">
                         <div
-                          className="w-full bg-teal-500 dark:bg-teal-400 rounded-t-lg transition-all duration-500"
-                          style={{ height: `${Math.max(4, heightPct)}%` }}
+                          className="analytics-bar-fill w-full rounded-t-lg motion-safe:transition-[height,filter] motion-safe:duration-500 group-hover:brightness-125"
+                          style={{ height: `${Math.max(4, heightPct)}%`, background: `linear-gradient(180deg, ${barColor}, ${barColor}55)`, boxShadow: `0 0 14px ${barColor}66` }}
                         />
                       </div>
-                      <span className="text-[10px] font-bold text-slate-400">{bucket.label}</span>
-                      <span className="text-[9px] text-slate-400 font-medium">({bucket.range})</span>
-                    </div>
+                      <span className={`text-[9px] sm:text-[10px] font-bold ${isSelected ? 'text-cyan-600 dark:text-cyan-300' : 'text-slate-400'}`}>{bucket.label}</span>
+                      <span className="text-[8px] sm:text-[9px] text-slate-400 font-medium">({bucket.range})</span>
+                    </button>
                   );
                 })}
               </div>
+              <p className="min-h-5 text-center text-[10px] text-slate-500 dark:text-slate-400" aria-live="polite">
+                {activeMonthTrajectoryIndex === null
+                  ? (isAr ? 'اختر أسبوعًا لعرض عدد حصصه وساعاته.' : language === 'en' ? 'Select a week to see its sessions and hours.' : 'Sélectionnez une semaine pour voir ses heures et sessions.')
+                  : `${monthlyStats.weekBuckets[activeMonthTrajectoryIndex].label} · ${monthlyStats.weekBuckets[activeMonthTrajectoryIndex].range} · ${monthlyStats.weekBuckets[activeMonthTrajectoryIndex].hours.toFixed(1)}h · ${monthlyWeekDetails[activeMonthTrajectoryIndex]?.blocks.length || 0} ${isAr ? 'حصص' : language === 'en' ? 'sessions' : 'sessions'}`}
+              </p>
 
               {/* Detailed Monthly Subject Table */}
               <div className="space-y-2 pt-2">
@@ -2278,7 +2299,7 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
                         return (
                           <tr key={s.id} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-900/30">
                             <td className="py-2 px-2 flex items-center gap-2 font-bold text-slate-800 dark:text-slate-200">
-                              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: s.hexColor }} />
+                              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: SUBJECT_CHART_COLORS[s.id] || s.hexColor }} />
                               <span>{s.name}</span>
                             </td>
                             <td className="py-2 px-2 text-center font-bold text-teal-600 dark:text-teal-400">
@@ -2539,7 +2560,7 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
                           : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300'
                           }`}
                       >
-                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.hexColor }} />
+                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: SUBJECT_CHART_COLORS[s.id] || s.hexColor }} />
                         <span className="truncate">{s.name}</span>
                       </button>
                     );
