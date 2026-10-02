@@ -19,6 +19,31 @@
   }
 }
 
+@keyframes analytics-donut-reveal {
+  from { opacity: 0; transform: scale(.9) rotate(-7deg); }
+  to { opacity: 1; transform: scale(1) rotate(0); }
+}
+
+.analytics-donut-segment {
+  transform-box: view-box;
+  transform-origin: 120px 120px;
+  animation: analytics-donut-reveal 520ms cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.analytics-donut-path {
+  transition: filter 180ms ease, stroke-width 180ms ease;
+}
+
+.analytics-donut-path:focus-visible {
+  stroke: white;
+  stroke-width: 4;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .analytics-donut-segment { animation: none; }
+  .analytics-donut-path { transition: none; }
+}
+
 @layer base {
   :root {
     --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;

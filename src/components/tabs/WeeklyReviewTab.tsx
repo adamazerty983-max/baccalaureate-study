@@ -63,6 +63,133 @@ function pad2(n: number): string {
   return n < 10 ? `0${n}` : `${n}`;
 }
 
+const SUBJECT_CHART_COLORS: Record<string, string> = {
+  math: '#22D3EE', french: '#FB923C', arabic: '#E879F9', english: '#818CF8',
+  philosophy: '#F472B6', islamic_studies: '#34D399', biology: '#A3E635', physics: '#F87171',
+  history_geo: '#FBBF24', economics: '#38BDF8', computer_science: '#A78BFA', general: '#2DD4BF',
+};
+
+interface StudyHoursSegment {
+  subject: string;
+  subjectId: string;
+  hours: string;
+  percentage: number;
+  color: string;
+  startAngle: number;
+  angle: number;
+}
+
+function donutPoint(angle: number, radius: number) {
+  const radians = ((angle - 90) * Math.PI) / 180;
+  return { x: 120 + radius * Math.cos(radians), y: 120 + radius * Math.sin(radians) };
+}
+
+function donutSegmentPath(startAngle: number, angle: number) {
+  const endAngle = startAngle + angle;
+  const outerStart = donutPoint(startAngle, 106);
+  const outerEnd = donutPoint(endAngle, 106);
+  const innerEnd = donutPoint(endAngle, 65);
+  const innerStart = donutPoint(startAngle, 65);
+  if (angle >= 359.99) {
+    const outerMid = donutPoint(startAngle + 180, 106);
+    const innerMid = donutPoint(startAngle + 180, 65);
+    return `M ${outerStart.x} ${outerStart.y} A 106 106 0 1 1 ${outerMid.x} ${outerMid.y} A 106 106 0 1 1 ${outerStart.x} ${outerStart.y} L ${innerStart.x} ${innerStart.y} A 65 65 0 1 0 ${innerMid.x} ${innerMid.y} A 65 65 0 1 0 ${innerStart.x} ${innerStart.y} Z`;
+  }
+  const largeArc = angle > 180 ? 1 : 0;
+  return `M ${outerStart.x} ${outerStart.y} A 106 106 0 ${largeArc} 1 ${outerEnd.x} ${outerEnd.y} L ${innerEnd.x} ${innerEnd.y} A 65 65 0 ${largeArc} 0 ${innerStart.x} ${innerStart.y} Z`;
+}
+
+function shortSubjectName(subjectId: string, language: AppLanguage) {
+  if (language === 'ar') {
+    const labels: Record<string, string> = {
+      math: 'رياضيات', french: 'فرنسية', arabic: 'عربية', english: 'إنجليزية',
+      philosophy: 'فلسفة', islamic_studies: 'إسلامية', biology: 'علوم الحياة', physics: 'فيزياء',
+      history_geo: 'تاريخ', economics: 'اقتصاد', computer_science: 'معلوماتية', general: 'مراجعة',
+    };
+    return labels[subjectId] || subjectId;
+  }
+  const labels: Record<string, string> = {
+    math: 'Maths', french: 'Français', arabic: 'Arabe', english: 'Anglais',
+    philosophy: 'Philo', islamic_studies: 'Islam', biology: 'SVT', physics: 'Physique',
+    history_geo: 'Histoire', economics: 'Éco', computer_science: 'Info', general: 'Révision',
+  };
+  return labels[subjectId] || subjectId;
+}
+
+function StudyHoursDonut({
+  segments,
+  totalHours,
+  language,
+  centerLabel,
+}: {
+  segments: StudyHoursSegment[];
+  totalHours: number;
+  language: AppLanguage;
+  centerLabel: string;
+}) {
+  const [activeSegment, setActiveSegment] = useState<StudyHoursSegment | null>(null);
+  const activeSubject = activeSegment?.subject;
+  const activeColor = activeSegment?.color;
+
+  return (
+    <div className="relative flex w-full flex-col items-center justify-center py-3">
+      <div className="mb-2 flex min-h-7 items-center justify-center" aria-live="polite">
+        {activeSegment ? (
+          <div className="motion-safe:animate-fade-in flex items-center gap-2 rounded-full border border-white/10 bg-slate-900/90 px-3 py-1 text-xs font-bold text-white shadow-lg shadow-black/20">
+            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: activeSegment.color, boxShadow: `0 0 12px ${activeSegment.color}` }} />
+            <span>{activeSegment.subject}</span>
+            <span className="text-slate-300">{activeSegment.hours}h · {activeSegment.percentage}%</span>
+          </div>
+        ) : <span className="text-[10px] font-medium text-slate-500">{language === 'ar' ? 'مرّر على قسم لعرض التفاصيل' : language === 'en' ? 'Hover or focus a slice for details' : 'Survolez une part pour voir les détails'}</span>}
+      </div>
+      <div className="relative w-56 max-w-full aspect-square motion-safe:transition-transform motion-safe:duration-300 hover:scale-[1.03]">
+        <svg viewBox="0 0 240 240" className="h-full w-full overflow-visible" role="img" aria-label={`${centerLabel}: ${totalHours.toFixed(1)}h`}>
+          <circle cx="120" cy="120" r="85.5" fill="none" stroke="currentColor" strokeWidth="41" className="text-slate-200 dark:text-slate-800" />
+          {segments.map((segment, index) => {
+            const midAngle = segment.startAngle + segment.angle / 2;
+            const labelPoint = donutPoint(midAngle, 85.5);
+            const active = activeSubject === segment.subject;
+            const compactLabel = shortSubjectName(segment.subjectId, language);
+            return (
+              <g key={segment.subject} className="analytics-donut-segment" style={{ animationDelay: `${index * 45}ms` }} onMouseEnter={() => setActiveSegment(segment)} onMouseLeave={() => setActiveSegment(null)} onFocus={() => setActiveSegment(segment)} onBlur={() => setActiveSegment(null)}>
+                <path
+                  d={donutSegmentPath(segment.startAngle, segment.angle)}
+                  fill={segment.color}
+                  stroke="#172334"
+                  strokeWidth="2"
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`${segment.subject}: ${segment.hours} ${language === 'ar' ? 'ساعة' : 'hours'}, ${segment.percentage}%`}
+                  className="analytics-donut-path cursor-pointer focus:outline-none"
+                  style={{ filter: active ? `drop-shadow(0 0 8px ${segment.color})` : undefined }}
+                >
+                  <title>{`${segment.subject}: ${segment.hours}h (${segment.percentage}%)`}</title>
+                </path>
+                <text x={labelPoint.x} y={labelPoint.y} textAnchor="middle" dominantBaseline="central" className="pointer-events-none select-none fill-white" style={{ fontSize: segment.angle < 14 ? '5px' : segment.angle < 24 ? '6px' : '8px', fontWeight: 800, paintOrder: 'stroke', stroke: 'rgba(15, 23, 42, .82)', strokeWidth: 2, filter: 'drop-shadow(0 1px 2px rgba(0,0,0,.75))' }}>
+                  {compactLabel}
+                </text>
+              </g>
+            );
+          })}
+          <circle cx="120" cy="120" r="63" fill="#1A2535" className="drop-shadow-lg" />
+          {activeSegment ? (
+            <g className="pointer-events-none">
+              <text x="120" y="112" textAnchor="middle" className="fill-slate-300" style={{ fontSize: '9px', fontWeight: 700 }}>{shortSubjectName(activeSegment.subjectId, language)}</text>
+              <text x="120" y="137" textAnchor="middle" className="fill-white" style={{ fontSize: '19px', fontWeight: 900 }}>{activeSegment.hours}h</text>
+            </g>
+          ) : (
+            <g className="pointer-events-none">
+              <text x="120" y="109" textAnchor="middle" className="fill-slate-400" style={{ fontSize: '10px', fontWeight: 700 }}>{centerLabel}</text>
+              <text x="120" y="137" textAnchor="middle" className="fill-white" style={{ fontSize: '20px', fontWeight: 900 }}>{totalHours.toFixed(1)}h</text>
+            </g>
+          )}
+          {activeColor && <circle cx="120" cy="120" r="63" fill="none" stroke={activeColor} strokeOpacity=".65" strokeWidth="1.5" className="pointer-events-none" />}
+        </svg>
+      </div>
+    </div>
+  );
+}
+
 // Get the Monday date for a given date
 function getMonday(d: Date): Date {
   const date = new Date(d);
@@ -422,27 +549,15 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
       currentAngle += angle;
       return {
         subject: subj,
+        subjectId: subjectInfo?.id || subj,
         hours: hrs.toFixed(1),
         percentage: Math.round(pct),
-        color: subjectInfo?.hexColor || '#14B8A6',
+        color: SUBJECT_CHART_COLORS[subjectInfo?.id || ''] || subjectInfo?.hexColor || '#14B8A6',
         startAngle,
         angle,
       };
     });
   }, [weeklyStats]);
-
-  const weeklyConicGradientStr = useMemo(() => {
-    if (weeklyDonutSegments.length === 0) {
-      return 'conic-gradient(#334155 0deg 360deg)';
-    }
-    let str = 'conic-gradient(';
-    weeklyDonutSegments.forEach((seg, idx) => {
-      const isLast = idx === weeklyDonutSegments.length - 1;
-      str += `${seg.color} ${seg.startAngle}deg ${seg.startAngle + seg.angle}deg${isLast ? '' : ', '}`;
-    });
-    str += ')';
-    return str;
-  }, [weeklyDonutSegments]);
 
   // Exact dates for the 7 days of the selected week (Monday to Sunday)
   const weekDates = useMemo(() => {
@@ -791,40 +906,26 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
       currentAngle += angle;
       return {
         subject: subj,
+        subjectId: subjectInfo?.id || subj,
         hours: hrs.toFixed(1),
         percentage: Math.round(pct),
-        color: subjectInfo?.hexColor || '#14B8A6',
+        color: SUBJECT_CHART_COLORS[subjectInfo?.id || ''] || subjectInfo?.hexColor || '#14B8A6',
         startAngle,
         angle,
       };
     });
   }, [monthlyStats]);
 
-  const monthlyConicGradientStr = useMemo(() => {
-    if (monthlyDonutSegments.length === 0) {
-      return 'conic-gradient(#334155 0deg 360deg)';
-    }
-    let str = 'conic-gradient(';
-    monthlyDonutSegments.forEach((seg, idx) => {
-      const isLast = idx === monthlyDonutSegments.length - 1;
-      str += `${seg.color} ${seg.startAngle}deg ${seg.startAngle + seg.angle}deg${isLast ? '' : ', '}`;
-    });
-    str += ')';
-    return str;
-  }, [monthlyDonutSegments]);
-
   const subjectBreakdown = subjectBreakdownPeriod === 'week'
     ? {
       subjectHoursMap: weeklyStats.subjectHoursMap,
       subjectPlannedMap: weeklyStats.subjectPlannedMap,
       totalHours: weeklyStats.totalCompletedHours,
-      conicGradient: weeklyConicGradientStr,
     }
     : {
       subjectHoursMap: monthlyStats.subjectHoursMap,
       subjectPlannedMap: monthlyStats.subjectPlannedMap,
       totalHours: monthlyStats.totalMonthlyHours,
-      conicGradient: monthlyConicGradientStr,
     };
 
   React.useEffect(() => {
@@ -1324,19 +1425,12 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
               </div>
 
               {/* Donut graphic */}
-              <div className="flex flex-col items-center justify-center py-3">
-                <div
-                  className="relative w-36 h-36 rounded-full flex items-center justify-center shadow-inner transition-transform hover:scale-105"
-                  style={{ background: subjectBreakdown.conicGradient }}
-                >
-                  <div className="w-24 h-24 rounded-full bg-white dark:bg-[#1A2535] flex flex-col items-center justify-center text-center p-2 shadow-sm">
-                    <span className="text-xs font-bold text-slate-400">{isAr ? 'المجموع' : 'Total'}</span>
-                    <span className="text-xl font-black font-['Outfit'] text-slate-900 dark:text-white">
-                      {subjectBreakdown.totalHours.toFixed(1)}h
-                    </span>
-                  </div>
-                </div>
-              </div>
+              <StudyHoursDonut
+                segments={subjectBreakdownPeriod === 'week' ? weeklyDonutSegments : monthlyDonutSegments}
+                totalHours={subjectBreakdown.totalHours}
+                language={language}
+                centerLabel={isAr ? 'المجموع' : language === 'en' ? 'Total' : 'Total'}
+              />
 
               {/* List of active subjects */}
               <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
@@ -1355,7 +1449,7 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
                       className="w-full text-left flex items-center justify-between p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900/50 hover:bg-teal-500/10 dark:hover:bg-teal-500/10 border border-slate-200/60 dark:border-slate-800 cursor-pointer transition-all text-xs group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
                     >
                       <div className="flex items-center gap-2 min-w-0">
-                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: subj.hexColor }} />
+                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: SUBJECT_CHART_COLORS[subj.id] || subj.hexColor }} />
                         <span className="font-bold text-slate-800 dark:text-slate-200 group-hover:text-teal-600 dark:group-hover:text-teal-400 truncate">
                           {subj.name}
                         </span>
@@ -2083,19 +2177,12 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
               </div>
 
               {/* Monthly Donut Graphic */}
-              <div className="flex flex-col items-center justify-center py-3">
-                <div
-                  className="relative w-36 h-36 rounded-full flex items-center justify-center shadow-inner transition-transform hover:scale-105"
-                  style={{ background: monthlyConicGradientStr }}
-                >
-                  <div className="w-24 h-24 rounded-full bg-white dark:bg-[#1A2535] flex flex-col items-center justify-center text-center p-2 shadow-sm">
-                    <span className="text-xs font-bold text-slate-400">{isAr ? 'الشهر' : 'Mois'}</span>
-                    <span className="text-xl font-black font-['Outfit'] text-slate-900 dark:text-white">
-                      {monthlyStats.totalMonthlyHours.toFixed(1)}h
-                    </span>
-                  </div>
-                </div>
-              </div>
+              <StudyHoursDonut
+                segments={monthlyDonutSegments}
+                totalHours={monthlyStats.totalMonthlyHours}
+                language={language}
+                centerLabel={isAr ? 'الشهر' : language === 'en' ? 'Month' : 'Mois'}
+              />
 
               {/* Subject Breakdown List */}
               <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
@@ -2111,7 +2198,7 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
                       className="flex items-center justify-between p-2 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200/60 dark:border-slate-800 text-xs"
                     >
                       <div className="flex items-center gap-2 min-w-0">
-                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: subj.hexColor }} />
+                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: SUBJECT_CHART_COLORS[subj.id] || subj.hexColor }} />
                         <span className="font-bold text-slate-800 dark:text-slate-200 truncate">{subj.name}</span>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
