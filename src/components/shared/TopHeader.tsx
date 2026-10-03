@@ -4,8 +4,6 @@ import {
   PanelLeft,
   Plus,
   Clock,
-  Sun,
-  Moon,
   Zap,
   Keyboard,
   Sparkles,
@@ -39,7 +37,6 @@ interface TopHeaderProps {
   onRefresh?: () => void;
   settings: AppSettings;
   language: AppLanguage;
-  onToggleTheme: () => void;
   onToggleSound: () => void;
   daysRemaining: number;
   unreadNotificationCount?: number;
@@ -60,7 +57,6 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   onRefresh,
   settings,
   language,
-  onToggleTheme,
   onToggleSound,
   daysRemaining,
   unreadNotificationCount = 0,

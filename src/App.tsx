@@ -54,7 +54,6 @@ import {
   LessonItem,
   QuizItem,
   TaskItem,
-  ThemeMode,
   TimeBlock,
   WeeklyReviewData,
   MonthlyReviewData,
@@ -347,32 +346,16 @@ export default function App() {
     document.documentElement.lang = language;
   }, [language]);
 
-  // Theme Management (Dark / Light / System)
+  // Keep the application in its single supported dark appearance.
   useEffect(() => {
     const root = document.documentElement;
-    const theme = appData.settings.theme;
-
-    if (theme === 'dark') {
-      root.classList.add('dark');
-    } else if (theme === 'light') {
-      root.classList.remove('dark');
-    } else {
-      const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      if (systemDark) {
-        root.classList.add('dark');
-      } else {
-        root.classList.remove('dark');
-      }
+    root.classList.add('dark');
+    root.dataset.uiStyle = 'mybac';
+    root.style.colorScheme = 'dark';
+    if (appData.settings.theme !== 'dark' || appData.settings.uiStyle !== 'mybac') {
+      setAppData((prev) => ({ ...prev, settings: { ...prev.settings, theme: 'dark', uiStyle: 'mybac' } }));
     }
-  }, [appData.settings.theme]);
-
-  // Interface Style Management (Classic / MyBac Tracker skin)
-  // The whole skin lives in src/styles/mybac.css, scoped to this attribute, so
-  // switching back to 'classic' is a one-attribute change with no side effects.
-  useEffect(() => {
-    const style = appData.settings.uiStyle === 'mybac' ? 'mybac' : 'classic';
-    document.documentElement.dataset.uiStyle = style;
-  }, [appData.settings.uiStyle]);
+  }, [appData.settings.theme, appData.settings.uiStyle]);
 
   // Audio Engine Sound & Volume Sync
   useEffect(() => {
@@ -440,9 +423,6 @@ export default function App() {
       } else if (e.key === '?' || e.key === '/') {
         e.preventDefault();
         setIsShortcutsOpen((prev) => !prev);
-      } else if (e.key === 'd' || e.key === 'D') {
-        e.preventDefault();
-        handleToggleTheme();
       } else if (e.key === 'm' || e.key === 'M') {
         e.preventDefault();
         handleToggleSound();
@@ -471,7 +451,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [appData.settings.theme, appData.settings.chimeSoundEnabled, activeTab]);
+  }, [appData.settings.chimeSoundEnabled, activeTab]);
 
   // Calculate days remaining to Baccalaureate
   const daysRemaining = Math.max(
@@ -519,65 +499,6 @@ export default function App() {
     },
     [activeTab]
   );
-
-  // Settings & Theme Toggles with View Transitions
-  // `origin` = center of the clicked toggle button → the new theme expands as a
-  // circular reveal from the button. The old view stays fully visible beneath,
-  // so fixed elements like the mobile drawer never flicker.
-  const handleToggleTheme = (origin?: { x: number; y: number }) => {
-    chimePlayer.playChime('theme_toggle');
-    const current = appData.settings.theme;
-    const nextTheme: ThemeMode = current === 'dark' ? 'light' : 'dark';
-    const updateTheme = () => {
-      setAppData((prev) => ({
-        ...prev,
-        settings: { ...prev.settings, theme: nextTheme },
-      }));
-    };
-
-    const doc = document as any;
-    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-    if (!('startViewTransition' in doc) || prefersReducedMotion) {
-      updateTheme();
-      return;
-    }
-
-    try {
-      const transition = doc.startViewTransition({
-        update: updateTheme,
-        types: ['theme-toggle'],
-      });
-
-      transition.ready
-        ?.then(() => {
-          const x = origin?.x ?? window.innerWidth / 2;
-          const y = origin?.y ?? window.innerHeight / 2;
-          const endRadius = Math.hypot(
-            Math.max(x, window.innerWidth - x),
-            Math.max(y, window.innerHeight - y)
-          );
-          doc.documentElement.animate(
-            {
-              clipPath: [
-                `circle(0px at ${x}px ${y}px)`,
-                `circle(${endRadius}px at ${x}px ${y}px)`,
-              ],
-            },
-            {
-              duration: 500,
-              easing: 'cubic-bezier(0.16, 1, 0.3, 1)',
-              pseudoElement: '::view-transition-new(root)',
-            }
-          );
-        })
-        .catch(() => {
-          // Transition skipped — nothing to animate
-        });
-    } catch {
-      updateTheme();
-    }
-  };
 
   const handleToggleSound = () => {
     const nextVal = !appData.settings.chimeSoundEnabled;
@@ -1156,7 +1077,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen flex bg-slate-50 text-slate-900 dark:bg-[#0E1522] dark:text-slate-100 transition-colors font-['Inter']">
+    <div className="min-h-screen flex bg-slate-50 text-slate-900 dark:bg-[#0E1522] dark:text-slate-100 transition-colors font-sans">
       {/* Smooth trailing cursor — only revealed inside the planner task list */}
       <PlannerCursor />
 
@@ -1171,7 +1092,6 @@ export default function App() {
         settings={appData.settings}
         language={language}
         onChangeLanguage={handleChangeLanguage}
-        onToggleTheme={(origin) => handleToggleTheme(origin)}
         onToggleSound={handleToggleSound}
         daysRemaining={daysRemaining}
         counts={itemCounts}
@@ -1209,7 +1129,6 @@ export default function App() {
           onRefresh={handleRefreshApp}
           settings={appData.settings}
           language={language}
-          onToggleTheme={handleToggleTheme}
           onToggleSound={handleToggleSound}
           daysRemaining={daysRemaining}
           unreadNotificationCount={inAppNotifications.filter((n) => !n.read).length}

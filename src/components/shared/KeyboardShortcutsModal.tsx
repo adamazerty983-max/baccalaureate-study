@@ -22,7 +22,6 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
   const shortcuts = [
     { key: '1 - 9', desc: isAr ? 'التنقل السريع بين الأقسام والصفحات' : 'Naviguer rapidement entre les onglets' },
     { key: 'F', desc: isAr ? 'فتح أو تصغير وضع التركيز العميق (Focus Mode)' : 'Ouvrir / réduire le mode Concentration' },
-    { key: 'D', desc: isAr ? 'التبديل بين الوضع الليلي والنهاري' : 'Basculer le mode sombre / clair' },
     { key: 'M', desc: isAr ? 'تشغيل أو كتم المؤثرات الصوتية' : 'Activer / couper les effets sonores' },
     { key: '?', desc: isAr ? 'عرض نافذة اختصارات لوحة المفاتيح' : 'Afficher ce guide des raccourcis' },
     { key: 'Esc', desc: isAr ? 'إغلاق النوافذ المنبثقة والتركيز' : 'Fermer les fenêtres modales' },

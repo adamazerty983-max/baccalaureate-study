@@ -7,6 +7,11 @@ import './index.css';
 import './styles/mybac.css';
 import './styles/planner-cursor.css';
 
+// Apply the single supported appearance before React mounts to prevent a light-mode flash.
+document.documentElement.classList.add('dark');
+document.documentElement.dataset.uiStyle = 'mybac';
+document.documentElement.style.colorScheme = 'dark';
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ToastProvider>

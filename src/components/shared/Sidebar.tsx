@@ -8,8 +8,6 @@ import {
   FileText,
   CalendarClock,
   Settings,
-  Sun,
-  Moon,
   Brain,
   Calculator,
   Target,
@@ -73,7 +71,6 @@ interface SidebarProps {
   settings: AppSettings;
   language: AppLanguage;
   onChangeLanguage: (lang: AppLanguage) => void;
-  onToggleTheme: (origin?: { x: number; y: number }) => void;
   onToggleSound: () => void;
   daysRemaining: number;
   counts?: SidebarCounts;
@@ -91,7 +88,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   settings,
   language,
   onChangeLanguage,
-  onToggleTheme,
   onToggleSound,
   daysRemaining,
   counts,
@@ -412,28 +408,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
           )}
 
-          {/* Quick theme & sound icons */}
+          {/* Sound control */}
           <div className="flex items-center justify-around pt-1">
-            <button
-              onClick={(e) => {
-                // Report the button center so the theme change animates as a
-                // circular reveal growing from the button itself
-                const rect = e.currentTarget.getBoundingClientRect();
-                onToggleTheme({
-                  x: rect.left + rect.width / 2,
-                  y: rect.top + rect.height / 2,
-                });
-              }}
-              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors"
-              title="Basculer thème sombre / clair"
-            >
-              {settings.theme === 'dark' ? (
-                <Sun className="w-4 h-4 text-amber-400" />
-              ) : (
-                <Moon className="w-4 h-4 text-teal-400" />
-              )}
-            </button>
-
             <button
               onClick={onToggleSound}
               className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors"

@@ -50,6 +50,8 @@ export function loadStoredAppData(): FullAppData {
       settings: {
         ...INITIAL_SETTINGS,
         ...(parsed.settings || {}),
+        theme: 'dark',
+        uiStyle: 'mybac',
         notifications: {
           ...INITIAL_NOTIFICATIONS_PREFERENCES,
           ...(parsed.settings?.notifications || {}),

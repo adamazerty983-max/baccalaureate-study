@@ -2,8 +2,6 @@ import React, { useState } from 'react';
 import {
   Settings,
   Moon,
-  Sun,
-  Laptop,
   Calendar,
   Type,
   Download,
@@ -41,9 +39,8 @@ import {
   Award,
   Target,
   Info,
-  Palette,
 } from 'lucide-react';
-import { AppLanguage, AppSettings, FontSizeOption, FullAppData, ThemeMode, UiStyleMode } from '../../types';
+import { AppLanguage, AppSettings, FontSizeOption, FullAppData } from '../../types';
 import { BAC_SUBJECTS, BAC_TRACK_PRESETS, BacTrackPreset, getSubjectCoefficient, INITIAL_NOTIFICATIONS_PREFERENCES } from '../../utils/constants';
 import { exportAppDataToFile } from '../../utils/storage';
 import { chimePlayer } from '../../utils/audio';
@@ -211,8 +208,10 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
             </h1>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
               {isAr
-                ? 'تخصيص لغة الواجهة، المظهر، موعد الامتحان، وقاعدة البيانات السحابية'
-                : 'Personnalisez la langue, le thème, la date d\'examen et gérez la base de données cloud'}
+                ? 'خصص لغة الواجهة وموعد الامتحان وقاعدة البيانات السحابية؛ الوضع الداكن ثابت.'
+                : language === 'en'
+                  ? 'Set your language and exam date, and manage cloud sync. Dark mode stays on.'
+                  : 'Personnalisez la langue, la date d\'examen et la synchronisation cloud. Le mode sombre reste actif.'}
             </p>
           </div>
         </div>
@@ -385,99 +384,27 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
       <section className="bg-white dark:bg-[#1A2535] p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
         <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
           <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-            <Sun className="w-4 h-4 text-amber-500" />
+            <Moon className="w-4 h-4 text-cyan-400" />
             <span>{t('settings_dark')}</span>
           </h2>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {[
-            { id: 'light', label: 'Clair', icon: Sun },
-            { id: 'dark', label: 'Sombre', icon: Moon },
-            { id: 'system', label: 'Système', icon: Laptop },
-          ].map((item) => {
-            const Icon = item.icon;
-            const isSelected = settings.theme === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => onUpdateSettings({ theme: item.id as ThemeMode })}
-                className={`p-4 rounded-xl border flex items-center gap-3 transition-all ${isSelected
-                  ? 'border-teal-500 bg-teal-50/50 dark:bg-teal-950/40 shadow-xs'
-                  : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/40'
-                  }`}
-              >
-                <Icon className="w-5 h-5 text-teal-600 dark:text-teal-400" />
-                <span className="text-xs font-bold text-slate-900 dark:text-white">
-                  {item.label}
-                </span>
-              </button>
-            );
-          })}
+        <div className="flex items-center gap-4 rounded-2xl border border-cyan-400/20 bg-gradient-to-r from-cyan-500/10 via-blue-500/10 to-violet-500/10 p-4">
+          <span className="flex h-11 w-11 items-center justify-center rounded-xl border border-cyan-300/20 bg-cyan-400/10 text-cyan-300">
+            <Moon className="h-5 w-5" />
+          </span>
+          <div>
+            <p className="text-sm font-bold text-slate-900 dark:text-white">
+              {language === 'ar' ? 'الوضع الداكن مفعّل دائمًا' : language === 'en' ? 'Dark mode is always on' : 'Le mode sombre est toujours actif'}
+            </p>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              {language === 'ar' ? 'واجهة ليلية موحّدة مع ألوان سماوية وزرقاء زاهية.' : language === 'en' ? 'A consistent night interface with vivid cyan and blue accents.' : 'Une interface nocturne unifiée aux accents cyan et bleus lumineux.'}
+            </p>
+          </div>
+          <span className="ms-auto rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1 text-[10px] font-bold text-emerald-300">
+            {language === 'ar' ? 'مفعّل' : language === 'en' ? 'ON' : 'ACTIF'}
+          </span>
         </div>
-      </section>
-
-      {/* 2b. Interface Style — Classic vs MyBac Tracker skin */}
-      <section className="bg-white dark:bg-[#1A2535] p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-        <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-          <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-            <Palette className="w-4 h-4 text-teal-600 dark:text-teal-400" />
-            <span>{t('settings_style')}</span>
-          </h2>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {[
-            {
-              id: 'classic' as UiStyleMode,
-              label: t('settings_style_classic'),
-              sub: t('settings_style_classic_sub'),
-              swatch: ['#0F172A', '#14B8A6', '#E2E8F0'],
-            },
-            {
-              id: 'mybac' as UiStyleMode,
-              label: t('settings_style_mybac'),
-              sub: t('settings_style_mybac_sub'),
-              swatch: ['#134848', '#C89B3C', '#F2EDE4'],
-            },
-          ].map((item) => {
-            const isSelected = (settings.uiStyle ?? 'classic') === item.id;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => onUpdateSettings({ uiStyle: item.id })}
-                className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${isSelected
-                  ? 'border-teal-500 bg-teal-50/50 dark:bg-teal-950/40 shadow-xs'
-                  : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/40'
-                  }`}
-              >
-                <div className="flex items-center gap-2 mb-2">
-                  {item.swatch.map((color) => (
-                    <span
-                      key={color}
-                      className="w-4 h-4 rounded-full border border-black/10"
-                      style={{ backgroundColor: color }}
-                    />
-                  ))}
-                  {isSelected && (
-                    <CheckCircle2 className="w-4 h-4 text-teal-600 dark:text-teal-400 ml-auto" />
-                  )}
-                </div>
-                <div className="text-xs font-bold text-slate-900 dark:text-white">{item.label}</div>
-                <div className="text-[11px] text-slate-400 mt-1">{item.sub}</div>
-              </button>
-            );
-          })}
-        </div>
-
-        <p className="text-[11px] text-slate-400">
-          {language === 'ar'
-            ? 'يمكنك الرجوع إلى النمط الكلاسيكي في أي وقت من هنا.'
-            : language === 'en'
-              ? 'You can switch back to the classic look at any time from here.'
-              : 'Vous pouvez revenir au style classique à tout moment depuis ici.'}
-        </p>
       </section>
 
       {/* 3. Exam Date Cooldown */}

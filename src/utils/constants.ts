@@ -337,8 +337,8 @@ export const INITIAL_NOTIFICATIONS_PREFERENCES: NotificationPreferences = {
 
 export const INITIAL_SETTINGS: AppSettings = {
   language: 'fr',
-  theme: 'light',
-  uiStyle: 'classic',
+  theme: 'dark',
+  uiStyle: 'mybac',
   fontSize: 'base',
   baccalaureateDate: '2027-06-10T08:00:00',
   academicYearStartDate: '2026-09-07T08:00:00',

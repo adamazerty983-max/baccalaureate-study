@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="dark" data-ui-style="mybac" style="color-scheme: dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -11,7 +11,7 @@
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="manifest" href="/manifest.json" />
-    <meta name="theme-color" content="#0d9488" />
+    <meta name="theme-color" content="#07111f" />
 
     <!-- DNS Prefetch for faster external resources -->
     <link rel="dns-prefetch" href="https://fonts.googleapis.com">
@@ -22,26 +22,16 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,300..800&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   </head>
-  <body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 transition-colors duration-200 antialiased min-h-screen">
+  <body class="bg-slate-950 text-slate-100 transition-colors duration-200 antialiased min-h-screen">
     <div id="root">
       <style>
         :root {
-          --sk-bg: #f8fafc;
-          --sk-card: #ffffff;
-          --sk-border: #e2e8f0;
-          --sk-bone: #e2e8f0;
-          --sk-shimmer: rgba(255, 255, 255, 0.65);
-          --sk-accent: #0d9488;
-        }
-        @media (prefers-color-scheme: dark) {
-          :root {
-            --sk-bg: #0b1120;
-            --sk-card: #111827;
-            --sk-border: #1e293b;
-            --sk-bone: #1e293b;
-            --sk-shimmer: rgba(255, 255, 255, 0.04);
-            --sk-accent: #14b8a6;
-          }
+          --sk-bg: #07111f;
+          --sk-card: #0d1b2c;
+          --sk-border: #203752;
+          --sk-bone: #12243a;
+          --sk-shimmer: rgba(104, 199, 255, 0.08);
+          --sk-accent: #11c9e5;
         }
         .sk-shell {
           display: flex;
@@ -75,7 +65,7 @@
           width: 40px;
           height: 40px;
           border-radius: 12px;
-          background: linear-gradient(135deg, #0d9488, #10b981);
+          background: linear-gradient(135deg, #11c9e5, #287df0);
           display: flex;
           align-items: center;
           justify-content: center;
@@ -105,8 +95,8 @@
           overflow: hidden;
         }
         .sk-nav-item.active {
-          background: rgba(13, 148, 136, 0.15);
-          border: 1px solid rgba(13, 148, 136, 0.25);
+          background: rgba(17, 201, 229, 0.12);
+          border: 1px solid rgba(17, 201, 229, 0.24);
         }
         .sk-main {
           flex: 1;

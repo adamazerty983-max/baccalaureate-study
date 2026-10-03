@@ -1,59 +1,38 @@
-/* ============================================================================
-   MyBac Tracker skin — optional interface style
-   ----------------------------------------------------------------------------
-   Imported by App.tsx. Everything is scoped to `html[data-ui-style="mybac"]`,
-   so the default (classic) look is never touched. App.tsx sets the attribute
-   from `settings.uiStyle`, which the user picks in Settings ▸ Style de
-   l'interface.
-
-   Design tokens and signature details (cream background, zellige top stripe,
-   dashed cards, teal/gold/orange accents, Segoe UI typography) are ported
-   from the reference app App V3.html.
-   ========================================================================== */
-
-/* ---------------------------------------------------------------- 1. Tokens */
+/* MyBac night dashboard: one deep-blue visual language across every tab. */
 html[data-ui-style='mybac'] {
-  --mb-bg: #f2ede4;
-  --mb-bg2: #eae3d8;
-  --mb-sur: #ffffff;
-  --mb-sur2: #f7f3ed;
-  --mb-bor: #ddd5c8;
-  --mb-pri: #1a5f5f;
-  --mb-pr2: #134848;
-  --mb-prl: #e8f2f2;
-  --mb-acc: #c4622d;
-  --mb-gld: #c89b3c;
-  --mb-grn: #2a7a5a;
-  --mb-tx: #1c1c1c;
-  --mb-t2: #484848;
-  --mb-t3: #767676;
-  --mb-sh: 0 2px 12px rgba(0, 0, 0, 0.07);
-  --mb-r: 14px;
+  color-scheme: dark;
+  --mb-bg: #07111f;
+  --mb-bg2: #0a1728;
+  --mb-sur: #0d1b2c;
+  --mb-sur2: #12243a;
+  --mb-sur3: #172b43;
+  --mb-bor: #203752;
+  --mb-pri: #11c9e5;
+  --mb-pr2: #168de0;
+  --mb-prl: #112d48;
+  --mb-violet: #9875ff;
+  --mb-pink: #ed6ac4;
+  --mb-gld: #f2bc5a;
+  --mb-grn: #42d5a0;
+  --mb-tx: #eff6ff;
+  --mb-t2: #a8bad0;
+  --mb-t3: #7c93ae;
+  --mb-sh: 0 14px 36px rgba(0, 0, 0, 0.24);
+  --mb-r: 18px;
 }
 
-html.dark[data-ui-style='mybac'] {
-  --mb-bg: #0f1923;
-  --mb-bg2: #162130;
-  --mb-sur: #1c2b3a;
-  --mb-sur2: #1a2535;
-  --mb-bor: #2a3d50;
-  --mb-pri: #2a8f8f;
-  --mb-pr2: #1f6f6f;
-  --mb-prl: #0f2f2f;
-  --mb-acc: #d4733d;
-  --mb-gld: #d4a84b;
-  --mb-grn: #3a9a6a;
-  --mb-tx: #e8edf2;
-  --mb-t2: #9aaabb;
-  --mb-t3: #5a7080;
-  --mb-sh: 0 2px 12px rgba(0, 0, 0, 0.3);
-}
-
-/* ----------------------------------------------------------------- 2. Shell */
 html[data-ui-style='mybac'] body {
-  background: var(--mb-bg);
+  min-height: 100%;
+  background-color: var(--mb-bg);
+  background-image:
+    radial-gradient(ellipse at 15% -12%, rgba(15, 157, 205, 0.16), transparent 42rem),
+    radial-gradient(ellipse at 105% 22%, rgba(108, 79, 200, 0.1), transparent 35rem);
   color: var(--mb-tx);
-  font-family: 'Segoe UI', Tahoma, Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+}
+
+html[data-ui-style='mybac'] #root {
+  min-height: 100vh;
 }
 
 html[data-ui-style='mybac'] h1,
@@ -61,57 +40,42 @@ html[data-ui-style='mybac'] h2,
 html[data-ui-style='mybac'] h3,
 html[data-ui-style='mybac'] h4,
 html[data-ui-style='mybac'] h5,
-html[data-ui-style='mybac'] h6,
-html[data-ui-style='mybac'] .font-\[\'Outfit\'\] {
-  font-family: 'Segoe UI', Tahoma, Arial, Helvetica, sans-serif;
+html[data-ui-style='mybac'] h6 {
+  font-family: var(--font-display);
+  letter-spacing: -0.025em;
 }
 
-/* Zellige stripe — the signature 5px band pinned to the top of the window */
-html[data-ui-style='mybac'] body::before {
-  content: '';
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 5px;
-  z-index: 9999;
-  pointer-events: none;
-  background: repeating-linear-gradient(
-    90deg,
-    var(--mb-pri) 0,
-    var(--mb-pri) 20px,
-    var(--mb-gld) 20px,
-    var(--mb-gld) 40px,
-    var(--mb-acc) 40px,
-    var(--mb-acc) 60px,
-    var(--mb-pri) 60px,
-    var(--mb-pri) 80px
-  );
+/* Translate the existing utility palette into layered midnight-blue surfaces. */
+html.dark[data-ui-style='mybac'] [class~='bg-white'],
+html.dark[data-ui-style='mybac'] [class~='bg-white/95'],
+html.dark[data-ui-style='mybac'] [class~='bg-white/90'],
+html.dark[data-ui-style='mybac'] [class~='bg-white/80'],
+html.dark[data-ui-style='mybac'] [class~='bg-white/70'],
+html.dark[data-ui-style='mybac'] [class~='bg-white/60'] {
+  background-color: var(--mb-sur) !important;
 }
 
-/* -------------------------------------------------------------- 3. Surfaces */
-html[data-ui-style='mybac']:not(.dark) [class*='bg-white']:not([class*='hover:bg-white']) {
-  background-color: var(--mb-sur);
+html.dark[data-ui-style='mybac'] [class~='bg-slate-50'],
+html.dark[data-ui-style='mybac'] [class~='bg-slate-50/80'],
+html.dark[data-ui-style='mybac'] [class~='bg-slate-50/70'],
+html.dark[data-ui-style='mybac'] [class~='bg-slate-50/60'],
+html.dark[data-ui-style='mybac'] [class~='bg-gray-50'] {
+  background-color: var(--mb-bg2) !important;
 }
 
-html[data-ui-style='mybac']:not(.dark) [class*='bg-slate-50']:not([class*='hover:bg-slate-50']) {
-  background-color: var(--mb-bg);
+html.dark[data-ui-style='mybac'] [class~='bg-slate-100'],
+html.dark[data-ui-style='mybac'] [class~='bg-slate-100/80'],
+html.dark[data-ui-style='mybac'] [class~='bg-slate-100/70'],
+html.dark[data-ui-style='mybac'] [class~='bg-slate-100/60'],
+html.dark[data-ui-style='mybac'] [class~='bg-slate-200'],
+html.dark[data-ui-style='mybac'] [class~='bg-slate-200/80'] {
+  background-color: var(--mb-sur2) !important;
 }
 
-html[data-ui-style='mybac']:not(.dark) [class*='bg-slate-100']:not([class*='hover:bg-slate-100']) {
-  background-color: var(--mb-bg2);
-}
-
-html[data-ui-style='mybac']:not(.dark) [class*='bg-slate-200']:not([class*='hover:bg-slate-200']) {
-  background-color: var(--mb-bg2);
-}
-
-/* Dark theme: the app paints surfaces with hard-coded hexes — remap them all
-   onto the MyBac dark palette so no screen keeps a stray navy panel. */
 html.dark[data-ui-style='mybac'] [class*='dark:bg-[#1A2535]'],
 html.dark[data-ui-style='mybac'] [class*='dark:bg-[#111827]'],
-html.dark[data-ui-style='mybac'] [class*='dark:bg-[#1E293B]'],
 html.dark[data-ui-style='mybac'] [class*='dark:bg-[#111726]'],
+html.dark[data-ui-style='mybac'] [class*='dark:bg-[#1E293B]'],
 html.dark[data-ui-style='mybac'] [class*='dark:bg-[#192237]'],
 html.dark[data-ui-style='mybac'] [class*='dark:bg-[#151D2A]'] {
   background-color: var(--mb-sur) !important;
@@ -122,133 +86,163 @@ html.dark[data-ui-style='mybac'] [class*='dark:bg-[#182030]'] {
 }
 
 html.dark[data-ui-style='mybac'] [class*='dark:bg-[#0E1522]'],
-html.dark[data-ui-style='mybac'] [class*='dark:bg-[#0E182A]'] {
+html.dark[data-ui-style='mybac'] [class*='dark:bg-[#0E182A]'],
+html.dark[data-ui-style='mybac'] [class*='dark:bg-slate-950'] {
   background-color: var(--mb-bg) !important;
 }
 
-html.dark[data-ui-style='mybac'] [class*='dark:bg-slate-900']:not([class*='dark:hover:bg-slate-900']) {
+html.dark[data-ui-style='mybac'] [class*='dark:bg-slate-900']:not([class*='dark:hover:bg-slate-900']),
+html.dark[data-ui-style='mybac'] [class*='dark:bg-slate-800']:not([class*='dark:hover:bg-slate-800']) {
   background-color: var(--mb-sur2);
 }
 
-/* --------------------------------------------- 4. Dashed cards & 14px radius */
-html[data-ui-style='mybac'] [class*='rounded-2xl'][class*='border'],
-html[data-ui-style='mybac'] [class*='rounded-3xl'][class*='border'] {
-  border-radius: var(--mb-r) !important;
-  border-style: dashed !important;
-  border-color: var(--mb-bor) !important;
-  box-shadow: var(--mb-sh);
-}
-
-html[data-ui-style='mybac'] [class*='border-slate-200'],
-html[data-ui-style='mybac'] [class*='border-slate-100'],
-html[data-ui-style='mybac'] [class*='border-slate-800'] {
-  border-color: var(--mb-bor);
-}
-
-/* ------------------------------------------------------------ 5. Typography */
-html[data-ui-style='mybac']:not(.dark) [class*='text-slate-900']:not([class*='dark:text-slate-900']) {
-  color: var(--mb-tx);
-}
-
-html[data-ui-style='mybac']:not(.dark) [class*='text-slate-700'],
-html[data-ui-style='mybac']:not(.dark) [class*='text-slate-600'] {
-  color: var(--mb-t2);
-}
-
-html[data-ui-style='mybac']:not(.dark) [class*='text-slate-500'],
-html[data-ui-style='mybac']:not(.dark) [class*='text-slate-400'] {
-  color: var(--mb-t3);
-}
-
-html.dark[data-ui-style='mybac'] [class*='dark:text-slate-100'],
-html.dark[data-ui-style='mybac'] [class*='dark:text-white'] {
+/* Keep labels crisp on the dark canvas, including legacy non-dark utility colors. */
+html.dark[data-ui-style='mybac'] [class~='text-black'],
+html.dark[data-ui-style='mybac'] [class~='text-slate-950'],
+html.dark[data-ui-style='mybac'] [class~='text-slate-900'],
+html.dark[data-ui-style='mybac'] [class~='text-gray-900'],
+html.dark[data-ui-style='mybac'] [class~='text-slate-800'] {
   color: var(--mb-tx) !important;
 }
 
-html.dark[data-ui-style='mybac'] [class*='dark:text-slate-400'] {
+html.dark[data-ui-style='mybac'] [class~='text-slate-700'],
+html.dark[data-ui-style='mybac'] [class~='text-slate-600'],
+html.dark[data-ui-style='mybac'] [class~='text-gray-700'],
+html.dark[data-ui-style='mybac'] [class~='text-gray-600'] {
+  color: #c1d0e2 !important;
+}
+
+html.dark[data-ui-style='mybac'] [class~='text-slate-500'],
+html.dark[data-ui-style='mybac'] [class~='text-slate-400'],
+html.dark[data-ui-style='mybac'] [class~='text-gray-500'],
+html.dark[data-ui-style='mybac'] [class~='text-gray-400'] {
   color: var(--mb-t2) !important;
 }
 
-/* ------------------------------------------------- 6. Sidebar & top header */
-html[data-ui-style='mybac'] aside[class*='bg-[#0F172A]'] {
-  background-color: var(--mb-pr2) !important;
+html.dark[data-ui-style='mybac'] [class*='dark:text-white'],
+html.dark[data-ui-style='mybac'] [class*='dark:text-slate-100'] {
+  color: var(--mb-tx) !important;
 }
 
-html[data-ui-style='mybac'] aside [class*='border-slate-800'] {
-  border-color: rgba(255, 255, 255, 0.1) !important;
+html.dark[data-ui-style='mybac'] [class*='dark:text-slate-400'],
+html.dark[data-ui-style='mybac'] [class*='dark:text-slate-300'] {
+  color: var(--mb-t2) !important;
 }
 
-html[data-ui-style='mybac'] header[class*='sticky'] {
-  background-color: var(--mb-sur2) !important;
-  border-bottom: 1px solid var(--mb-bor) !important;
+/* The reference's signature cyan and blue focus colors unify navigation and controls. */
+html.dark[data-ui-style='mybac'] [class*='dark:text-teal-400'],
+html.dark[data-ui-style='mybac'] [class*='dark:text-cyan-400'] {
+  color: var(--mb-pri) !important;
 }
 
-/* ------------------------------------------------- 7. Flat teal action tint */
-/* Action buttons: the reference style is deliberately flat, so their gradients
-   are replaced by the solid MyBac teal. Scoped to <button> on purpose —
-   surface gradients on cards must survive (see below). */
-html[data-ui-style='mybac'] button[class*='bg-gradient-to-'] {
-  background-image: none !important;
-  background-color: var(--mb-pri) !important;
-  box-shadow: none !important;
-}
-
-/* Dark "hero" panels (countdown, streak, goals/average headers): their navy
-   gradient becomes the MyBac deep-teal gradient. White text stays readable. */
-html[data-ui-style='mybac'] [class*='from-[#091120]'],
-html[data-ui-style='mybac'] [class*='from-teal-900'] {
-  background-image: linear-gradient(135deg, var(--mb-pr2) 0%, var(--mb-pri) 100%) !important;
-}
-
-/* Flat dark hero card (Tasks streak panel) — same treatment as the gradients
-   above so every hero panel shares one MyBac identity. */
-html[data-ui-style='mybac'] [class*='bg-[#131F24]'] {
-  background-color: var(--mb-pr2) !important;
-  border-color: var(--mb-pri) !important;
-}
-
-/* Light card surfaces (white → tinted gradient) become the flat cream surface */
-html[data-ui-style='mybac']:not(.dark) [class*='from-white'] {
-  background-image: none !important;
-  background-color: var(--mb-sur) !important;
-}
-
-/* Same for their dark-theme counterpart */
-html.dark[data-ui-style='mybac'] [class*='dark:from-[#0E1726]'],
-html.dark[data-ui-style='mybac'] [class*='dark:from-[#0D1525]'],
-html.dark[data-ui-style='mybac'] [class*='dark:from-slate-900'] {
-  background-image: none !important;
-  background-color: var(--mb-sur) !important;
-}
-
-/* ------------------------------------------------------------- 8. Controls */
-html[data-ui-style='mybac'] input:not([type='range']):not([type='checkbox']),
-html[data-ui-style='mybac'] select,
-html[data-ui-style='mybac'] textarea {
-  background-color: var(--mb-sur2) !important;
+html.dark[data-ui-style='mybac'] [class*='border-slate-100'],
+html.dark[data-ui-style='mybac'] [class*='border-slate-200'],
+html.dark[data-ui-style='mybac'] [class*='border-slate-700'],
+html.dark[data-ui-style='mybac'] [class*='border-slate-800'],
+html.dark[data-ui-style='mybac'] [class*='dark:border-white/'] {
   border-color: var(--mb-bor) !important;
-  border-radius: var(--mb-r) !important;
-  color: var(--mb-tx);
 }
 
-html[data-ui-style='mybac'] input:focus,
-html[data-ui-style='mybac'] select:focus,
-html[data-ui-style='mybac'] textarea:focus {
-  border-color: var(--mb-pri) !important;
-  outline: none;
+html.dark[data-ui-style='mybac'] aside[class*='bg-[#0F172A]'] {
+  background-color: #06101e !important;
+  border-color: rgba(112, 163, 209, 0.18) !important;
+  box-shadow: 12px 0 48px rgba(0, 0, 0, 0.18);
 }
 
-/* ------------------------------------------------------------ 9. Scrollbar */
-html[data-ui-style='mybac'] ::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+html.dark[data-ui-style='mybac'] aside > div:first-child,
+html.dark[data-ui-style='mybac'] aside > div:last-child {
+  border-color: rgba(112, 163, 209, 0.16) !important;
 }
 
-html[data-ui-style='mybac'] ::-webkit-scrollbar-track {
-  background: transparent;
+html.dark[data-ui-style='mybac'] aside > div:last-child {
+  background: #081423 !important;
 }
 
-html[data-ui-style='mybac'] ::-webkit-scrollbar-thumb {
-  background: var(--mb-bor);
-  border-radius: 2px;
+html.dark[data-ui-style='mybac'] aside button[class*='from-teal-600'] {
+  background-image: linear-gradient(110deg, #08b8d2 0%, #287df0 100%) !important;
+  box-shadow: 0 8px 22px rgba(24, 153, 225, 0.22) !important;
+}
+
+html.dark[data-ui-style='mybac'] header[class*='sticky'] {
+  background: rgba(10, 23, 40, 0.91) !important;
+  border-color: rgba(94, 138, 184, 0.2) !important;
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+
+html.dark[data-ui-style='mybac'] button[class*='bg-teal-600'],
+html.dark[data-ui-style='mybac'] button[class*='from-teal-500'] {
+  background-color: #0eaecb;
+  box-shadow: 0 7px 22px rgba(13, 178, 216, 0.18);
+}
+
+/* Refined surfaces: quiet borders, glass depth, and restrained hover feedback. */
+html.dark[data-ui-style='mybac'] [class*='rounded-2xl'][class*='border'],
+html.dark[data-ui-style='mybac'] [class*='rounded-3xl'][class*='border'] {
+  border-style: solid !important;
+  border-color: var(--mb-bor);
+}
+
+html.dark[data-ui-style='mybac'] .bento-card {
+  border-color: rgba(92, 145, 194, 0.22) !important;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.2), inset 0 1px rgba(197, 230, 255, 0.035);
+}
+
+html.dark[data-ui-style='mybac'] .bento-card:hover {
+  border-color: rgba(40, 195, 224, 0.38) !important;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.24), 0 0 28px rgba(18, 170, 213, 0.07);
+}
+
+html.dark[data-ui-style='mybac'] input:not([type='range']):not([type='checkbox']),
+html.dark[data-ui-style='mybac'] select,
+html.dark[data-ui-style='mybac'] textarea {
+  color-scheme: dark;
+  background-color: var(--mb-bg2) !important;
+  border-color: var(--mb-bor) !important;
+}
+
+html.dark[data-ui-style='mybac'] input::placeholder,
+html.dark[data-ui-style='mybac'] textarea::placeholder {
+  color: #758ba5;
+}
+
+html.dark[data-ui-style='mybac'] input:focus-visible,
+html.dark[data-ui-style='mybac'] select:focus-visible,
+html.dark[data-ui-style='mybac'] textarea:focus-visible,
+html.dark[data-ui-style='mybac'] button:focus-visible,
+html.dark[data-ui-style='mybac'] a:focus-visible {
+  outline: 2px solid var(--mb-pri);
+  outline-offset: 2px;
+}
+
+html.dark[data-ui-style='mybac'] ::selection {
+  color: #03101d;
+  background: rgba(28, 209, 234, 0.74);
+}
+
+html.dark[data-ui-style='mybac'] ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+html.dark[data-ui-style='mybac'] ::-webkit-scrollbar-track {
+  background: #081423;
+}
+
+html.dark[data-ui-style='mybac'] ::-webkit-scrollbar-thumb {
+  background: #29435f;
+  border: 2px solid #081423;
+  border-radius: 999px;
+}
+
+html.dark[data-ui-style='mybac'] ::-webkit-scrollbar-thumb:hover {
+  background: #3c6288;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.dark[data-ui-style='mybac'] *,
+  html.dark[data-ui-style='mybac'] *::before,
+  html.dark[data-ui-style='mybac'] *::after {
+    scroll-behavior: auto !important;
+  }
 }
