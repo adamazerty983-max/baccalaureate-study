@@ -698,6 +698,8 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
   const [dragCurrentY, setDragCurrentY] = useState<number>(0);
   const [dragStartMinutes, setDragStartMinutes] = useState<number>(360); // 06:00
   const [dragCurrentMinutes, setDragCurrentMinutes] = useState<number>(420); // 07:00
+  // The window-level mouseup handler reads this ref so its drag range never goes stale.
+  const dragSelectionRef = useRef({ isDragging: false, startMinutes: 360, currentMinutes: 420 });
 
   // Active block drag/move/resize state
   const [activeMove, setActiveMove] = useState<ActiveMoveState | null>(null);
@@ -1020,7 +1022,8 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
           prev ? { ...prev, currentStartMinutes: boundedStart, durationMinutes: newDuration } : null
         );
       }
-    } else if (isDragging) {
+    } else if (dragSelectionRef.current.isDragging) {
+      dragSelectionRef.current.currentMinutes = mins;
       setDragCurrentY(relativeY);
       setDragCurrentMinutes(mins);
     }
@@ -1040,6 +1043,7 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
     const relativeY = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
 
     const mins = pixelOffsetToMinutes(relativeY);
+    dragSelectionRef.current = { isDragging: true, startMinutes: mins, currentMinutes: mins };
     setIsDragging(true);
     setDragStartY(relativeY);
     setDragCurrentY(relativeY);
@@ -1096,12 +1100,14 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
       return;
     }
 
-    if (!isDragging) return;
+    const dragSelection = dragSelectionRef.current;
+    if (!dragSelection.isDragging) return;
+    dragSelectionRef.current.isDragging = false;
     setIsDragging(false);
 
     // Compute start and end minutes
-    const startMins = Math.min(dragStartMinutes, dragCurrentMinutes);
-    const rawEndMins = Math.max(dragStartMinutes, dragCurrentMinutes);
+    const startMins = Math.min(dragSelection.startMinutes, dragSelection.currentMinutes);
+    const rawEndMins = Math.max(dragSelection.startMinutes, dragSelection.currentMinutes);
 
     // A quick click (no actual drag) keeps the 1-hour default. A deliberate but
     // short drag is clamped up to the 15-minute minimum instead of being
@@ -1151,7 +1157,7 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
   // Global mouseup listener + stuck-drag rescue
   useEffect(() => {
     const handleGlobalMouseUp = () => {
-      if (isDragging || activeMove) {
+      if (dragSelectionRef.current.isDragging || activeMove) {
         handleGridMouseUp();
       }
     };
@@ -1159,6 +1165,7 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
     // swallow the mouseup, which left a phantom selection box stuck on the grid
     // with the drag state still armed.
     const handleCancelDrag = () => {
+      dragSelectionRef.current.isDragging = false;
       setIsDragging(false);
       setActiveMove(null);
     };
@@ -1168,7 +1175,7 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
       window.removeEventListener('mouseup', handleGlobalMouseUp);
       window.removeEventListener('blur', handleCancelDrag);
     };
-  }, [isDragging, activeMove]);
+  }, [activeMove]);
 
   // Dismiss modal or subject dropdown on Escape key
   useEffect(() => {
