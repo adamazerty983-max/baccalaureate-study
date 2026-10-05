@@ -49,12 +49,12 @@ interface TimeBlockingTabProps {
   onAddTimeBlock: (block: Omit<TimeBlock, 'id'>) => void;
   onUpdateTimeBlock: (block: TimeBlock) => void;
   onDeleteTimeBlock: (blockId: string) => void;
-  onToggleComplete: (blockId: string, occurrenceDateKey: string, isCompleted: boolean) => void;
+  onToggleComplete: (blockId: string, occurrenceDateKey: string, isCompleted: boolean, useSelectedDate?: boolean) => void;
 }
 
 // 05:00 to 24:00 (half-hour markers)
 export const TIMETABLE_START_HOUR = 5; // 05:00
-export const TIMETABLE_END_HOUR = 24; // 24:00 (midnight)
+export const TIMETABLE_END_HOUR = 26; // 02:00 the following day
 export const SLOT_HEIGHT_PX = 46; // height for 30 minutes (92px per hour)
 export const PIXELS_PER_MINUTE = (SLOT_HEIGHT_PX * 2) / 60; // ~1.533 px per minute
 
@@ -68,7 +68,7 @@ const DAYS_OF_WEEK = [
   { id: 0, name: 'Dimanche', nameAr: 'الأحد', short: 'Dim', shortAr: 'أحد' },
 ];
 
-// Generate 30-min markers from 05:00 to 24:00
+// Generate 30-min markers from 05:00 to 02:00 the following day
 const TIME_MARKERS: string[] = [];
 for (let h = TIMETABLE_START_HOUR; h <= TIMETABLE_END_HOUR; h++) {
   const hh = String(h).padStart(2, '0');
@@ -87,10 +87,19 @@ const timeToMinutes = (timeStr: string): number => {
 
 // Helper to convert total minutes from midnight to "HH:mm"
 const minutesToTime = (minutes: number): string => {
-  const safeMins = Math.max(0, Math.min(24 * 60, minutes));
+  const safeMins = Math.max(0, Math.min(TIMETABLE_END_HOUR * 60, minutes));
   const h = Math.floor(safeMins / 60);
   const m = safeMins % 60;
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+};
+
+const minutesToClockInput = (minutes: number): string => minutesToTime(minutes % (24 * 60));
+const displayTimelineTime = (minutes: number): string => minutesToClockInput(minutes);
+
+const clockInputToTimelineMinutes = (clockValue: string, referenceMinutes: number): number => {
+  const clockMinutes = timeToMinutes(clockValue);
+  const dayOffset = referenceMinutes >= 24 * 60 || (referenceMinutes >= 23 * 60 && clockMinutes < 5 * 60) ? 24 * 60 : 0;
+  return clockMinutes + dayOffset;
 };
 
 // Helper to format duration string: "2h 45min" or "45 min" or "1h" or "1h 05min"
@@ -721,6 +730,8 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
   // Selected Day Pill in modal: 'today' | 'tomorrow' | 'week' | 'custom'
   const [modalDayOption, setModalDayOption] = useState<'today' | 'tomorrow' | 'week' | 'custom'>('today');
   const [modalCustomDay, setModalCustomDay] = useState<number>(() => new Date().getDay());
+  const [modalExactDateKey, setModalExactDateKey] = useState<string | null>(null);
+  const [modalPreserveSchedule, setModalPreserveSchedule] = useState(false);
 
   // Time & Duration inside Modal
   const [modalStartMinutes, setModalStartMinutes] = useState(360); // 06:00
@@ -1120,6 +1131,8 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
     }
 
     setEditingBlockId(null);
+    setModalExactDateKey(null);
+    setModalPreserveSchedule(false);
     setModalStartMinutes(startMins);
     setModalDurationMinutes(duration);
     setTaskTitle('');
@@ -1139,6 +1152,8 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
   // Open direct Add Task modal with clean empty fields
   const handleOpenAddNewBlock = (defaultStartMinutes = 480) => {
     setEditingBlockId(null);
+    setModalExactDateKey(null);
+    setModalPreserveSchedule(false);
     setModalStartMinutes(defaultStartMinutes);
     setModalDurationMinutes(60);
     setTaskTitle('');
@@ -1233,6 +1248,8 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
   // Open Edit Dialog for a block
   const handleOpenEditBlock = (block: TimeBlock) => {
     setEditingBlockId(block.id);
+    setModalExactDateKey(null);
+    setModalPreserveSchedule(false);
     setTaskTitle(block.title);
     setTaskSubject(block.subject || '');
     setSubjectError('');
@@ -1262,6 +1279,33 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
     setIsModalOpen(true);
   };
 
+  const handleOpenHistoryAdd = (dateKey: string) => {
+    const date = new Date(`${dateKey}T12:00:00`);
+    setSelectedDay(date.getDay());
+    setEditingBlockId(null);
+    setModalExactDateKey(dateKey);
+    setModalPreserveSchedule(false);
+    setModalStartMinutes(8 * 60);
+    setModalDurationMinutes(60);
+    setTaskTitle('');
+    setTaskSubject('');
+    setSubjectError('');
+    setTaskNotes('');
+    setNaturalInput('');
+    setModalDayOption('custom');
+    setModalCustomDay(date.getDay());
+    setModalMode('precision');
+    setIsCustomTimeExpanded(false);
+    setIsDetailsExpanded(false);
+    setIsModalOpen(true);
+  };
+
+  const handleOpenHistoryEdit = (block: TimeBlock) => {
+    handleOpenEditBlock(block);
+    setModalExactDateKey(block.dateKey || null);
+    setModalPreserveSchedule(true);
+  };
+
   // -------------------------------------------------------------
   // MODAL QUICK ACTIONS
   // -------------------------------------------------------------
@@ -1287,25 +1331,25 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
   };
 
   const handleDurationPresetClick = (minutes: number) => {
-    setModalDurationMinutes(minutes);
+    setModalDurationMinutes(Math.min(minutes, TIMETABLE_END_HOUR * 60 - modalStartMinutes));
   };
 
   const handleSetHours = (newHours: number) => {
     const h = Math.max(0, Math.min(12, newHours));
     const m = modalDurationMinutes % 60;
-    const total = Math.max(1, h * 60 + m);
+    const total = Math.max(1, Math.min(TIMETABLE_END_HOUR * 60 - modalStartMinutes, h * 60 + m));
     setModalDurationMinutes(total);
   };
 
   const handleSetMinutes = (newMins: number) => {
     const h = Math.floor(modalDurationMinutes / 60);
     const m = Math.max(0, Math.min(59, newMins));
-    const total = Math.max(1, h * 60 + m);
+    const total = Math.max(1, Math.min(TIMETABLE_END_HOUR * 60 - modalStartMinutes, h * 60 + m));
     setModalDurationMinutes(total);
   };
 
   const handleAdjustMinutesDelta = (delta: number) => {
-    setModalDurationMinutes((prev) => Math.max(1, Math.min(24 * 60, prev + delta)));
+    setModalDurationMinutes((prev) => Math.max(1, Math.min(TIMETABLE_END_HOUR * 60 - modalStartMinutes, prev + delta)));
     chimePlayer.playChime('click');
   };
 
@@ -1383,7 +1427,7 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
       subjectToValidate
     ).trim();
 
-    const targetDateKey = computeDateKeyForDay(targetDay);
+    const targetDateKey = modalExactDateKey || computeDateKeyForDay(targetDay);
 
     if (editingBlockId) {
       const existing = timeBlocks.find((b) => b.id === editingBlockId);
@@ -1392,8 +1436,8 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
           ...existing,
           title: finalTitle,
           subject: subjectToValidate,
-          dayOfWeek: targetDay,
-          dateKey: targetDateKey,
+          dayOfWeek: modalPreserveSchedule ? existing.dayOfWeek : targetDay,
+          dateKey: modalPreserveSchedule ? existing.dateKey : targetDateKey,
           startTime: startStr,
           endTime: endStr,
           notes: taskNotes.trim(),
@@ -1401,7 +1445,7 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
       }
     } else {
       onAddTimeBlock({
-        dayOfWeek: targetDay,
+        dayOfWeek: modalExactDateKey ? new Date(`${modalExactDateKey}T12:00:00`).getDay() : targetDay,
         dateKey: targetDateKey,
         startTime: startStr,
         endTime: endStr,
@@ -1416,6 +1460,8 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
 
     setIsModalOpen(false);
     setEditingBlockId(null);
+    setModalExactDateKey(null);
+    setModalPreserveSchedule(false);
     setIsSubjectDropdownOpen(false);
     setSubjectError('');
     chimePlayer.playChime('add');
@@ -1443,7 +1489,7 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
 
   // Handler for dropping a sticker directly onto the timetable at a specific start time
   const handleDropSticker = (sticker: ActivitySticker, startMinutes: number) => {
-    const endM = Math.min(24 * 60, startMinutes + sticker.defaultDurationMinutes);
+    const endM = Math.min(TIMETABLE_END_HOUR * 60, startMinutes + sticker.defaultDurationMinutes);
     const startStr = minutesToTime(startMinutes);
     const endStr = minutesToTime(endM);
 
@@ -1703,7 +1749,13 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
         </div>
       </div>
 
-      {isStudyHistoryOpen && <PlannerHistoryCalendar timeBlocks={timeBlocks} language={language} />}
+      {isStudyHistoryOpen && <PlannerHistoryCalendar
+        timeBlocks={timeBlocks}
+        language={language}
+        onAddBlock={handleOpenHistoryAdd}
+        onEditBlock={handleOpenHistoryEdit}
+        onToggleComplete={onToggleComplete}
+      />}
 
       {/* 2. "ACTIVITÉS" STICKERS BAR (DRAG & DROP TO TIMETABLE) */}
       <div className="bg-white/90 dark:bg-[#111827]/95 p-3 sm:p-3.5 rounded-3xl border border-slate-200/80 dark:border-white/[0.08] shadow-xs flex items-center justify-between gap-3 overflow-x-auto no-scrollbar">
@@ -1880,9 +1932,9 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                 {/* Left Time label */}
                 <div className="w-16 shrink-0 text-right pr-4 font-mono text-xs font-medium">
                   {isHour ? (
-                    <span className="font-bold text-slate-700 dark:text-slate-300">{time}</span>
+                    <span className="font-bold text-slate-700 dark:text-slate-300">{displayTimelineTime(timeToMinutes(time))}</span>
                   ) : (
-                    <span className="text-slate-400 dark:text-slate-600 text-[10px]">{time}</span>
+                    <span className="text-slate-400 dark:text-slate-600 text-[10px]">{displayTimelineTime(timeToMinutes(time))}</span>
                   )}
                 </div>
 
@@ -1896,16 +1948,16 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
           })}
 
           {/* ─── REAL-TIME "NOW LINE" CURRENT TIME MARKER (App V3) ─── */}
-          {currentTimeMinutes >= TIMETABLE_START_HOUR * 60 && currentTimeMinutes < TIMETABLE_END_HOUR * 60 && (
+          {(currentTimeMinutes < 2 * 60 ? currentTimeMinutes + 24 * 60 : currentTimeMinutes) >= TIMETABLE_START_HOUR * 60 && (currentTimeMinutes < 2 * 60 ? currentTimeMinutes + 24 * 60 : currentTimeMinutes) < TIMETABLE_END_HOUR * 60 && (
             <div
-              style={{ top: `${minutesToPixelOffset(currentTimeMinutes)}px` }}
+              style={{ top: `${minutesToPixelOffset(currentTimeMinutes < 2 * 60 ? currentTimeMinutes + 24 * 60 : currentTimeMinutes)}px` }}
               className="absolute inset-x-0 flex items-center pointer-events-none z-25 -translate-y-1/2"
             >
               {/* Left: Current time badge */}
               <div className="w-16 shrink-0 text-right pr-2">
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-500 text-white font-mono text-[10px] font-black shadow-md animate-pulse">
                   <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
-                  {minutesToTime(currentTimeMinutes)}
+                  {displayTimelineTime(currentTimeMinutes < 2 * 60 ? currentTimeMinutes + 24 * 60 : currentTimeMinutes)}
                 </span>
               </div>
               {/* Red glowing dot */}
@@ -2016,9 +2068,9 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                     </span>
                   </div>
                   <div className="text-[11px] font-mono font-bold text-teal-700 dark:text-teal-300">
-                    {minutesToTime(stickerDropMinutes)} –{' '}
-                    {minutesToTime(
-                      Math.min(24 * 60, stickerDropMinutes + draggingSticker.defaultDurationMinutes)
+                    {displayTimelineTime(stickerDropMinutes)} –{' '}
+                    {displayTimelineTime(
+                      Math.min(TIMETABLE_END_HOUR * 60, stickerDropMinutes + draggingSticker.defaultDurationMinutes)
                     )}
                   </div>
                 </div>
@@ -2061,10 +2113,10 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
               ? getStickerTheme(stickerData.type)
               : getSubjectCardTheme(block.subject);
 
-            const startTimeFormatted = isBeingMoved ? minutesToTime(startM) : block.startTime;
+            const startTimeFormatted = displayTimelineTime(startM);
             const endTimeFormatted = isBeingMoved
-              ? minutesToTime(startM + duration)
-              : block.endTime;
+              ? displayTimelineTime(startM + duration)
+              : displayTimelineTime(timeToMinutes(block.endTime));
 
             return (
               <div
@@ -2700,7 +2752,7 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                       </label>
                       <div className="flex items-center gap-1.5">
                         <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-white/5 px-2 py-0.5 rounded-lg border border-slate-200/60 dark:border-white/10 hidden sm:inline">
-                          {minutesToTime(modalStartMinutes)} ➔ {minutesToTime(modalStartMinutes + modalDurationMinutes)}
+                          {displayTimelineTime(modalStartMinutes)} ➔ {displayTimelineTime(modalStartMinutes + modalDurationMinutes)}
                         </span>
                         <span className="font-mono text-xs font-black text-teal-700 dark:text-teal-300 px-2 py-0.5 rounded-lg bg-teal-500/10 border border-teal-500/20">
                           {isAr ? formatDurationArabic(modalDurationMinutes) : formatDurationLabel(modalDurationMinutes)}
@@ -3113,10 +3165,11 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                               </label>
                               <input
                                 type="time"
-                                value={minutesToTime(modalStartMinutes)}
+                                value={minutesToClockInput(modalStartMinutes)}
                                 onChange={(e) => {
-                                  const mins = timeToMinutes(e.target.value);
+                                  const mins = clockInputToTimelineMinutes(e.target.value, modalStartMinutes);
                                   setModalStartMinutes(mins);
+                                  setModalDurationMinutes((duration) => Math.min(duration, TIMETABLE_END_HOUR * 60 - mins));
                                 }}
                                 className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#111827] border border-slate-200 dark:border-white/10 text-slate-900 dark:text-slate-100 font-mono font-bold text-xs focus:outline-none focus:border-teal-500"
                               />
@@ -3128,14 +3181,13 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                               </label>
                               <input
                                 type="time"
-                                value={minutesToTime(modalStartMinutes + modalDurationMinutes)}
+                                value={minutesToClockInput(modalStartMinutes + modalDurationMinutes)}
                                 onChange={(e) => {
-                                  const endMins = timeToMinutes(e.target.value);
-                                  if (endMins > modalStartMinutes) {
-                                    setModalDurationMinutes(Math.max(1, endMins - modalStartMinutes));
-                                  } else if (endMins < modalStartMinutes) {
-                                    setModalDurationMinutes(Math.max(1, 24 * 60 - modalStartMinutes + endMins));
-                                  }
+                                  const clockMinutes = timeToMinutes(e.target.value);
+                                  const endMins = modalStartMinutes >= 24 * 60 || clockMinutes <= modalStartMinutes
+                                    ? clockMinutes + 24 * 60
+                                    : clockMinutes;
+                                  setModalDurationMinutes(Math.max(1, Math.min(TIMETABLE_END_HOUR * 60 - modalStartMinutes, endMins - modalStartMinutes)));
                                 }}
                                 className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#111827] border border-slate-200 dark:border-white/10 text-slate-900 dark:text-slate-100 font-mono font-bold text-xs focus:outline-none focus:border-teal-500"
                               />
@@ -3149,7 +3201,7 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                                 {isAr ? 'البداية' : 'Début'}
                               </span>
                               <span className="font-mono text-xs font-bold text-slate-900 dark:text-white">
-                                {minutesToTime(modalStartMinutes)}
+                                {displayTimelineTime(modalStartMinutes)}
                               </span>
                             </div>
 
@@ -3167,7 +3219,7 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                                 {isAr ? 'النهاية' : 'Fin'}
                               </span>
                               <span className="font-mono text-xs font-bold text-slate-900 dark:text-white">
-                                {minutesToTime(modalStartMinutes + modalDurationMinutes)}
+                                {displayTimelineTime(modalStartMinutes + modalDurationMinutes)}
                               </span>
                             </div>
                           </div>

@@ -21,8 +21,9 @@ function parseTimeToMinutes(t: string): number {
  */
 export function getTimeBlockDurationHours(b: { startTime: string; endTime: string }): number {
   const startM = parseTimeToMinutes(b.startTime);
-  const endM = parseTimeToMinutes(b.endTime);
-  if (endM <= startM) return 1;
+  let endM = parseTimeToMinutes(b.endTime);
+  if (endM < startM) endM += 24 * 60;
+  if (endM === startM) return 1;
   return Math.round(((endM - startM) / 60) * 100) / 100;
 }
 
