@@ -22,6 +22,10 @@ export default defineConfig(({ command }) => {
       reportCompressedSize: false,
       chunkSizeWarningLimit: 600,
       rollupOptions: {
+        input: {
+          main: path.resolve(__dirname, 'index.html'),
+          todo: path.resolve(__dirname, 'todo.html'),
+        },
         output: {
           manualChunks(id) {
             // Firebase ecosystem
@@ -40,18 +44,13 @@ export default defineConfig(({ command }) => {
             }
 
             // Animation libraries
-            if (id.includes('node_modules/motion') || id.includes('node_modules/canvas-confetti')) {
+            if (id.includes('node_modules/canvas-confetti')) {
               return 'vendor-animations';
             }
 
             // Lucide icons
             if (id.includes('node_modules/lucide-react')) {
               return 'vendor-icons';
-            }
-
-            // Google AI
-            if (id.includes('node_modules/@google/genai')) {
-              return 'vendor-ai';
             }
 
             // Other node_modules

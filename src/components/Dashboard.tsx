@@ -31,12 +31,14 @@ import {
   GraduationCap,
   Languages,
   AlertTriangle,
+  History,
 } from 'lucide-react';
 import { AppLanguage, FullAppData, HomeworkItem, QuizItem, TaskItem, TaskType } from '../types';
 import { BAC_SUBJECTS, getSubjectCoefficient } from '../utils/constants';
 import { TASK_TYPES_VISUAL, evaluateTaskUrgency } from '../utils/taskVisualConfig';
 import { StreakFlameCanvas } from './gamification/StreakFlameCanvas';
 import { DuolingoStreakFlame } from './gamification/DuolingoStreakFlame';
+import { StreakHistoryModal } from './gamification/StreakHistoryModal';
 import { ProgressRing } from './shared/ProgressRing';
 import { CalendarHeatmap } from './gamification/CalendarHeatmap';
 import { chimePlayer } from '../utils/audio';
@@ -168,6 +170,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [quickTaskPriority, setQuickTaskPriority] = useState<'urgent' | 'high' | 'medium' | 'low'>('high');
   const [quickTaskType, setQuickTaskType] = useState<TaskType>('homework');
   const [taskFilter, setTaskFilter] = useState<'all' | 'todo' | 'completed'>('all');
+  const [isStreakHistoryOpen, setIsStreakHistoryOpen] = useState(false);
 
   // Identify Urgent & Overdue Attention Tasks for Exam / Focus Period
   const urgentAttentionTasks = useMemo(() => {
@@ -616,6 +619,19 @@ export const Dashboard: React.FC<DashboardProps> = ({
               : 'bg-sky-500/15'
               }`}
           />
+
+          {/* Streak History Action Button (Red corner marked in Image 2) */}
+          <button
+            type="button"
+            onClick={() => setIsStreakHistoryOpen(true)}
+            className="absolute top-4 right-4 rtl:right-auto rtl:left-4 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 hover:border-amber-400/40 text-white text-xs font-bold transition-all hover:scale-105 active:scale-95 backdrop-blur-md shadow-lg cursor-pointer group/btn"
+            title={isAr ? 'عرض سجل السلاسل والتقويم' : language === 'fr' ? 'Historique des séries & calendrier' : 'Streak history & calendar'}
+          >
+            <History className="w-3.5 h-3.5 text-amber-400 group-hover/btn:rotate-[-45deg] transition-transform duration-200" />
+            <span className="text-[11px] font-extrabold tracking-wide">
+              {isAr ? 'سجل السلاسل' : language === 'fr' ? 'Historique' : 'Streak History'}
+            </span>
+          </button>
 
           {/* Flame + Streak Count */}
           <div className="relative z-10 flex flex-col items-center text-center w-full">
@@ -1797,6 +1813,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </div>
       )}
+
+      {/* Streak History & Calendar Modal */}
+      <StreakHistoryModal
+        isOpen={isStreakHistoryOpen}
+        onClose={() => setIsStreakHistoryOpen(false)}
+        appData={appData}
+        language={language}
+      />
     </div>
   );
 };

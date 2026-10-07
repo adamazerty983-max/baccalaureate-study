@@ -19,10 +19,9 @@ This project now includes **true background Web Push notifications** that work e
    - Sends subscription to backend
    - Provides API for scheduling/canceling notifications
 
-3. **Integration Layer** (`src/services/webPushIntegration.ts`)
-   - Hooks into existing notification triggers (tasks, Focus sessions, time blocks)
-   - Automatically schedules Web Push notifications
-   - Syncs with app data
+3. **Settings UI** (`src/components/shared/WebPushSettings.tsx`)
+   - Owns subscribe / unsubscribe / test-notification
+   - Calls `webPushService` directly
 
 4. **Service Worker** (`public/sw.js`)
    - Handles `push` events from the backend
@@ -40,13 +39,13 @@ This project now includes **true background Web Push notifications** that work e
 
 ```
 1. User enables Web Push in Settings
-   ↓
+   â†“
 2. Browser requests notification permission
-   ↓
+   â†“
 3. Client subscribes via PushManager.subscribe()
-   ↓
+   â†“
 4. Subscription sent to backend (POST /api/push/subscribe)
-   ↓
+   â†“
 5. Backend stores subscription with user ID
 ```
 
@@ -54,17 +53,17 @@ This project now includes **true background Web Push notifications** that work e
 
 ```
 1. User creates a task with due date/time
-   ↓
+   â†“
 2. scheduleWebPushForTask() called
-   ↓
+   â†“
 3. Backend schedules notification (POST /api/push/schedule)
-   ↓
+   â†“
 4. Backend setTimeout() waits until scheduled time
-   ↓
+   â†“
 5. Backend sends Web Push via webpush.sendNotification()
-   ↓
+   â†“
 6. Service Worker receives 'push' event
-   ↓
+   â†“
 7. Service Worker displays notification (even if app closed)
 ```
 
@@ -125,7 +124,7 @@ Schedule a push notification for a future time.
   "userId": "user@example.com",
   "payload": {
     "title": "Task Reminder: Study Math",
-    "body": "Subject: Mathematics • Due: 2024-01-15 at 18:00",
+    "body": "Subject: Mathematics â€¢ Due: 2024-01-15 at 18:00",
     "icon": "/original_icon_512.png",
     "data": {
       "tab": "tasks",
@@ -182,12 +181,12 @@ Already generated and added to `.env`:
 
 ```bash
 VAPID_PUBLIC_KEY=BMAij0w99HbEo-BkSF-bk-L1le-9K-zeQVmPxcBLQWKZqojlX1eTfjapzz0lYzUe_yBphjxRfSe0vPX66ysuPuY
-VAPID_PRIVATE_KEY=LV-qbw-HpWPyDjMgZYxXiOBkxFs6iPSZVJUf_n8fuqI
+VAPID_PRIVATE_KEY=<your-private-key>
 VAPID_SUBJECT=mailto:mybac-tracker@example.com
 VITE_VAPID_PUBLIC_KEY=BMAij0w99HbEo-BkSF-bk-L1le-9K-zeQVmPxcBLQWKZqojlX1eTfjapzz0lYzUe_yBphjxRfSe0vPX66ysuPuY
 ```
 
-**⚠️ IMPORTANT**: Keep `VAPID_PRIVATE_KEY` secret! Never commit it to public repositories.
+**âš ï¸ IMPORTANT**: Keep `VAPID_PRIVATE_KEY` secret! Never commit it to public repositories.
 
 ### Generate New Keys (Optional)
 
@@ -197,13 +196,13 @@ node scripts/generate-vapid-keys.js
 
 ## Hosting Requirements
 
-### ❌ Does NOT Work On:
+### âŒ Does NOT Work On:
 - **GitHub Pages** (static hosting, no backend)
 - **Netlify/Vercel** (static sites without serverless functions)
 - **Local file:// protocol**
 
-### ✅ Works On:
-- **Render.com** (free tier) - ⭐ Recommended
+### âœ… Works On:
+- **Render.com** (free tier) - â­ Recommended
 - **Railway.app** (free tier with credit)
 - **Fly.io** (free tier)
 - **Heroku** (paid)
@@ -228,7 +227,7 @@ node scripts/generate-vapid-keys.js
 3. **Set Environment Variables**
    ```
    VAPID_PUBLIC_KEY=BMAij0w99HbEo-BkSF-bk-L1le-9K-zeQVmPxcBLQWKZqojlX1eTfjapzz0lYzUe_yBphjxRfSe0vPX66ysuPuY
-   VAPID_PRIVATE_KEY=LV-qbw-HpWPyDjMgZYxXiOBkxFs6iPSZVJUf_n8fuqI
+   VAPID_PRIVATE_KEY=<your-private-key>
    VAPID_SUBJECT=mailto:mybac-tracker@example.com
    NODE_ENV=production
    ```
@@ -259,65 +258,53 @@ node scripts/generate-vapid-keys.js
 
 ## Usage in Code
 
-### Initialize Web Push
-
-```typescript
-import { webPushService } from './services/webPushService';
-import { initializeWebPush, syncWebPushNotifications } from './services/webPushIntegration';
-
-// On app initialization
-await initializeWebPush(userId);
-
-// Sync all pending notifications
-await syncWebPushNotifications(appData, userId);
-```
+> **Note:** scheduling is opt-in and user-driven. The app does *not* auto-push
+> reminders for every task or Focus session. The user subscribes in
+> **Settings ▸ Notifications**, and backend scheduling happens through
+> `POST /api/push/schedule`. In-app reminders come from
+> `src/services/notificationService.ts` and need no Web Push.
 
 ### Subscribe User
 
+The subscribe flow lives entirely in `WebPushSettings.tsx`:
+
 ```typescript
-// In Settings UI
+// src/components/shared/WebPushSettings.tsx
+await webPushService.init(userId);
 const success = await webPushService.subscribe();
-if (success) {
-  console.log('✅ Subscribed to Web Push');
-}
 ```
 
-### Schedule Task Notification
+### Send a test notification
 
 ```typescript
-import { scheduleWebPushForTask } from './services/webPushIntegration';
-
-// When task is created/updated
-await scheduleWebPushForTask(task, userId, language);
+// Backend
+await sendPushNotification(userId, {
+  title: 'Test',
+  body: 'Web Push is working',
+});
 ```
 
-### Schedule Focus Session End
+### Schedule a notification
 
 ```typescript
-import { scheduleWebPushForFocusSession } from './services/webPushIntegration';
+// Backend
+scheduleNotification(notificationId, userId, payload, scheduledTime);
 
-// When Focus session starts
-await scheduleWebPushForFocusSession(block, endTime, userId, language);
+// Cancel it
+cancelScheduledNotification(notificationId);
 ```
 
-### Cancel Notification
-
-```typescript
-import { cancelWebPushForTask } from './services/webPushIntegration';
-
-// When task is deleted or completed
-await cancelWebPushForTask(task);
-```
+See [`../server.js`](../server.js) for the full `/api/push/*` surface.
 
 ## Browser Support
 
 | Browser | Desktop | Mobile | Notes |
 |---------|---------|--------|-------|
-| Chrome | ✅ | ✅ | Full support |
-| Firefox | ✅ | ✅ | Full support |
-| Edge | ✅ | ✅ | Full support |
-| Safari | ✅ (16.4+) | ✅ (16.4+) | iOS 16.4+ required |
-| Opera | ✅ | ✅ | Full support |
+| Chrome | âœ… | âœ… | Full support |
+| Firefox | âœ… | âœ… | Full support |
+| Edge | âœ… | âœ… | Full support |
+| Safari | âœ… (16.4+) | âœ… (16.4+) | iOS 16.4+ required |
+| Opera | âœ… | âœ… | Full support |
 
 ## Limitations
 
@@ -370,8 +357,8 @@ npm start
 ### Test Push Notification
 
 1. Open app in browser
-2. Go to Settings → Notifications
-3. Enable "Notifications en arrière-plan"
+2. Go to Settings â†’ Notifications
+3. Enable "Notifications en arriÃ¨re-plan"
 4. Click "Tester" button
 5. Check notification appears
 

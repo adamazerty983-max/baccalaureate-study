@@ -27,3 +27,43 @@ describe('shouldFreezeFlame — blue until today is validated', () => {
     expect(shouldFreezeFlame({ completedDates: new Set([daysAgo(0), daysAgo(1)]) })).toBe(false);
   });
 });
+
+describe('calculateAllStreakPeriods & syncAndGetPreservedStreaks', () => {
+  it('correctly calculates continuous streak segments and identifies record streak', async () => {
+    const { calculateAllStreakPeriods } = await import('./streak');
+    const dates = new Set([
+      '2026-08-01',
+      '2026-08-02',
+      '2026-08-03',
+      // gap on 08-04
+      '2026-08-05',
+      '2026-08-06',
+    ]);
+
+    const periods = calculateAllStreakPeriods(dates);
+    expect(periods).toHaveLength(2);
+
+    const streak3 = periods.find((p) => p.length === 3);
+    const streak2 = periods.find((p) => p.length === 2);
+
+    expect(streak3).toBeDefined();
+    expect(streak3?.startDate).toBe('2026-08-01');
+    expect(streak3?.endDate).toBe('2026-08-03');
+    expect(streak3?.isRecord).toBe(true);
+
+    expect(streak2).toBeDefined();
+    expect(streak2?.startDate).toBe('2026-08-05');
+    expect(streak2?.endDate).toBe('2026-08-06');
+    expect(streak2?.isRecord).toBeFalsy();
+  });
+
+  it('preserves historical streaks across syncs', async () => {
+    const { syncAndGetPreservedStreaks } = await import('./streak');
+    const dates = new Set(['2026-09-01', '2026-09-02', '2026-09-03']);
+
+    const preserved = syncAndGetPreservedStreaks(dates);
+    expect(preserved.length).toBeGreaterThanOrEqual(1);
+    expect(preserved.some((p) => p.length === 3 && p.startDate === '2026-09-01')).toBe(true);
+  });
+});
+

@@ -1,7 +1,10 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
+import {
+  initializeApp,
+  getApps,
+  getApp,
+} from 'firebase/app';
 import {
   getAuth,
-  signInAnonymously,
   onAuthStateChanged,
   User as FirebaseUser,
   GoogleAuthProvider,
@@ -16,14 +19,8 @@ import {
   getFirestore,
   setLogLevel,
   doc,
-  getDoc,
   setDoc,
   onSnapshot,
-  serverTimestamp,
-  collection,
-  query,
-  where,
-  getDocs,
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
@@ -63,7 +60,6 @@ export const db = (() => {
 export const googleProvider = new GoogleAuthProvider();
 
 export {
-  signInAnonymously,
   onAuthStateChanged,
   signInWithPopup,
   signOut,
@@ -71,14 +67,8 @@ export {
   createUserWithEmailAndPassword,
   updateProfile,
   doc,
-  getDoc,
   setDoc,
   onSnapshot,
-  serverTimestamp,
-  collection,
-  query,
-  where,
-  getDocs,
 };
 
 export type { FirebaseUser };

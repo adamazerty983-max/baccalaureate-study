@@ -2,10 +2,8 @@ import {
   auth,
   db,
   doc,
-  getDoc,
   setDoc,
   onSnapshot,
-  signInAnonymously,
   signInWithPopup,
   signOut,
   signInWithEmailAndPassword,
@@ -119,124 +117,6 @@ export function initAuthListener(
   };
 }
 
-/**
- * Saves the full application data to Firestore database under `userData/{userId}`
- */
-export async function saveUserDataToFirestore(
-  userId: string,
-  appData: FullAppData
-): Promise<{ success: boolean; error?: string }> {
-  if (!userId) return { success: false, error: 'No user ID provided' };
-
-  try {
-    const userDataRef = doc(db, 'userData', userId);
-    // NOTE: keep appData's own updatedAt. Re-stamping at write time made the
-    // echo of our own write look "newer" than local, feeding an infinite
-    // save→echo cycle that could revert fresh local edits with stale payloads.
-    const payload = {
-      ...appData,
-      userId,
-    };
-    await setDoc(userDataRef, payload, { merge: true });
-    return { success: true };
-  } catch (err: any) {
-    console.error('Failed to save user data to Firestore:', err);
-    return { success: false, error: err.message || 'Firestore write failed' };
-  }
-}
-
-/**
- * Loads the user data once from Firestore
- */
-export async function loadUserDataFromFirestore(
-  userId: string
-): Promise<FullAppData | null> {
-  if (!userId) return null;
-  try {
-    const userDataRef = doc(db, 'userData', userId);
-    const snap = await getDoc(userDataRef);
-    if (snap.exists()) {
-      return snap.data() as FullAppData;
-    }
-    return null;
-  } catch (err) {
-    console.error('Failed to fetch user data from Firestore:', err);
-    return null;
-  }
-}
-
-/**
- * Cloud Study Room synchronization (Sync by custom code across multiple devices)
- */
-export async function saveStudyRoomToFirestore(
-  roomCode: string,
-  appData: FullAppData,
-  userId: string
-): Promise<{ success: boolean; message: string }> {
-  const code = roomCode.trim().toUpperCase();
-  if (!code) return { success: false, message: 'Le code ne peut pas être vide' };
-
-  try {
-    const roomRef = doc(db, 'studyRooms', code);
-    await setDoc(
-      roomRef,
-      {
-        roomId: code,
-        appData,
-        updatedAt: new Date().toISOString(),
-        ownerId: userId || 'anonymous',
-      },
-      { merge: true }
-    );
-
-    return {
-      success: true,
-      message: `Données sauvegardées dans la salle Cloud [${code}] sur Firestore avec succès !`,
-    };
-  } catch (err: any) {
-    console.error('Failed to save to Firestore studyRooms:', err);
-    return {
-      success: false,
-      message: `Erreur Firestore: ${err.message || 'Échec de synchronisation'}`,
-    };
-  }
-}
-
-/**
- * Loads a cloud study room from Firestore by room code
- */
-export async function loadStudyRoomFromFirestore(
-  roomCode: string
-): Promise<{ success: boolean; data?: FullAppData; message: string }> {
-  const code = roomCode.trim().toUpperCase();
-  if (!code) return { success: false, message: 'Le code ne peut pas être vide' };
-
-  try {
-    const roomRef = doc(db, 'studyRooms', code);
-    const snap = await getDoc(roomRef);
-    if (snap.exists()) {
-      const room = snap.data();
-      if (room.appData) {
-        return {
-          success: true,
-          data: room.appData as FullAppData,
-          message: `Données restaurées depuis la base Firestore [${code}] !`,
-        };
-      }
-    }
-    return {
-      success: false,
-      message: `Aucune salle trouvée avec le code [${code}] dans la base de données.`,
-    };
-  } catch (err: any) {
-    console.error('Failed to load from Firestore studyRooms:', err);
-    return {
-      success: false,
-      message: `Erreur de connexion Firestore: ${err.message}`,
-    };
-  }
-}
-
 // In-flight Google sign-in singleton promise to prevent concurrent popups
 let googleSignInPromise: Promise<{ success: boolean; user?: FirebaseUser; error?: string }> | null = null;
 
@@ -288,25 +168,6 @@ export async function loginWithGoogle(): Promise<{ success: boolean; user?: Fire
   })();
 
   return googleSignInPromise;
-}
-
-/**
- * Auth Helper: Explicit Anonymous sign in
- */
-export async function loginAnonymously(): Promise<{ success: boolean; user?: FirebaseUser; error?: string }> {
-  try {
-    const result = await signInAnonymously(auth);
-    return { success: true, user: result.user };
-  } catch (err: any) {
-    const code = err?.code || '';
-    if (code === 'auth/admin-restricted-operation' || code === 'auth/operation-not-allowed') {
-      return {
-        success: false,
-        error: 'L\'accès anonyme n\'est pas activé dans le projet Firebase. Veuillez utiliser la connexion Google.',
-      };
-    }
-    return { success: false, error: err?.message || 'Échec de la connexion anonyme.' };
-  }
 }
 
 /**

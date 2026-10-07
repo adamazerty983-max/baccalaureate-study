@@ -75,7 +75,7 @@ export function isBlockActiveNow(block: TimeBlock, now = new Date()): boolean {
   const currentDay = now.getDay();
   const matchesDate = block.dateKey ? block.dateKey === todayDateKey : block.dayOfWeek === currentDay;
   if (!matchesDate) return false;
-  if (isTimeBlockOccurrenceCompleted(block, todayDateKey)) return false;
+  if (block.isCompleted || isTimeBlockOccurrenceCompleted(block, todayDateKey)) return false;
 
   const currentMins = now.getHours() * 60 + now.getMinutes();
   const [sh, sm] = (block.startTime || '00:00').split(':').map(Number);

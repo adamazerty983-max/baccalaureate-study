@@ -480,3 +480,154 @@ export function generateMonthCalendar(
 
   return days;
 }
+
+export interface PreservedStreakRecord {
+  id: string;
+  startDate: string;
+  endDate: string;
+  length: number;
+  isActive: boolean;
+  isRecord?: boolean;
+  preservedAt?: string;
+}
+
+const PRESERVED_STREAKS_KEY = 'bac_preserved_streak_history';
+
+/**
+ * Calculates all continuous streak segments from completed dates.
+ */
+export function calculateAllStreakPeriods(completedDates: Set<string>): PreservedStreakRecord[] {
+  if (completedDates.size === 0) return [];
+  const sorted = Array.from(completedDates).sort();
+  const periods: PreservedStreakRecord[] = [];
+
+  const today = new Date();
+  const todayStr = getLocalDateStr(today);
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = getLocalDateStr(yesterday);
+
+  let currentRun: string[] = [];
+
+  for (let i = 0; i < sorted.length; i++) {
+    const curStr = sorted[i];
+    if (currentRun.length === 0) {
+      currentRun.push(curStr);
+    } else {
+      const lastStr = currentRun[currentRun.length - 1];
+      const lastDate = new Date(lastStr);
+      const curDate = new Date(curStr);
+      const diffDays = Math.round((curDate.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+
+      if (diffDays === 1) {
+        currentRun.push(curStr);
+      } else {
+        const startDate = currentRun[0];
+        const endDate = currentRun[currentRun.length - 1];
+        periods.push({
+          id: `streak_${startDate}_${endDate}`,
+          startDate,
+          endDate,
+          length: currentRun.length,
+          isActive: endDate === todayStr || (endDate === yesterdayStr && !completedDates.has(todayStr)),
+        });
+        currentRun = [curStr];
+      }
+    }
+  }
+
+  if (currentRun.length > 0) {
+    const startDate = currentRun[0];
+    const endDate = currentRun[currentRun.length - 1];
+    periods.push({
+      id: `streak_${startDate}_${endDate}`,
+      startDate,
+      endDate,
+      length: currentRun.length,
+      isActive: endDate === todayStr || (endDate === yesterdayStr && !completedDates.has(todayStr)),
+    });
+  }
+
+  const maxLen = periods.reduce((max, p) => Math.max(max, p.length), 0);
+  periods.forEach((p) => {
+    if (p.length === maxLen && maxLen > 0) {
+      p.isRecord = true;
+    }
+  });
+
+  return periods.sort((a, b) => b.endDate.localeCompare(a.endDate));
+}
+
+/**
+ * Reads preserved streaks from localStorage.
+ */
+export function getSavedStreakRecords(): PreservedStreakRecord[] {
+  try {
+    if (typeof localStorage === 'undefined') return [];
+    const raw = localStorage.getItem(PRESERVED_STREAKS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (err) {
+    console.error('Failed to load saved streak records', err);
+  }
+  return [];
+}
+
+/**
+ * Saves preserved streaks to localStorage.
+ */
+export function saveStreakRecords(records: PreservedStreakRecord[]): void {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.setItem(PRESERVED_STREAKS_KEY, JSON.stringify(records));
+  } catch (err) {
+    console.error('Failed to save streak records', err);
+  }
+}
+
+/**
+ * Synchronizes calculated streak periods with permanently preserved history records.
+ * Ensures that all past streaks remain preserved and documented indefinitely.
+ */
+export function syncAndGetPreservedStreaks(completedDates: Set<string>): PreservedStreakRecord[] {
+  const dynamicPeriods = calculateAllStreakPeriods(completedDates);
+  const savedRecords = getSavedStreakRecords();
+
+  const recordMap = new Map<string, PreservedStreakRecord>();
+
+  // Load existing records first
+  savedRecords.forEach((r) => {
+    recordMap.set(`${r.startDate}_${r.endDate}`, r);
+  });
+
+  // Merge dynamic periods
+  dynamicPeriods.forEach((p) => {
+    const key = `${p.startDate}_${p.endDate}`;
+    const existing = recordMap.get(key);
+    if (!existing || existing.length < p.length) {
+      recordMap.set(key, {
+        ...p,
+        preservedAt: existing?.preservedAt || new Date().toISOString(),
+      });
+    } else {
+      recordMap.set(key, {
+        ...existing,
+        isActive: p.isActive,
+        isRecord: p.isRecord || existing.isRecord,
+      });
+    }
+  });
+
+  const merged = Array.from(recordMap.values());
+  const maxLen = merged.reduce((max, r) => Math.max(max, r.length), 0);
+  merged.forEach((r) => {
+    r.isRecord = r.length === maxLen && maxLen > 0;
+  });
+
+  merged.sort((a, b) => b.endDate.localeCompare(a.endDate));
+  saveStreakRecords(merged);
+
+  return merged;
+}

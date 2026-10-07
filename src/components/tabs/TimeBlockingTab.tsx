@@ -34,6 +34,7 @@ import {
   CheckCircle,
   Brain,
   RotateCcw,
+  Compass,
 } from 'lucide-react';
 import { ActivitySticker, AppLanguage, StickerActivityType, TaskItem, TimeBlock } from '../../types';
 import { ACTIVITY_STICKERS, BAC_SUBJECTS } from '../../utils/constants';
@@ -1721,28 +1722,58 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
         </div>
 
         {/* Right: Day Selector Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
           <button
             type="button"
             onClick={() => setIsStudyHistoryOpen((open) => !open)}
             aria-expanded={isStudyHistoryOpen}
-            className={`flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold transition-colors ${isStudyHistoryOpen ? 'border-teal-500/40 bg-teal-500/10 text-teal-700 dark:text-teal-300' : 'border-slate-200/80 bg-slate-100/80 text-slate-600 hover:bg-slate-200/70 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10'}`}
+            className={`flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold transition-all active:scale-95 cursor-pointer ${isStudyHistoryOpen ? 'border-teal-500/40 bg-teal-500/10 text-teal-700 dark:text-teal-300 shadow-xs' : 'border-slate-200/80 bg-slate-100/80 text-slate-600 hover:bg-slate-200/70 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10'}`}
           >
             <CalendarRange className="h-3.5 w-3.5" />
             {isAr ? 'سجل الدراسة' : language === 'en' ? 'Study history' : 'Historique'}
           </button>
+
+          {/* Quick jump to Today: «اختر مكان» button requested by user */}
+          <button
+            type="button"
+            onClick={() => {
+              const todayId = new Date().getDay();
+              setSelectedDay(todayId);
+              setIsStudyHistoryOpen(false);
+            }}
+            className={`flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold transition-all active:scale-95 cursor-pointer shadow-xs ${
+              selectedDay === new Date().getDay()
+                ? 'border-sky-500/50 bg-sky-500/15 text-sky-700 dark:text-sky-300 ring-1 ring-sky-500/30'
+                : 'border-slate-200/80 bg-slate-100/80 text-slate-700 hover:bg-slate-200/70 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10'
+            }`}
+            title={isAr ? 'الانتقال المباشر إلى اليوم الحالي' : language === 'fr' ? "Aller au jour d'aujourd'hui" : 'Go to today'}
+          >
+            <Compass className="h-3.5 w-3.5 text-sky-500 shrink-0" />
+            <span>{isAr ? 'اختر مكان' : language === 'fr' ? 'Aller à aujourd\'hui' : 'Go to today'}</span>
+          </button>
+
           {DAYS_OF_WEEK.map((d) => {
             const isSelected = selectedDay === d.id;
+            const isToday = d.id === new Date().getDay();
             return (
               <button
                 key={d.id}
                 onClick={() => setSelectedDay(d.id)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${isSelected
+                className={`relative px-3.5 py-1 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex flex-col items-center justify-center min-h-[36px] ${isSelected
                   ? 'bg-teal-600 text-white shadow-md shadow-teal-600/25'
-                  : 'bg-slate-100/80 hover:bg-slate-200/70 dark:bg-white/5 dark:hover:bg-white/10 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  : isToday
+                    ? 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/40 ring-1 ring-amber-400/30'
+                    : 'bg-slate-100/80 hover:bg-slate-200/70 dark:bg-white/5 dark:hover:bg-white/10 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                   }`}
               >
-                {isAr ? d.nameAr : d.name}
+                {/* Feature 1: Star ⭐ and today indicator above the day's name */}
+                {isToday && (
+                  <span className={`flex items-center gap-0.5 text-[9px] font-black leading-none mb-0.5 ${isSelected ? 'text-amber-200' : 'text-amber-500 dark:text-amber-400'}`}>
+                    <span className="text-[10px]">★</span>
+                    <span>{isAr ? 'اليوم' : language === 'fr' ? "Aujourd'hui" : 'Today'}</span>
+                  </span>
+                )}
+                <span>{isAr ? d.nameAr : d.name}</span>
               </button>
             );
           })}

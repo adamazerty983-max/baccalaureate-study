@@ -19,7 +19,7 @@
 
 ### Step 3: Create Web Service
 
-1. Click **"New +"** → **"Web Service"**
+1. Click **"New +"** â†’ **"Web Service"**
 2. Select your repository: `baccalaureate-study`
 3. Configure:
    - **Name**: `mybac-tracker-push` (or your choice)
@@ -37,13 +37,13 @@ In the Render dashboard, go to **Environment** tab and add:
 
 ```
 VAPID_PUBLIC_KEY=BMAij0w99HbEo-BkSF-bk-L1le-9K-zeQVmPxcBLQWKZqojlX1eTfjapzz0lYzUe_yBphjxRfSe0vPX66ysuPuY
-VAPID_PRIVATE_KEY=LV-qbw-HpWPyDjMgZYxXiOBkxFs6iPSZVJUf_n8fuqI
+VAPID_PRIVATE_KEY=<your-private-key>
 VAPID_SUBJECT=mailto:mybac-tracker@example.com
 NODE_ENV=production
 PORT=3000
 ```
 
-**⚠️ SECURITY NOTE**: Generate NEW VAPID keys for production:
+**âš ï¸ SECURITY NOTE**: Generate NEW VAPID keys for production:
 ```bash
 node scripts/generate-vapid-keys.js
 ```
@@ -80,8 +80,8 @@ npm run build
 ### Step 7: Test the Deployment
 
 1. Open your app: `https://your-github-pages-url` or `http://localhost:3000`
-2. Go to **Settings** → **Notifications**
-3. Scroll to **"Notifications en arrière-plan"** section
+2. Go to **Settings** â†’ **Notifications**
+3. Scroll to **"Notifications en arriÃ¨re-plan"** section
 4. Click **"Activer les notifications"**
 5. Allow browser permission when prompted
 6. Click **"Tester"** button
@@ -117,7 +117,7 @@ railway init
 
 ```bash
 railway variables set VAPID_PUBLIC_KEY=BMAij0w99HbEo-BkSF-bk-L1le-9K-zeQVmPxcBLQWKZqojlX1eTfjapzz0lYzUe_yBphjxRfSe0vPX66ysuPuY
-railway variables set VAPID_PRIVATE_KEY=LV-qbw-HpWPyDjMgZYxXiOBkxFs6iPSZVJUf_n8fuqI
+railway variables set VAPID_PRIVATE_KEY=<your-private-key>
 railway variables set VAPID_SUBJECT=mailto:mybac-tracker@example.com
 railway variables set NODE_ENV=production
 ```
@@ -161,7 +161,7 @@ fly launch --name mybac-tracker-push
 
 ```bash
 fly secrets set VAPID_PUBLIC_KEY=BMAij0w99HbEo-BkSF-bk-L1le-9K-zeQVmPxcBLQWKZqojlX1eTfjapzz0lYzUe_yBphjxRfSe0vPX66ysuPuY
-fly secrets set VAPID_PRIVATE_KEY=LV-qbw-HpWPyDjMgZYxXiOBkxFs6iPSZVJUf_n8fuqI
+fly secrets set VAPID_PRIVATE_KEY=<your-private-key>
 fly secrets set VAPID_SUBJECT=mailto:mybac-tracker@example.com
 ```
 
@@ -250,10 +250,10 @@ Set up a cron job to ping your health endpoint every 10 minutes:
 
 | Platform | Free Tier | Limits | Upgrade Cost |
 |----------|-----------|--------|--------------|
-| Render.com | ✅ Yes | 750 hrs/month, sleeps after 15min | $7/month |
-| Railway.app | ✅ $5 credit | 500 hrs/month | $5/month |
-| Fly.io | ✅ Yes | 3 shared-cpu VMs | $1.94/month |
-| Heroku | ❌ No | N/A | $7/month |
+| Render.com | âœ… Yes | 750 hrs/month, sleeps after 15min | $7/month |
+| Railway.app | âœ… $5 credit | 500 hrs/month | $5/month |
+| Fly.io | âœ… Yes | 3 shared-cpu VMs | $1.94/month |
+| Heroku | âŒ No | N/A | $7/month |
 
 **Recommended**: Start with Render.com free tier, then upgrade if needed.
 
