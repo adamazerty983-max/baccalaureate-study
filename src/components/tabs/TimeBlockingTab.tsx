@@ -1198,10 +1198,9 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
     };
   }, [activeMove]);
 
-  // Keep a drag-to-create selection moving when the pointer reaches the edge
-  // of the page's scrollable timetable viewport. Recalculate its time from the
-  // stationary pointer after every scroll frame so one continuous drag can
-  // create a session longer than the currently visible portion of the grid.
+  // Scroll and update the selection in the same animation frame while the
+  // pointer is held near the edge. This keeps a single drag continuous as the
+  // timetable moves beneath the stationary pointer.
   useEffect(() => {
     if (!isDragging) return;
 
@@ -1217,41 +1216,60 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
       }
     }
 
-    const edgeSize = 72;
+    const edgeSize = 76;
     let animationFrame = 0;
+    let previousFrameTime = performance.now();
+    const handleWindowMouseMove = (event: MouseEvent) => {
+      if (dragSelectionRef.current.isDragging) {
+        dragPointerClientYRef.current = event.clientY;
+      }
+    };
+
     const updateDuringAutoScroll = () => {
       const pointerY = dragPointerClientYRef.current;
       if (pointerY === null || !dragSelectionRef.current.isDragging) return;
 
+      const now = performance.now();
+      const elapsedSeconds = Math.min(32, now - previousFrameTime) / 1000;
+      previousFrameTime = now;
       const bounds = scrollContainer?.getBoundingClientRect();
       const viewportTop = bounds?.top ?? 0;
       const viewportBottom = bounds?.bottom ?? window.innerHeight;
-      let scrollDelta = 0;
+      let scrollDirection = 0;
+      let edgeIntensity = 0;
 
       if (pointerY < viewportTop + edgeSize) {
-        const intensity = Math.min(1, (viewportTop + edgeSize - pointerY) / edgeSize);
-        scrollDelta = -Math.max(2, Math.ceil(intensity * 12));
+        scrollDirection = -1;
+        edgeIntensity = Math.min(1, (viewportTop + edgeSize - pointerY) / edgeSize);
       } else if (pointerY > viewportBottom - edgeSize) {
-        const intensity = Math.min(1, (pointerY - (viewportBottom - edgeSize)) / edgeSize);
-        scrollDelta = Math.max(2, Math.ceil(intensity * 12));
+        scrollDirection = 1;
+        edgeIntensity = Math.min(1, (pointerY - (viewportBottom - edgeSize)) / edgeSize);
       }
 
-      if (scrollDelta !== 0) {
+      let didScroll = false;
+      if (scrollDirection !== 0 && edgeIntensity > 0) {
+        // Ramp speed up smoothly as the pointer moves deeper into the edge
+        // zone instead of jumping by a fixed number of pixels per frame.
+        const pixelsPerSecond = 520 * edgeIntensity * edgeIntensity;
+        const scrollDelta = scrollDirection * pixelsPerSecond * elapsedSeconds;
         if (scrollContainer) {
           const previousScrollTop = scrollContainer.scrollTop;
-          scrollContainer.scrollTop += scrollDelta;
-          if (scrollContainer.scrollTop === previousScrollTop) scrollDelta = 0;
+          scrollContainer.scrollTo({ top: previousScrollTop + scrollDelta, behavior: 'instant' });
+          didScroll = scrollContainer.scrollTop !== previousScrollTop;
         } else {
           const previousScrollY = window.scrollY;
-          window.scrollBy(0, scrollDelta);
-          if (window.scrollY === previousScrollY) scrollDelta = 0;
+          window.scrollTo({ top: previousScrollY + scrollDelta, behavior: 'instant' });
+          didScroll = window.scrollY !== previousScrollY;
         }
       }
 
-      if (scrollDelta !== 0) {
-        const gridRect = grid.getBoundingClientRect();
-        const relativeY = Math.max(0, Math.min(gridRect.height, pointerY - gridRect.top));
-        const minutes = pixelOffsetToMinutes(relativeY);
+      // Recompute from the latest pointer and post-scroll grid position every
+      // frame, not only after scrolling. The selection edge therefore tracks
+      // the drag continuously and mouseup still commits its latest endpoint.
+      const gridRect = grid.getBoundingClientRect();
+      const relativeY = Math.max(0, Math.min(gridRect.height, pointerY - gridRect.top));
+      const minutes = pixelOffsetToMinutes(relativeY);
+      if (didScroll || minutes !== dragSelectionRef.current.currentMinutes) {
         dragSelectionRef.current.currentMinutes = minutes;
         setDragCurrentY(relativeY);
         setDragCurrentMinutes(minutes);
@@ -1260,8 +1278,12 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
       animationFrame = window.requestAnimationFrame(updateDuringAutoScroll);
     };
 
+    window.addEventListener('mousemove', handleWindowMouseMove);
     animationFrame = window.requestAnimationFrame(updateDuringAutoScroll);
-    return () => window.cancelAnimationFrame(animationFrame);
+    return () => {
+      window.removeEventListener('mousemove', handleWindowMouseMove);
+      window.cancelAnimationFrame(animationFrame);
+    };
   }, [isDragging]);
 
   // Dismiss modal or subject dropdown on Escape key
