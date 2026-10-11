@@ -41,6 +41,7 @@ import {
 import { BAC_SUBJECTS } from '../../utils/constants';
 import { chimePlayer } from '../../utils/audio';
 import { getT } from '../../utils/i18n';
+import { getCalendarWeeksForMonth } from '../../utils/calendarWeeks';
 import {
   calculateBestStreak,
   calculateDailyStreak,
@@ -218,11 +219,14 @@ function getBlockDurationHours(b: TimeBlock): number {
 
 // Resolve the date string (YYYY-MM-DD) for a timeblock
 function getBlockDateStr(b: TimeBlock): string {
+  // An explicit dateKey identifies the scheduled/completed occurrence being
+  // displayed. Keep it ahead of completedAt so late confirmations stay on the
+  // day they belong to in historical statistics.
+  if (b.dateKey && b.dateKey.length === 10) return b.dateKey;
   if (b.isCompleted && b.completedAt) {
     const completedDate = new Date(b.completedAt);
     if (!Number.isNaN(completedDate.getTime())) return getLocalDateStr(completedDate);
   }
-  if (b.dateKey && b.dateKey.length === 10) return b.dateKey;
   if (b.completedAt && b.completedAt.length >= 10) return b.completedAt.slice(0, 10);
   if (b.createdAt && b.createdAt.length >= 10) return b.createdAt.slice(0, 10);
 
@@ -772,23 +776,26 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
       }
     });
 
-    // Week by week trajectory inside the month (W1: 1-7, W2: 8-14, W3: 15-21, W4: 22-28, W5: 29+)
-    const weekBuckets = [
-      { label: isAr ? 'الأسبوع 1' : 'Sem 1', range: '1-7', hours: 0 },
-      { label: isAr ? 'الأسبوع 2' : 'Sem 2', range: '8-14', hours: 0 },
-      { label: isAr ? 'الأسبوع 3' : 'Sem 3', range: '15-21', hours: 0 },
-      { label: isAr ? 'الأسبوع 4' : 'Sem 4', range: '22-28', hours: 0 },
-      { label: isAr ? 'الأسبوع 5' : 'Sem 5', range: '29+', hours: 0 },
-    ];
+    // Calendar weeks always run Monday through Sunday. Month edges can
+    // therefore include days from adjacent months, while hours remain scoped
+    // to the selected month's completed occurrences.
+    const locale = isAr ? 'ar-MA' : language === 'en' ? 'en-US' : 'fr-FR';
+    const weekBuckets = getCalendarWeeksForMonth(selectedMonthDate.getFullYear(), selectedMonthDate.getMonth())
+      .map(({ startDate, endDate }, index) => {
+        const startLabel = new Date(`${startDate}T12:00:00`).toLocaleDateString(locale, { day: 'numeric', month: 'short' });
+        const endLabel = new Date(`${endDate}T12:00:00`).toLocaleDateString(locale, { day: 'numeric', month: 'short' });
+        return {
+          label: isAr ? `الأسبوع ${index + 1}` : language === 'en' ? `Week ${index + 1}` : `Sem ${index + 1}`,
+          range: `${startLabel} – ${endLabel}`,
+          startDate,
+          endDate,
+          hours: 0,
+        };
+      });
 
     completedBlocks.forEach(({ block, date }) => {
-      const dayNum = parseInt(date.slice(8, 10), 10);
-      const dur = getBlockDurationHours(block);
-      if (dayNum <= 7) weekBuckets[0].hours += dur;
-      else if (dayNum <= 14) weekBuckets[1].hours += dur;
-      else if (dayNum <= 21) weekBuckets[2].hours += dur;
-      else if (dayNum <= 28) weekBuckets[3].hours += dur;
-      else weekBuckets[4].hours += dur;
+      const bucket = weekBuckets.find((week) => date >= week.startDate && date <= week.endDate);
+      if (bucket) bucket.hours += getBlockDurationHours(block);
     });
 
     return {
@@ -805,10 +812,10 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
       weekBuckets,
       daysInMonth,
     };
-  }, [appData.timeBlocks, selectedMonthKey, selectedMonthDate, isAr]);
+  }, [appData.timeBlocks, selectedMonthKey, selectedMonthDate, isAr, language]);
 
-  // Completed sessions for the reference-style monthly drilldown. Completed work
-  // is attributed to the actual completion date, matching the review totals above.
+  // Completed sessions for the monthly drilldown, attributed to the scheduled
+  // occurrence date used by the weekly and monthly review totals.
   const monthlyCompletedBlocks = useMemo(() => {
     return (appData.timeBlocks || [])
       .filter((block) => block.type === 'study')
@@ -835,16 +842,14 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
   }, [monthlyStats]);
 
   const monthlyWeekDetails = useMemo(() => {
-    const ranges: [number, number][] = [[1, 7], [8, 14], [15, 21], [22, 28], [29, monthlyStats.daysInMonth]];
-    return monthlyStats.weekBuckets.map((bucket, index) => {
-      const [startDay, endDay] = ranges[index];
+    return monthlyStats.weekBuckets.map((bucket) => {
       const blocks = monthlyCompletedBlocks.filter((block) => {
-        const day = Number(getBlockDateStr(block).slice(8, 10));
-        return day >= startDay && day <= endDay;
+        const date = getBlockDateStr(block);
+        return date >= bucket.startDate && date <= bucket.endDate;
       });
-      return { ...bucket, startDay, endDay, blocks };
+      return { ...bucket, blocks };
     });
-  }, [monthlyStats.weekBuckets, monthlyStats.daysInMonth, monthlyCompletedBlocks]);
+  }, [monthlyStats.weekBuckets, monthlyCompletedBlocks]);
 
   const gradeProgress = useMemo(() => {
     const gradesBySubject = new Map<string, typeof appData.grades>();
@@ -1994,7 +1999,7 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
 
               <section aria-label={isAr ? 'تفصيل ساعات الشهر حسب الأسبوع' : 'Monthly study hours by week'}>
                 <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 mb-3">{isAr ? 'التوزيع حسب أسابيع الشهر' : language === 'en' ? 'Week-by-week' : 'Évolution par semaine'}</h4>
-                <div className="grid grid-cols-5 gap-2 items-end min-h-40 border-b border-slate-200 dark:border-slate-800 pb-3">
+                <div className="grid gap-2 items-end min-h-40 border-b border-slate-200 dark:border-slate-800 pb-3" style={{ gridTemplateColumns: `repeat(${monthlyWeekDetails.length}, minmax(0, 1fr))` }}>
                   {monthlyWeekDetails.map((bucket, index) => {
                     const maxHours = Math.max(...monthlyWeekDetails.map((item) => item.hours), 1);
                     const height = Math.max(4, Math.round((bucket.hours / maxHours) * 100));
@@ -2240,7 +2245,7 @@ export const WeeklyReviewTab: React.FC<WeeklyReviewTabProps> = ({
               </div>
 
               {/* Trajectory Bar Chart */}
-              <div className="grid grid-cols-5 gap-1 sm:gap-3 pt-6 items-end h-44 border-b border-slate-200 dark:border-slate-800 pb-3">
+              <div className="grid gap-1 sm:gap-3 pt-6 items-end h-44 border-b border-slate-200 dark:border-slate-800 pb-3" style={{ gridTemplateColumns: `repeat(${monthlyStats.weekBuckets.length}, minmax(0, 1fr))` }}>
                 {monthlyStats.weekBuckets.map((bucket, index) => {
                   const maxW = Math.max(...monthlyStats.weekBuckets.map((b) => b.hours), 8);
                   const heightPct = Math.min(100, Math.round((bucket.hours / maxW) * 100));
