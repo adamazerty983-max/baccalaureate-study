@@ -27,27 +27,30 @@ export function getTimeBlockDurationHours(b: { startTime: string; endTime: strin
   return Math.round(((endM - startM) / 60) * 100) / 100;
 }
 
-/** Returns each completed Planner occurrence using its actual completion date. */
+/** Returns each completed Planner occurrence on its scheduled date. */
 export function getTimeBlockCompletionOccurrences(
   block: TimeBlock
 ): { dateKey: string; completedAt?: string }[] {
   if (block.completedOccurrences) {
     return block.completedOccurrences.map((occurrence) => {
-      const completed = new Date(occurrence.completedAt);
       return {
-        dateKey: !Number.isNaN(completed.getTime()) ? getLocalDateStr(completed) : occurrence.dateKey,
+        // `completedAt` records when the user clicked complete. `dateKey` records
+        // which scheduled Planner occurrence they completed and must drive stats.
+        dateKey: occurrence.dateKey,
         completedAt: occurrence.completedAt,
       };
     });
   }
   if (!block.isCompleted) return [];
+  // Legacy blocks have no occurrence list. Their dateKey is the scheduled day;
+  // prefer it over the timestamp, which may be from a later day.
+  if (block.dateKey) return [{ dateKey: block.dateKey, completedAt: block.completedAt }];
   if (block.completedAt) {
     const completed = new Date(block.completedAt);
     if (!Number.isNaN(completed.getTime())) {
       return [{ dateKey: getLocalDateStr(completed), completedAt: block.completedAt }];
     }
   }
-  if (block.dateKey) return [{ dateKey: block.dateKey }];
   if (block.createdAt) {
     const created = new Date(block.createdAt);
     if (!Number.isNaN(created.getTime())) return [{ dateKey: getLocalDateStr(created) }];

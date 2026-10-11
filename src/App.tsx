@@ -739,17 +739,12 @@ export default function App() {
       const now = completedAt.toISOString();
       const today = getLocalDateStr(completedAt);
       const requestedDateKey = occurrenceDateKey || today;
-      const completedDateKey = useSelectedDate && requestedDateKey > today ? today : requestedDateKey;
-      const occurrenceCompletedAt = useSelectedDate
-        ? (() => {
-            const [year, month, day] = completedDateKey.split('-').map(Number);
-            return new Date(year, month - 1, day, completedAt.getHours(), completedAt.getMinutes(), completedAt.getSeconds(), completedAt.getMilliseconds()).toISOString();
-          })()
-        : now;
       return {
         ...prev,
         timeBlocks: prev.timeBlocks.map((b) => {
           if (b.id !== blockId) return b;
+          const scheduledDateKey = useSelectedDate ? requestedDateKey : (b.dateKey || requestedDateKey);
+          const completedDateKey = scheduledDateKey > today ? today : scheduledDateKey;
           const occurrenceAlreadyCompleted = isTimeBlockOccurrenceCompleted(b, completedDateKey);
           const willBeCompleted = nextOccurrenceCompleted ?? !occurrenceAlreadyCompleted;
           const existingOccurrences = b.completedOccurrences || (b.isCompleted
@@ -761,7 +756,7 @@ export default function App() {
           const completedOccurrences = willBeCompleted
             ? [
                 ...existingOccurrences.filter((occurrence) => occurrence.dateKey !== completedDateKey),
-                { dateKey: completedDateKey, completedAt: occurrenceCompletedAt },
+                { dateKey: completedDateKey, completedAt: now },
               ]
             : existingOccurrences.filter((occurrence) => occurrence.dateKey !== completedDateKey);
           const mostRecentOccurrence = [...completedOccurrences]

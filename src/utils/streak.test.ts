@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { shouldFreezeFlame } from './streak';
+import { getTimeBlockCompletionOccurrences, shouldFreezeFlame } from './streak';
 
 function daysAgo(n: number): string {
   const d = new Date();
@@ -25,6 +25,48 @@ describe('shouldFreezeFlame — blue until today is validated', () => {
 
   it('burns hot when today and past days are completed', () => {
     expect(shouldFreezeFlame({ completedDates: new Set([daysAgo(0), daysAgo(1)]) })).toBe(false);
+  });
+});
+
+describe('getTimeBlockCompletionOccurrences', () => {
+  it('keeps a Planner session on its scheduled day when it is marked complete later', () => {
+    const occurrences = getTimeBlockCompletionOccurrences({
+      id: 'late-completed-session',
+      dayOfWeek: 2,
+      dateKey: '2026-10-06',
+      startTime: '11:00',
+      endTime: '12:30',
+      title: 'Maths',
+      subject: 'Mathématiques',
+      isCompleted: true,
+      type: 'study',
+      completedOccurrences: [{
+        dateKey: '2026-10-06',
+        completedAt: '2026-10-07T09:00:00.000Z',
+      }],
+    });
+
+    expect(occurrences).toEqual([{
+      dateKey: '2026-10-06',
+      completedAt: '2026-10-07T09:00:00.000Z',
+    }]);
+  });
+
+  it('uses the scheduled date for completed legacy Planner blocks', () => {
+    const occurrences = getTimeBlockCompletionOccurrences({
+      id: 'legacy-late-completion',
+      dayOfWeek: 2,
+      dateKey: '2026-10-06',
+      startTime: '11:00',
+      endTime: '12:30',
+      title: 'Maths',
+      subject: 'Mathématiques',
+      isCompleted: true,
+      type: 'study',
+      completedAt: '2026-10-07T09:00:00.000Z',
+    });
+
+    expect(occurrences[0]?.dateKey).toBe('2026-10-06');
   });
 });
 
