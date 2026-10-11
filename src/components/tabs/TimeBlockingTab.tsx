@@ -710,6 +710,7 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
   const [dragCurrentMinutes, setDragCurrentMinutes] = useState<number>(420); // 07:00
   // The window-level mouseup handler reads this ref so its drag range never goes stale.
   const dragSelectionRef = useRef({ isDragging: false, startMinutes: 360, currentMinutes: 420 });
+  const dragPointerClientYRef = useRef<number | null>(null);
 
   // Active block drag/move/resize state
   const [activeMove, setActiveMove] = useState<ActiveMoveState | null>(null);
@@ -998,6 +999,7 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
   // -------------------------------------------------------------
   const handleGridMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!gridContainerRef.current) return;
+    if (dragSelectionRef.current.isDragging) dragPointerClientYRef.current = e.clientY;
     const rect = gridContainerRef.current.getBoundingClientRect();
     const relativeY = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
 
@@ -1055,6 +1057,7 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
     const relativeY = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
 
     const mins = pixelOffsetToMinutes(relativeY);
+    dragPointerClientYRef.current = e.clientY;
     dragSelectionRef.current = { isDragging: true, startMinutes: mins, currentMinutes: mins };
     setIsDragging(true);
     setDragStartY(relativeY);
@@ -1094,6 +1097,7 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
   };
 
   const handleGridMouseUp = () => {
+    dragPointerClientYRef.current = null;
     if (activeMove) {
       const newStartStr = minutesToTime(activeMove.currentStartMinutes);
       const newEndStr = minutesToTime(activeMove.currentStartMinutes + activeMove.durationMinutes);
@@ -1182,6 +1186,7 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
     // with the drag state still armed.
     const handleCancelDrag = () => {
       dragSelectionRef.current.isDragging = false;
+      dragPointerClientYRef.current = null;
       setIsDragging(false);
       setActiveMove(null);
     };
@@ -1192,6 +1197,72 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
       window.removeEventListener('blur', handleCancelDrag);
     };
   }, [activeMove]);
+
+  // Keep a drag-to-create selection moving when the pointer reaches the edge
+  // of the page's scrollable timetable viewport. Recalculate its time from the
+  // stationary pointer after every scroll frame so one continuous drag can
+  // create a session longer than the currently visible portion of the grid.
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const grid = gridContainerRef.current;
+    if (!grid) return;
+
+    let scrollContainer: HTMLElement | null = null;
+    for (let ancestor = grid.parentElement; ancestor; ancestor = ancestor.parentElement) {
+      const overflowY = window.getComputedStyle(ancestor).overflowY;
+      if ((overflowY === 'auto' || overflowY === 'scroll') && ancestor.scrollHeight > ancestor.clientHeight + 1) {
+        scrollContainer = ancestor;
+        break;
+      }
+    }
+
+    const edgeSize = 72;
+    let animationFrame = 0;
+    const updateDuringAutoScroll = () => {
+      const pointerY = dragPointerClientYRef.current;
+      if (pointerY === null || !dragSelectionRef.current.isDragging) return;
+
+      const bounds = scrollContainer?.getBoundingClientRect();
+      const viewportTop = bounds?.top ?? 0;
+      const viewportBottom = bounds?.bottom ?? window.innerHeight;
+      let scrollDelta = 0;
+
+      if (pointerY < viewportTop + edgeSize) {
+        const intensity = Math.min(1, (viewportTop + edgeSize - pointerY) / edgeSize);
+        scrollDelta = -Math.max(2, Math.ceil(intensity * 12));
+      } else if (pointerY > viewportBottom - edgeSize) {
+        const intensity = Math.min(1, (pointerY - (viewportBottom - edgeSize)) / edgeSize);
+        scrollDelta = Math.max(2, Math.ceil(intensity * 12));
+      }
+
+      if (scrollDelta !== 0) {
+        if (scrollContainer) {
+          const previousScrollTop = scrollContainer.scrollTop;
+          scrollContainer.scrollTop += scrollDelta;
+          if (scrollContainer.scrollTop === previousScrollTop) scrollDelta = 0;
+        } else {
+          const previousScrollY = window.scrollY;
+          window.scrollBy(0, scrollDelta);
+          if (window.scrollY === previousScrollY) scrollDelta = 0;
+        }
+      }
+
+      if (scrollDelta !== 0) {
+        const gridRect = grid.getBoundingClientRect();
+        const relativeY = Math.max(0, Math.min(gridRect.height, pointerY - gridRect.top));
+        const minutes = pixelOffsetToMinutes(relativeY);
+        dragSelectionRef.current.currentMinutes = minutes;
+        setDragCurrentY(relativeY);
+        setDragCurrentMinutes(minutes);
+      }
+
+      animationFrame = window.requestAnimationFrame(updateDuringAutoScroll);
+    };
+
+    animationFrame = window.requestAnimationFrame(updateDuringAutoScroll);
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [isDragging]);
 
   // Dismiss modal or subject dropdown on Escape key
   useEffect(() => {
