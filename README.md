@@ -3,7 +3,7 @@
 Offline-first study companion for Baccalaureate (French/Arabic) students. Tracks
 exams, homework, lecture notes, time-blocked study sessions, spaced-repetition
 revision, habits, grades and goals — with cloud sync across devices, and a
-packaged Electron desktop build.
+packaged Electron desktop build and a lightweight Windows Tauri desktop app.
 
 ## Features
 
@@ -31,7 +31,7 @@ notifications, offline queueing.
 - **Data** — Supabase (Postgres + Realtime) per user, plus LocalStorage + IndexedDB with merge-based conflict handling
 - **Auth** — Firebase Auth (Google / email) only; all study data lives in Supabase
 - **Backend** — Express (`server.js`) serving `/api/sync` and `/api/push/*`
-- **Desktop** — Electron + electron-builder + electron-updater
+- **Desktop** — Tauri 2 + WebView2 + signed Tauri updater for Windows; the existing Electron + electron-builder + electron-updater channel remains supported.
 
 ## Getting started
 
@@ -60,12 +60,15 @@ at build time, so local builds need a `.env`.
 | --- | --- |
 | `npm run dev` | Vite dev server on port 3000 |
 | `npm run build` | Production build into `dist/` |
+| `npm run build:desktop` | Relative-path frontend bundle into `dist-desktop/` for Tauri |
 | `npm start` | Serve `dist/` + API via Express |
 | `npm test` | Vitest suite |
 | `npm run lint` | `tsc --noEmit` type check |
 | `npm run electron:dev` | Electron in dev mode |
 | `npm run electron:build:win` | Windows installer → `release/` |
 | `npm run electron:build:mac` | macOS dmg/zip → `release/` |
+| `npm run tauri:dev` | Run the app in the Tauri development window |
+| `npm run tauri:build` | Build a signed Tauri desktop release (requires Rust and updater signing setup) |
 
 ## Deployment
 
@@ -74,8 +77,10 @@ at build time, so local builds need a `.env`.
 - **API / Web Push** — needs a *persistent* Node host (Render, Railway, Fly).
   See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) and
   [`docs/WEB_PUSH_GUIDE.md`](docs/WEB_PUSH_GUIDE.md).
-- **Desktop** — `npm run electron:build:win`, then `Run_App.bat` launches the
-  unpacked build.
+- **Desktop** — the Windows Tauri installer and automatic signed updater are
+  documented in [`docs/DESKTOP_APP.md`](docs/DESKTOP_APP.md). The existing
+  Electron installer remains supported for current users. Tag-triggered desktop
+  releases are described in [`docs/RELEASE_WORKFLOW.md`](docs/RELEASE_WORKFLOW.md).
 
 ## Project layout
 
@@ -92,6 +97,7 @@ src/
 ├─ lib/                 # firebase + supabase clients
 └─ types/               # FullAppData and all domain types
 server/                 # electron main/preload + push service
+src-tauri/              # Tauri 2 Rust shell, capabilities and updater configuration
 docs/                   # deployment and web push guides
 ```
 

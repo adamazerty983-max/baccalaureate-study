@@ -1,134 +1,102 @@
 /**
- * Release & Publishing Automation Script for Baccalaureate Study Hub
+ * Prepare matching SemVer values for the web, Electron, and Tauri packages.
+ * This script only edits local version metadata. It never creates tags, pushes,
+ * publishes a GitHub Release, or handles signing credentials.
  *
  * Usage:
- *   node scripts/release.cjs [patch|minor|major|<specific-version>] [--dry-run] [--skip-publish]
- *
- * Examples:
  *   npm run release patch
- *   npm run release 1.0.1
- *   npm run release -- --dry-run
+ *   npm run release minor
+ *   npm run release 1.2.3
+ *   npm run release patch -- --dry-run
  */
 
-const fs = require('fs');
-const path = require('path');
-const { execSync } = require('child_process');
+const fs = require('node:fs');
+const path = require('node:path');
 
-const rootDir = path.resolve(__dirname, '..');
-const pkgPath = path.join(rootDir, 'package.json');
+const root = path.resolve(__dirname, '..');
+const packagePath = path.join(root, 'package.json');
+const lockPath = path.join(root, 'package-lock.json');
+const tauriPath = path.join(root, 'src-tauri/tauri.conf.json');
+const cargoPath = path.join(root, 'src-tauri/Cargo.toml');
+const cargoLockPath = path.join(root, 'src-tauri/Cargo.lock');
+const args = process.argv.slice(2);
+const dryRun = args.includes('--dry-run') || args.includes('-d');
+const bump = args.find((arg) => !arg.startsWith('-')) || 'patch';
+const semverPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 
-// 1. Parse CLI arguments
-const rawArgs = process.argv.slice(2);
-const isDryRun = rawArgs.includes('--dry-run') || rawArgs.includes('-d');
-const isSkipPublish = rawArgs.includes('--skip-publish') || isDryRun;
-const cleanArgs = rawArgs.filter((arg) => !arg.startsWith('--') && !arg.startsWith('-'));
-
-const bumpTypeOrVersion = cleanArgs[0] || 'patch';
-
-// 2. Validate SemVer helper
-const SEMVER_REGEX = /^(\d+)\.(\d+)\.(\d+)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$/;
-
-function parseSemVer(version) {
-  const match = version.match(SEMVER_REGEX);
-  if (!match) return null;
-  return {
-    major: parseInt(match[1], 10),
-    minor: parseInt(match[2], 10),
-    patch: parseInt(match[3], 10),
-    prerelease: match[4] || '',
-    build: match[5] || '',
-  };
+function fail(message) {
+  console.error(`Version preparation failed: ${message}`);
+  process.exit(1);
 }
 
-function bumpVersion(currentVersion, bumpType) {
-  const parsed = parseSemVer(currentVersion);
-  if (!parsed) {
-    throw new Error(`Current version "${currentVersion}" in package.json is not valid semver.`);
-  }
-
-  if (bumpType === 'major') {
-    return `${parsed.major + 1}.0.0`;
-  } else if (bumpType === 'minor') {
-    return `${parsed.major}.${parsed.minor + 1}.0`;
-  } else if (bumpType === 'patch') {
-    return `${parsed.major}.${parsed.minor}.${parsed.patch + 1}`;
-  } else {
-    // Treat as explicit version
-    if (!SEMVER_REGEX.test(bumpType)) {
-      throw new Error(
-        `Invalid version bump "${bumpType}". Must be "major", "minor", "patch", or an exact semver like "1.0.1".`
-      );
-    }
-    return bumpType;
+function readJson(filePath) {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch (error) {
+    fail(`Could not read ${path.relative(root, filePath)}: ${error.message}`);
   }
 }
 
-// 3. Read current package.json
-const pkgData = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-const currentVersion = pkgData.version;
-const newVersion = bumpVersion(currentVersion, bumpTypeOrVersion);
+function nextVersion(currentVersion, bumpArg) {
+  if (!semverPattern.test(currentVersion)) fail(`package.json version ${currentVersion} is not SemVer.`);
+  if (semverPattern.test(bumpArg)) return bumpArg;
 
-console.log('====================================================');
-console.log('🚀 Baccalaureate Study Hub Release Builder');
-console.log('====================================================');
+  const match = currentVersion.match(/^(\d+)\.(\d+)\.(\d+)$/);
+  if (!match) fail('Only explicit versions can be used when the current version is a prerelease.');
+  const [, majorText, minorText, patchText] = match;
+  const major = Number(majorText);
+  const minor = Number(minorText);
+  const patch = Number(patchText);
+  if (bumpArg === 'major') return `${major + 1}.0.0`;
+  if (bumpArg === 'minor') return `${major}.${minor + 1}.0`;
+  if (bumpArg === 'patch') return `${major}.${minor}.${patch + 1}`;
+  fail(`Unknown version ${bumpArg}. Use patch, minor, major, or an explicit version such as 1.2.3.`);
+}
+
+const pkg = readJson(packagePath);
+const lock = readJson(lockPath);
+const tauri = readJson(tauriPath);
+const currentVersion = pkg.version;
+const newVersion = nextVersion(currentVersion, bump);
+const cargo = fs.readFileSync(cargoPath, 'utf8');
+const cargoLock = fs.existsSync(cargoLockPath) ? fs.readFileSync(cargoLockPath, 'utf8') : null;
+
+if (lock.version !== currentVersion || lock.packages?.['']?.version !== currentVersion) {
+  fail('package-lock.json version is already out of sync. Run npm install before preparing a release.');
+}
+if (tauri.version !== currentVersion) fail('Tauri version is already out of sync with package.json.');
+if (!/^\[package\][\s\S]*?^version\s*=\s*"[^"]+"/m.test(cargo)) {
+  fail('Could not find the package version in src-tauri/Cargo.toml.');
+}
+const cargoLockPackagePattern = /^(\[\[package\]\]\r?\n(?:(?!\[\[package\]\])[^\r\n]*\r?\n)*?name\s*=\s*"baccalaureate-study-hub"\r?\nversion\s*=\s*)"[^"]+"/m;
+if (cargoLock && !cargoLockPackagePattern.test(cargoLock)) {
+  fail('Could not find the desktop package entry in src-tauri/Cargo.lock.');
+}
+
 console.log(`Current version: v${currentVersion}`);
-console.log(`Target version:  v${newVersion}`);
-console.log(`Dry-run mode:    ${isDryRun ? 'YES (No publish)' : 'NO'}`);
-console.log('----------------------------------------------------');
+console.log(`Prepared version: v${newVersion}`);
+console.log('This command only updates local metadata; it does not tag, push, build, or publish.');
 
-// 4. Validate GitHub Token requirement
-const ghToken = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
-if (!ghToken && !isSkipPublish) {
-  console.error('\n❌ ERROR: GH_TOKEN or GITHUB_TOKEN environment variable is not set!');
-  console.error('Publishing to GitHub Releases requires a Personal Access Token with "repo" scope.\n');
-  console.error('To set it in PowerShell:');
-  console.error('   $env:GH_TOKEN="ghp_yourPersonalAccessTokenHere"');
-  console.error('   npm run release\n');
-  console.error('Or run a local package test without publishing:');
-  console.error('   npm run release -- --dry-run\n');
-  process.exit(1);
+if (dryRun) {
+  console.log('Dry run: no files changed.');
+  process.exit(0);
 }
 
-// 5. Update package.json version
-if (!isDryRun) {
-  pkgData.version = newVersion;
-  fs.writeFileSync(pkgPath, JSON.stringify(pkgData, null, 2) + '\n', 'utf8');
-  console.log(`✔ Updated package.json version to ${newVersion}`);
-} else {
-  console.log(`[Dry-Run] Skipped writing new version to package.json`);
-}
+pkg.version = newVersion;
+lock.version = newVersion;
+lock.packages[''].version = newVersion;
+tauri.version = newVersion;
+const updatedCargo = cargo.replace(
+  /(^\[package\][\s\S]*?^version\s*=\s*)"[^"]+"/m,
+  `$1"${newVersion}"`
+);
+const updatedCargoLock = cargoLock?.replace(cargoLockPackagePattern, `$1"${newVersion}"`);
 
-// 6. Execute Build
-console.log('\n📦 Step 1: Building production web bundle (vite build)...');
-try {
-  execSync('npm run build', { cwd: rootDir, stdio: 'inherit' });
-  console.log('✔ Web bundle built successfully.');
-} catch (err) {
-  console.error('❌ Web build failed:', err.message);
-  process.exit(1);
-}
+fs.writeFileSync(packagePath, `${JSON.stringify(pkg, null, 2)}\n`, 'utf8');
+fs.writeFileSync(lockPath, `${JSON.stringify(lock, null, 2)}\n`, 'utf8');
+fs.writeFileSync(tauriPath, `${JSON.stringify(tauri, null, 2)}\n`, 'utf8');
+fs.writeFileSync(cargoPath, updatedCargo, 'utf8');
+if (updatedCargoLock) fs.writeFileSync(cargoLockPath, updatedCargoLock, 'utf8');
 
-// 7. Execute Electron Builder with publish
-const publishFlag = isSkipPublish ? '--publish never' : '--publish always';
-console.log(`\n🔨 Step 2: Packaging Electron app with electron-builder (${publishFlag})...`);
-
-try {
-  const isWin = process.platform === 'win32';
-  const targetFlag = isWin ? '--win' : '--mac';
-  const builderCmd = `npx electron-builder ${targetFlag} ${publishFlag}`;
-  console.log(`Running: ${builderCmd}`);
-  execSync(builderCmd, { cwd: rootDir, stdio: 'inherit' });
-  console.log('\n✔ Standalone packaging completed successfully!');
-} catch (err) {
-  console.error('❌ electron-builder failed:', err.message);
-  process.exit(1);
-}
-
-console.log('\n====================================================');
-console.log(`🎉 Release v${newVersion} finished successfully!`);
-if (!isSkipPublish) {
-  console.log('Releases and update manifests (latest.yml) were uploaded to GitHub Releases.');
-} else {
-  console.log('Artifacts generated in the release/ directory (local build).');
-}
-console.log('====================================================\n');
+console.log('Updated package.json, package-lock.json, src-tauri/tauri.conf.json, and Cargo version metadata.');
+console.log(`After reviewing the changes and configuring the signing key, create and push tag v${newVersion} to start the release workflow.`);

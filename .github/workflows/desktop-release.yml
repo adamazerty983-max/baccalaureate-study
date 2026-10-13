@@ -1,0 +1,122 @@
+name: Windows Desktop Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-windows:
+    name: Build and publish Windows desktop apps
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install locked frontend dependencies
+        run: npm ci
+
+      - name: Validate version and release tag
+        run: node scripts/validate-desktop-release.cjs --tag $env:GITHUB_REF_NAME
+        shell: pwsh
+
+      - name: Type check
+        run: npm run lint
+
+      - name: Run unit tests
+        run: npm test
+
+      - name: Build the GitHub Pages frontend
+        env:
+          VITE_SUPABASE_URL: https://vcniewfislplbztahaqj.supabase.co
+          VITE_SUPABASE_ANON_KEY: sb_publishable_FZ75fgDDOSamHfrraKi2PA_DB5dxbNU
+        run: npm run build
+
+      - name: Build the legacy Electron Windows updater assets
+        env:
+          VITE_SUPABASE_URL: https://vcniewfislplbztahaqj.supabase.co
+          VITE_SUPABASE_ANON_KEY: sb_publishable_FZ75fgDDOSamHfrraKi2PA_DB5dxbNU
+        run: npx electron-builder --win --publish never
+
+      - name: Verify legacy Electron assets
+        shell: pwsh
+        run: |
+          $legacyAssets = @(Get-ChildItem -LiteralPath release -File)
+          if (-not ($legacyAssets.Name -contains 'latest.yml')) {
+            throw 'electron-builder did not create release/latest.yml.'
+          }
+          if (-not ($legacyAssets.Name | Where-Object { $_ -match '\.exe$' })) {
+            throw 'electron-builder did not create a Windows installer.'
+          }
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@67ef31d5b988238dd797d409d6f9574278e20537 # stable toolchain action
+        with:
+          toolchain: stable
+          targets: x86_64-pc-windows-msvc
+
+      - name: Validate updater signing configuration
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          VITE_SUPABASE_URL: https://vcniewfislplbztahaqj.supabase.co
+          VITE_SUPABASE_ANON_KEY: sb_publishable_FZ75fgDDOSamHfrraKi2PA_DB5dxbNU
+        run: npm run desktop:validate-release
+
+      - name: Build and create a draft Tauri release
+        uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # action v1.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tauriScript: npx tauri
+          args: --target x86_64-pc-windows-msvc
+          tagName: ${{ github.ref_name }}
+          releaseName: Baccalaureate Study Hub ${{ github.ref_name }}
+          releaseBody: 'Windows installers for the Tauri and legacy Electron desktop apps. The Tauri updater manifest and signatures are included.'
+          generateReleaseNotes: true
+          releaseDraft: true
+          uploadUpdaterJson: true
+          updaterJsonPreferNsis: true
+
+      - name: Add Electron updater assets and publish the release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          $electronAssets = @(Get-ChildItem -LiteralPath release -File | Where-Object {
+            $_.Name -eq 'latest.yml' -or $_.Name -match '\.exe(\.blockmap)?$'
+          } | ForEach-Object { $_.FullName })
+          if (-not ($electronAssets | Where-Object { $_ -match '[\\/]latest\.yml$' })) {
+            throw 'Electron latest.yml is missing; the release will remain a draft.'
+          }
+          gh release upload $tag @electronAssets --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Could not upload legacy Electron update assets.' }
+
+          $assetNames = @(gh release view $tag --json assets --jq '.assets[].name')
+          if ($LASTEXITCODE -ne 0) { throw 'Could not inspect the draft release assets.' }
+          if (-not ($assetNames -contains 'latest.json')) { throw 'Tauri latest.json is missing; release remains a draft.' }
+          if (-not ($assetNames -contains 'latest.yml')) { throw 'Electron latest.yml is missing; release remains a draft.' }
+          if (-not ($assetNames | Where-Object { $_ -match '\.exe\.sig$' })) { throw 'Tauri signed installer signature is missing; release remains a draft.' }
+          if (-not ($assetNames | Where-Object { $_ -match '\.exe$' })) { throw 'Windows installer is missing; release remains a draft.' }
+
+          gh release edit $tag --draft=false
+          if ($LASTEXITCODE -ne 0) { throw 'Could not publish the verified desktop release.' }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Settings,
   Moon,
@@ -50,6 +50,12 @@ import { GoogleAuthButton } from '../shared/GoogleAuthButton';
 import { notificationService } from '../../services/notificationService';
 import { WebPushSettings } from '../shared/WebPushSettings';
 import firebaseConfig from '../../../firebase-applet-config.json';
+import {
+  DESKTOP_UPDATE_STATUS_EVENT,
+  DesktopUpdateUiState,
+  isDesktopApplication,
+  requestDesktopUpdateCheck,
+} from '../../services/desktopUpdater';
 
 interface SettingsTabProps {
   settings: AppSettings;
@@ -83,6 +89,16 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
     notificationService.getPermission()
   );
   const [testSent, setTestSent] = useState(false);
+  const [desktopUpdateState, setDesktopUpdateState] = useState<DesktopUpdateUiState>({ status: 'idle' });
+
+  useEffect(() => {
+    const handleUpdateStatus = (event: Event) => {
+      const detail = (event as CustomEvent<DesktopUpdateUiState>).detail;
+      if (detail) setDesktopUpdateState(detail);
+    };
+    window.addEventListener(DESKTOP_UPDATE_STATUS_EVENT, handleUpdateStatus);
+    return () => window.removeEventListener(DESKTOP_UPDATE_STATUS_EVENT, handleUpdateStatus);
+  }, []);
 
   const totalTasks = fullData.tasks.length;
   const totalQuizzes = fullData.quizzes.length;
@@ -216,6 +232,52 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
           </div>
         </div>
       </div>
+
+      {isDesktopApplication() && (
+        <section className="bg-white dark:bg-[#1A2535] p-5 rounded-2xl border border-indigo-500/25 shadow-sm space-y-3" aria-labelledby="desktop-updates-title">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-indigo-500/10 text-indigo-500 dark:text-indigo-300 flex items-center justify-center shrink-0">
+                <RefreshCw className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 id="desktop-updates-title" className="text-sm font-bold text-slate-900 dark:text-white">
+                  {isAr ? 'تحديثات التطبيق' : language === 'en' ? 'Application updates' : 'Mises à jour de l’application'}
+                </h2>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400" aria-live="polite">
+                  {desktopUpdateState.status === 'checking'
+                    ? (isAr ? 'جارٍ التحقق من أحدث إصدار…' : language === 'en' ? 'Checking for the latest version…' : 'Recherche de la dernière version…')
+                    : desktopUpdateState.status === 'available'
+                      ? (isAr ? `الإصدار ${desktopUpdateState.version} متاح؛ راجع التنبيه أعلى الصفحة.` : language === 'en' ? `Version ${desktopUpdateState.version} is available; see the notice above.` : `La version ${desktopUpdateState.version} est disponible ; consultez l’avis ci-dessus.`)
+                      : desktopUpdateState.status === 'downloading'
+                        ? (desktopUpdateState.progress !== undefined
+                          ? (isAr ? `جارٍ التنزيل: ${desktopUpdateState.progress}%` : language === 'en' ? `Downloading: ${desktopUpdateState.progress}%` : `Téléchargement : ${desktopUpdateState.progress}%`)
+                          : (isAr ? 'جارٍ تنزيل التحديث…' : language === 'en' ? 'Downloading update…' : 'Téléchargement de la mise à jour…'))
+                        : desktopUpdateState.status === 'installing'
+                          ? (isAr ? 'بدأ التثبيت؛ سيتوقف التطبيق مؤقتًا.' : language === 'en' ? 'Installation has started; the app will close briefly.' : 'L’installation a commencé ; l’application va se fermer brièvement.')
+                          : desktopUpdateState.status === 'not-available'
+                            ? desktopUpdateState.message || (isAr ? 'التطبيق محدّث.' : language === 'en' ? 'The app is up to date.' : 'L’application est à jour.')
+                            : desktopUpdateState.status === 'error'
+                              ? desktopUpdateState.message || (isAr ? 'تعذّر التحقق الآن؛ يمكنك المحاولة لاحقًا.' : language === 'en' ? 'Could not check right now; try again later.' : 'Vérification impossible ; réessayez plus tard.')
+                              : (isAr ? 'يتحقق التطبيق من التحديثات عند بدء التشغيل. يمكنك بدء فحص يدوي هنا.' : language === 'en' ? 'The app checks for updates at startup. You can also check manually here.' : 'L’application vérifie les mises à jour au démarrage. Vous pouvez aussi lancer une vérification ici.')}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setDesktopUpdateState({ status: 'checking' });
+                requestDesktopUpdateCheck();
+              }}
+              disabled={desktopUpdateState.status === 'checking' || desktopUpdateState.status === 'downloading' || desktopUpdateState.status === 'installing'}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${desktopUpdateState.status === 'checking' ? 'animate-spin' : ''}`} />
+              {isAr ? 'تحقق من التحديثات' : language === 'en' ? 'Check for Updates' : 'Vérifier les mises à jour'}
+            </button>
+          </div>
+        </section>
+      )}
 
       {/* Cloud Database (Firebase Firestore) Card */}
       <section className="bg-white dark:bg-[#1A2535] p-6 rounded-2xl border border-teal-500/30 dark:border-teal-500/20 shadow-sm space-y-4">

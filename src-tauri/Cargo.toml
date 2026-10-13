@@ -1,0 +1,19 @@
+[package]
+name = "baccalaureate-study-hub"
+version = "1.0.0"
+description = "Baccalaureate Study Hub desktop app"
+authors = ["Baccalaureate Study Hub"]
+edition = "2021"
+rust-version = "1.90"
+
+[lib]
+name = "baccalaureate_study_hub_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-process = "2"
+tauri-plugin-updater = "2"

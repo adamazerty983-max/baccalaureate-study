@@ -1,6 +1,7 @@
 node_modules/
 build/
 dist/
+dist-desktop/
 coverage/
 .DS_Store
 *.log
@@ -18,6 +19,7 @@ yarn-error.log*
 dist/
 build/
 release/
+src-tauri/target/
 dist-electron/
 *.log
 
