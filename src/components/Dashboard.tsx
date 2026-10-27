@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, Suspense, lazy } from 'react';
 import {
   Calendar,
   Clock,
@@ -41,6 +41,11 @@ import { DuolingoStreakFlame } from './gamification/DuolingoStreakFlame';
 import { StreakHistoryModal } from './gamification/StreakHistoryModal';
 import { ProgressRing } from './shared/ProgressRing';
 import { CalendarHeatmap } from './gamification/CalendarHeatmap';
+import { StudyHoursChartSkeleton } from './charts/StudyHoursChartSkeleton';
+
+const StudyHoursChart = lazy(() =>
+  import('./charts/StudyHoursChart').then((m) => ({ default: m.StudyHoursChart }))
+);
 import { chimePlayer } from '../utils/audio';
 import { getT } from '../utils/i18n';
 import { calculateDailyStreak, getLocalDateStr, getWeekDaysStreakStatus } from '../utils/streak';
@@ -1641,6 +1646,21 @@ export const Dashboard: React.FC<DashboardProps> = ({
       {/* =========================================================
           BENTO ROW 3.5: GITHUB-STYLE CALENDAR HEATMAP
           ========================================================= */}
+      {/* =========================================================
+          BENTO ROW 3.4: STUDY HOURS SMOOTH AREA/LINE CHART
+          ========================================================= */}
+      <Suspense fallback={<StudyHoursChartSkeleton />}>
+        <StudyHoursChart
+          timeBlocks={appData.timeBlocks}
+          weeklyReviews={appData.weeklyReviews}
+          academicYearStartDate={appData.settings.academicYearStartDate}
+          baccalaureateDate={appData.settings.baccalaureateDate}
+          language={language}
+          onNavigateTab={onNavigateTab}
+          onOpenFocusMode={onOpenFocusMode}
+        />
+      </Suspense>
+
       <CalendarHeatmap
         appData={appData}
         language={language}
