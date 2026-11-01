@@ -229,6 +229,11 @@ export const I18N: Record<AppLanguage, TranslationDictionary> = {
     desktop_update_desc_ready: 'La nouvelle version {v} est téléchargée. Redémarrez l’application pour finaliser la mise à jour.',
     desktop_update_btn_restart: 'Redémarrer et mettre à jour',
     desktop_update_btn_later: 'Plus tard',
+    desktop_update_btn_refresh: 'Actualiser',
+    desktop_update_btn_whats_new: 'Nouveautés',
+    desktop_update_btn_retry: 'Réessayer',
+    desktop_update_toast_success: 'Application mise à jour vers la v{v} !',
+    desktop_update_eta_remaining: 'restant',
     days_short: ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'],
     days_full: ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'],
     chart_study_hours_title: "Heures d'étude",
@@ -474,6 +479,11 @@ export const I18N: Record<AppLanguage, TranslationDictionary> = {
     desktop_update_desc_ready: 'تم تحميل الإصدار الجديد {v}. أعد تشغيل التطبيق لتثبيت التحديث الآن.',
     desktop_update_btn_restart: 'إعادة التشغيل والتحديث',
     desktop_update_btn_later: 'لاحقاً',
+    desktop_update_btn_refresh: 'تحديث الصفحة',
+    desktop_update_btn_whats_new: 'ما الجديد',
+    desktop_update_btn_retry: 'إعادة المحاولة',
+    desktop_update_toast_success: 'تم تحديث التطبيق إلى الإصدار v{v} بنجاح!',
+    desktop_update_eta_remaining: 'متبقي',
     days_short: ['الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت', 'الأحد'],
     days_full: ['الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت', 'الأحد'],
     chart_study_hours_title: 'ساعات الدراسة',
@@ -719,6 +729,11 @@ export const I18N: Record<AppLanguage, TranslationDictionary> = {
     desktop_update_desc_ready: 'New version {v} has been downloaded. Restart the app now to apply the update.',
     desktop_update_btn_restart: 'Restart & Update',
     desktop_update_btn_later: 'Later',
+    desktop_update_btn_refresh: 'Refresh',
+    desktop_update_btn_whats_new: "What's new",
+    desktop_update_btn_retry: 'Retry',
+    desktop_update_toast_success: 'Application updated to v{v}!',
+    desktop_update_eta_remaining: 'remaining',
     days_short: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
     days_full: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
     chart_study_hours_title: 'Study Hours',
@@ -743,8 +758,14 @@ export const I18N: Record<AppLanguage, TranslationDictionary> = {
 };
 
 export function getT(lang: AppLanguage = 'fr') {
-  return (key: string): string => {
+  return (key: string, params?: Record<string, string | number>): string => {
     const dict = I18N[lang] || I18N.fr;
-    return dict[key] || I18N.fr[key] || key;
+    let text = dict[key] || I18N.fr[key] || key;
+    if (params) {
+      for (const [k, v] of Object.entries(params)) {
+        text = text.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v));
+      }
+    }
+    return text;
   };
 }

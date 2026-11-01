@@ -1,18 +1,17 @@
-const { app, BrowserWindow, protocol, net, shell, Menu, ipcMain } = require('electron');
+const { app, BrowserWindow, protocol, net, shell, Menu, ipcMain, session } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const url = require('url');
 const fs = require('fs');
 
 // Register privileged custom scheme before app ready
-// standard: true + allowServiceWorkers: true enables sw.js and IndexedDB
+// Note: allowServiceWorkers is explicitly omitted so desktop does not run service workers
 protocol.registerSchemesAsPrivileged([
   {
     scheme: 'app',
     privileges: {
       standard: true,
       secure: true,
-      allowServiceWorkers: true,
       supportFetchAPI: true,
       corsEnabled: true,
       stream: true,
@@ -22,6 +21,61 @@ protocol.registerSchemesAsPrivileged([
 
 const isDev = process.env.ELECTRON_DEV === 'true' || process.argv.includes('--dev');
 let mainWindow = null;
+
+// Updater settings persistence in userData (single source of truth for main process)
+let settingsFilePath = '';
+let updaterSettings = {
+  autoDownload: true,
+  autoInstallOnAppQuit: false,
+};
+
+function getSettingsFilePath() {
+  if (!settingsFilePath) {
+    settingsFilePath = path.join(app.getPath('userData'), 'updater-settings.json');
+  }
+  return settingsFilePath;
+}
+
+function loadUpdaterSettings() {
+  try {
+    const file = getSettingsFilePath();
+    if (fs.existsSync(file)) {
+      const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+      if (typeof parsed.autoDownload === 'boolean') updaterSettings.autoDownload = parsed.autoDownload;
+      if (typeof parsed.autoInstallOnAppQuit === 'boolean') updaterSettings.autoInstallOnAppQuit = parsed.autoInstallOnAppQuit;
+    }
+  } catch (err) {
+    console.warn('[Updater Settings] Could not load updater-settings.json:', err.message);
+  }
+}
+
+function saveUpdaterSettings(patch) {
+  if (typeof patch.autoDownload === 'boolean') updaterSettings.autoDownload = patch.autoDownload;
+  if (typeof patch.autoInstallOnAppQuit === 'boolean') updaterSettings.autoInstallOnAppQuit = patch.autoInstallOnAppQuit;
+  try {
+    fs.writeFileSync(getSettingsFilePath(), JSON.stringify(updaterSettings, null, 2), 'utf8');
+  } catch (err) {
+    console.warn('[Updater Settings] Could not save updater-settings.json:', err.message);
+  }
+  autoUpdater.autoDownload = updaterSettings.autoDownload;
+  autoUpdater.autoInstallOnAppQuit = updaterSettings.autoInstallOnAppQuit;
+}
+
+/**
+ * Validate external URLs: strictly https and allowlisted host (github.com).
+ * Reject everything else to prevent arbitrary URL launching.
+ */
+function validateExternalUrl(targetUrl) {
+  if (!targetUrl || typeof targetUrl !== 'string') return false;
+  try {
+    const parsed = new URL(targetUrl);
+    if (parsed.protocol !== 'https:') return false;
+    const host = parsed.hostname.toLowerCase();
+    return host === 'github.com' || host.endsWith('.github.com');
+  } catch {
+    return false;
+  }
+}
 
 // Single Instance Lock
 const gotTheLock = app.requestSingleInstanceLock();
@@ -169,10 +223,12 @@ function createWindow() {
     mainWindow.show();
   });
 
-  // Open target external links in user default browser
+  // Open target external links in user default browser (strictly validated)
   mainWindow.webContents.setWindowOpenHandler(({ url: targetUrl }) => {
-    if (targetUrl.startsWith('http:') || targetUrl.startsWith('https:')) {
+    if (validateExternalUrl(targetUrl)) {
       shell.openExternal(targetUrl);
+    } else {
+      console.warn('[Security] Refused to open untrusted external URL:', targetUrl);
     }
     return { action: 'deny' };
   });
@@ -192,8 +248,9 @@ function createWindow() {
 
 function initAutoUpdater() {
   autoUpdater.logger = console;
-  autoUpdater.autoDownload = true;
-  autoUpdater.autoInstallOnAppQuit = false;
+  // Apply persisted settings directly
+  autoUpdater.autoDownload = updaterSettings.autoDownload;
+  autoUpdater.autoInstallOnAppQuit = updaterSettings.autoInstallOnAppQuit;
 
   if (process.env.ELECTRON_UPDATER_URL) {
     autoUpdater.forceDevUpdateConfig = true;
@@ -216,7 +273,7 @@ function initAutoUpdater() {
   autoUpdater.on('update-available', (info) => {
     sendStatusToWindow('available', {
       version: info?.version,
-      releaseNotes: info?.releaseNotes,
+      releaseNotes: typeof info?.releaseNotes === 'string' ? info.releaseNotes : Array.isArray(info?.releaseNotes) ? info.releaseNotes.map(n => n.note).join('\n') : undefined,
     });
   });
 
@@ -238,7 +295,7 @@ function initAutoUpdater() {
   autoUpdater.on('update-downloaded', (info) => {
     sendStatusToWindow('downloaded', {
       version: info?.version,
-      releaseNotes: info?.releaseNotes,
+      releaseNotes: typeof info?.releaseNotes === 'string' ? info.releaseNotes : Array.isArray(info?.releaseNotes) ? info.releaseNotes.map(n => n.note).join('\n') : undefined,
     });
   });
 
@@ -260,12 +317,30 @@ function initAutoUpdater() {
   });
 
   ipcMain.handle('updater:restart-and-install', () => {
-    // isSilent: false, isForceRunAfter: true
+    // isSilent: false, isForceRunAfter: true (ensures automatic restart into updated build)
     autoUpdater.quitAndInstall(false, true);
   });
 
   ipcMain.handle('updater:get-app-version', () => {
     return app.getVersion();
+  });
+
+  ipcMain.handle('updater:get-settings', () => {
+    return { ...updaterSettings };
+  });
+
+  ipcMain.handle('updater:set-settings', (_event, patch) => {
+    saveUpdaterSettings(patch || {});
+    return { ...updaterSettings };
+  });
+
+  ipcMain.handle('updater:open-external', async (_event, targetUrl) => {
+    if (validateExternalUrl(targetUrl)) {
+      await shell.openExternal(targetUrl);
+      return { success: true };
+    }
+    console.warn('[Security] Refused to open untrusted external URL via IPC:', targetUrl);
+    return { success: false, error: 'Untrusted URL' };
   });
 
   // Check for updates on startup (after 5s delay so UI loads smoothly)
@@ -283,7 +358,19 @@ function initAutoUpdater() {
   }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  // Purge desktop service worker and cache storage ONLY before loading the window.
+  // CRITICAL: indexeddb and localstorage are NEVER included, protecting all student study data!
+  try {
+    await session.defaultSession.clearStorageData({
+      storages: ['serviceworkers', 'cachestorage'],
+    });
+  } catch (err) {
+    console.warn('[Storage Cleanup] Failed to clear stale service worker caches:', err.message);
+  }
+
+  // Synchronously load updater settings before creating window or starting updater
+  loadUpdaterSettings();
   createWindow();
   initAutoUpdater();
 

@@ -27,7 +27,8 @@ import { LoadingScreen } from './components/shared/LoadingScreen';
 import { NotificationCenterModal } from './components/shared/NotificationCenterModal';
 import { NotificationPermissionBanner } from './components/shared/NotificationPermissionBanner';
 import { SystemNotificationHUD } from './components/shared/SystemNotificationHUD';
-import { DesktopUpdateBanner } from './components/shared/DesktopUpdateBanner';
+import { UpdateBanner } from './components/shared/UpdateBanner';
+import { useToast } from './components/shared/Toast';
 import { PlannerCursor } from './components/shared/PlannerCursor';
 import { OfflineBanner } from './components/shared/OfflineBanner';
 import { notificationService } from './services/notificationService';
@@ -67,6 +68,7 @@ import {
 } from './utils/storage';
 import { mergeAppData, stampNow } from './utils/merge';
 import { chimePlayer } from './utils/audio';
+import { getT } from './utils/i18n';
 import { getLocalDateStr, isTimeBlockOccurrenceCompleted } from './utils/streak';
 import { preloadCriticalChunks, runWhenIdle } from './utils/performance';
 
@@ -201,6 +203,31 @@ export default function App() {
   }, [appData]);
 
   const language = appData.settings.language || 'fr';
+  const t = getT(language);
+  const toast = useToast();
+
+  // Handle post-update toast with silent first run guard (SHOULD-FIX 9)
+  useEffect(() => {
+    try {
+      const currentVer = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1.0.0';
+      const lastSeen = localStorage.getItem('mybac:last-seen-version');
+
+      if (lastSeen === null) {
+        // First run on this device/browser: record version silently without toast
+        localStorage.setItem('mybac:last-seen-version', currentVer);
+      } else if (lastSeen !== currentVer) {
+        // App was freshly updated to a new version: record and celebrate
+        localStorage.setItem('mybac:last-seen-version', currentVer);
+        toast.success(
+          t('desktop_update_toast_success', { v: currentVer }),
+          t('desktop_update_desc_ready', { v: currentVer }),
+          6000
+        );
+      }
+    } catch {
+      // Storage unavailable in restricted environment
+    }
+  }, [t, toast]);
 
   // 0. IndexedDB Dual Hydration: merge (not replace) so a stale snapshot
   // can never erase a completion written by the sync localStorage copy.
@@ -1141,7 +1168,7 @@ export default function App() {
         />
 
         {/* Desktop Application Auto-Update Banner (Electron only) */}
-        <DesktopUpdateBanner language={language} />
+        <UpdateBanner language={language} isFocusModeOpen={isFocusModeOpen} />
 
         {/* Proactive Notification Permission Banner (non-blocking, dismissible) */}
         <NotificationPermissionBanner language={language} />

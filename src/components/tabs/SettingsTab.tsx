@@ -50,12 +50,8 @@ import { GoogleAuthButton } from '../shared/GoogleAuthButton';
 import { notificationService } from '../../services/notificationService';
 import { WebPushSettings } from '../shared/WebPushSettings';
 import firebaseConfig from '../../../firebase-applet-config.json';
-import {
-  DESKTOP_UPDATE_STATUS_EVENT,
-  DesktopUpdateUiState,
-  isDesktopApplication,
-  requestDesktopUpdateCheck,
-} from '../../services/desktopUpdater';
+import { updateService } from '../../services/updateService';
+import { UpdateState } from '../../services/updateStateMachine';
 
 interface SettingsTabProps {
   settings: AppSettings;
@@ -89,15 +85,23 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
     notificationService.getPermission()
   );
   const [testSent, setTestSent] = useState(false);
-  const [desktopUpdateState, setDesktopUpdateState] = useState<DesktopUpdateUiState>({ status: 'idle' });
+  const [updateState, setUpdateState] = useState<UpdateState>(() => updateService.getState());
+  const [updaterSettings, setUpdaterSettings] = useState(() => ({ autoDownload: true, autoInstallOnAppQuit: false }));
+  const [lastCheckTime, setLastCheckTime] = useState<number | null>(() => updateService.getLastCheckTime());
 
   useEffect(() => {
-    const handleUpdateStatus = (event: Event) => {
-      const detail = (event as CustomEvent<DesktopUpdateUiState>).detail;
-      if (detail) setDesktopUpdateState(detail);
-    };
-    window.addEventListener(DESKTOP_UPDATE_STATUS_EVENT, handleUpdateStatus);
-    return () => window.removeEventListener(DESKTOP_UPDATE_STATUS_EVENT, handleUpdateStatus);
+    const unsub = updateService.subscribe((s) => {
+      setUpdateState(s);
+      setLastCheckTime(updateService.getLastCheckTime());
+    });
+
+    if (typeof window !== 'undefined' && window.electronAPI?.updater?.getSettings) {
+      window.electronAPI.updater.getSettings().then((st) => {
+        if (st) setUpdaterSettings(st);
+      }).catch(() => {});
+    }
+
+    return unsub;
   }, []);
 
   const totalTasks = fullData.tasks.length;
@@ -233,51 +237,157 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
         </div>
       </div>
 
-      {isDesktopApplication() && (
-        <section className="bg-white dark:bg-[#1A2535] p-5 rounded-2xl border border-indigo-500/25 shadow-sm space-y-3" aria-labelledby="desktop-updates-title">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-start gap-3">
-              <div className="w-9 h-9 rounded-xl bg-indigo-500/10 text-indigo-500 dark:text-indigo-300 flex items-center justify-center shrink-0">
-                <RefreshCw className="w-4 h-4" />
-              </div>
-              <div>
-                <h2 id="desktop-updates-title" className="text-sm font-bold text-slate-900 dark:text-white">
+      {/* Application Updates Section (Desktop & Web) */}
+      <section className="bg-white dark:bg-[#1A2535] p-5 rounded-2xl border border-indigo-500/25 shadow-sm space-y-3" aria-labelledby="app-updates-title">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-100 dark:border-slate-800">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-xl bg-indigo-500/10 text-indigo-500 dark:text-indigo-400 flex items-center justify-center shrink-0">
+              <RefreshCw className={`w-4 h-4 ${updateState.status === 'checking' ? 'animate-spin' : ''}`} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 id="app-updates-title" className="text-sm font-bold text-slate-900 dark:text-white">
                   {isAr ? 'تحديثات التطبيق' : language === 'en' ? 'Application updates' : 'Mises à jour de l’application'}
                 </h2>
-                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400" aria-live="polite">
-                  {desktopUpdateState.status === 'checking'
-                    ? (isAr ? 'جارٍ التحقق من أحدث إصدار…' : language === 'en' ? 'Checking for the latest version…' : 'Recherche de la dernière version…')
-                    : desktopUpdateState.status === 'available'
-                      ? (isAr ? `الإصدار ${desktopUpdateState.version} متاح؛ راجع التنبيه أعلى الصفحة.` : language === 'en' ? `Version ${desktopUpdateState.version} is available; see the notice above.` : `La version ${desktopUpdateState.version} est disponible ; consultez l’avis ci-dessus.`)
-                      : desktopUpdateState.status === 'downloading'
-                        ? (desktopUpdateState.progress !== undefined
-                          ? (isAr ? `جارٍ التنزيل: ${desktopUpdateState.progress}%` : language === 'en' ? `Downloading: ${desktopUpdateState.progress}%` : `Téléchargement : ${desktopUpdateState.progress}%`)
-                          : (isAr ? 'جارٍ تنزيل التحديث…' : language === 'en' ? 'Downloading update…' : 'Téléchargement de la mise à jour…'))
-                        : desktopUpdateState.status === 'installing'
-                          ? (isAr ? 'بدأ التثبيت؛ سيتوقف التطبيق مؤقتًا.' : language === 'en' ? 'Installation has started; the app will close briefly.' : 'L’installation a commencé ; l’application va se fermer brièvement.')
-                          : desktopUpdateState.status === 'not-available'
-                            ? desktopUpdateState.message || (isAr ? 'التطبيق محدّث.' : language === 'en' ? 'The app is up to date.' : 'L’application est à jour.')
-                            : desktopUpdateState.status === 'error'
-                              ? desktopUpdateState.message || (isAr ? 'تعذّر التحقق الآن؛ يمكنك المحاولة لاحقًا.' : language === 'en' ? 'Could not check right now; try again later.' : 'Vérification impossible ; réessayez plus tard.')
-                              : (isAr ? 'يتحقق التطبيق من التحديثات عند بدء التشغيل. يمكنك بدء فحص يدوي هنا.' : language === 'en' ? 'The app checks for updates at startup. You can also check manually here.' : 'L’application vérifie les mises à jour au démarrage. Vous pouvez aussi lancer une vérification ici.')}
-                </p>
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
+                  v{updateState.currentVersion || (typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1.0.0')}
+                </span>
               </div>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400" aria-live="polite">
+                {updateState.status === 'checking'
+                  ? (isAr ? 'جارٍ التحقق من أحدث إصدار…' : language === 'en' ? 'Checking for updates…' : 'Recherche de mises à jour…')
+                  : updateState.status === 'available'
+                  ? (isAr ? `الإصدار ${updateState.version} متوفر للتحميل؛ انظر الشريط بالأسفل.` : language === 'en' ? `Version ${updateState.version} is available; see notice below.` : `La version ${updateState.version} est disponible.`)
+                  : updateState.status === 'downloading'
+                  ? (isAr ? `جارٍ التنزيل: ${updateState.percent ?? 0}%` : language === 'en' ? `Downloading: ${updateState.percent ?? 0}%` : `Téléchargement : ${updateState.percent ?? 0}%`)
+                  : updateState.status === 'downloaded'
+                  ? (isAr ? 'التحديث جاهز للتثبيت.' : language === 'en' ? 'Update ready to install.' : 'Mise à jour prête à installer.')
+                  : updateState.status === 'up-to-date'
+                  ? (isAr ? 'أنت تستخدم أحدث إصدار متوفر.' : language === 'en' ? 'You are using the latest version.' : 'Vous utilisez la dernière version.')
+                  : updateState.status === 'error'
+                  ? (updateState.errorMessage || (isAr ? 'تعذّر التحقق الآن؛ يمكنك المحاولة لاحقاً.' : language === 'en' ? 'Could not check right now; try again later.' : 'Vérification impossible ; réessayez plus tard.'))
+                  : (isAr ? 'يتحقق التطبيق من التحديثات تلقائياً. يمكنك إجراء فحص يدوي في أي وقت.' : language === 'en' ? 'The app checks for updates automatically. You can also run a check now.' : 'L’application vérifie automatiquement les mises à jour.')}
+              </p>
+              {lastCheckTime && (
+                <p className="text-[10px] text-slate-400 mt-1">
+                  {isAr ? 'آخر فحص: ' : language === 'en' ? 'Last checked: ' : 'Dernière vérification : '}
+                  {new Date(lastCheckTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              )}
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                setDesktopUpdateState({ status: 'checking' });
-                requestDesktopUpdateCheck();
-              }}
-              disabled={desktopUpdateState.status === 'checking' || desktopUpdateState.status === 'downloading' || desktopUpdateState.status === 'installing'}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${desktopUpdateState.status === 'checking' ? 'animate-spin' : ''}`} />
-              {isAr ? 'تحقق من التحديثات' : language === 'en' ? 'Check for Updates' : 'Vérifier les mises à jour'}
-            </button>
           </div>
-        </section>
-      )}
+
+          <button
+            type="button"
+            onClick={() => updateService.checkForUpdates(true)}
+            disabled={updateState.status === 'checking' || updateState.status === 'downloading'}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${updateState.status === 'checking' ? 'animate-spin' : ''}`} />
+            <span>{isAr ? 'تحقق من التحديثات' : language === 'en' ? 'Check for Updates' : 'Vérifier les mises à jour'}</span>
+          </button>
+        </div>
+
+        {/* Electron preferences (autoDownload, autoInstallOnAppQuit) */}
+        {typeof window !== 'undefined' && Boolean(window.electronAPI?.isElectron) && (
+          <div className="pt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+            <label className="flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={updaterSettings.autoDownload}
+                onChange={(e) => {
+                  const val = e.target.checked;
+                  setUpdaterSettings((prev) => ({ ...prev, autoDownload: val }));
+                  window.electronAPI?.updater?.setSettings?.({ autoDownload: val });
+                }}
+                className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+              />
+              <span className="text-slate-700 dark:text-slate-300 font-medium">
+                {isAr ? 'تنزيل التحديثات تلقائياً' : language === 'en' ? 'Download updates automatically' : 'Télécharger les mises à jour automatiquement'}
+              </span>
+            </label>
+
+            <label className="flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={updaterSettings.autoInstallOnAppQuit}
+                onChange={(e) => {
+                  const val = e.target.checked;
+                  setUpdaterSettings((prev) => ({ ...prev, autoInstallOnAppQuit: val }));
+                  window.electronAPI?.updater?.setSettings?.({ autoInstallOnAppQuit: val });
+                }}
+                className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+              />
+              <span className="text-slate-700 dark:text-slate-300 font-medium">
+                {isAr ? 'التثبيت عند إغلاق التطبيق' : language === 'en' ? 'Install when quitting app' : 'Installer à la fermeture de l’application'}
+              </span>
+            </label>
+          </div>
+        )}
+
+        {/* Dev Simulator Controls (Visible only in development mode) */}
+        {import.meta.env.DEV && (
+          <div className="mt-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-amber-700 dark:text-amber-300 flex items-center gap-1.5 text-[11px]">
+                <Sliders className="w-3.5 h-3.5" />
+                Dev Simulator: Test Update States
+              </span>
+              <button
+                type="button"
+                onClick={() => updateService.reset()}
+                className="text-[10px] font-bold text-amber-600 dark:text-amber-400 hover:underline"
+              >
+                Reset
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-1.5 pt-0.5">
+              <button
+                type="button"
+                onClick={() => updateService.simulate({ status: 'checking', isManualCheck: true })}
+                className="px-2 py-1 rounded bg-amber-200/50 dark:bg-amber-950/50 text-amber-900 dark:text-amber-200 text-[10px] font-mono hover:bg-amber-300"
+              >
+                Checking
+              </button>
+              <button
+                type="button"
+                onClick={() => updateService.simulate({ status: 'available', version: '1.1.0', releaseNotes: '### What\'s New in v1.1.0\n- Exam Simulator Chrono\n- Performance improvements' })}
+                className="px-2 py-1 rounded bg-amber-200/50 dark:bg-amber-950/50 text-amber-900 dark:text-amber-200 text-[10px] font-mono hover:bg-amber-300"
+              >
+                Available
+              </button>
+              <button
+                type="button"
+                onClick={() => updateService.simulate({ status: 'downloading', version: '1.1.0', percent: 45, transferred: 4500000, total: 10000000, bytesPerSecond: 1000000, estimatedSeconds: 6 })}
+                className="px-2 py-1 rounded bg-amber-200/50 dark:bg-amber-950/50 text-amber-900 dark:text-amber-200 text-[10px] font-mono hover:bg-amber-300"
+              >
+                Downloading (45%)
+              </button>
+              <button
+                type="button"
+                onClick={() => updateService.simulate({ status: 'downloaded', version: '1.1.0', percent: 100, releaseNotes: '### v1.1.0 Ready\nRestart now to apply changes.' })}
+                className="px-2 py-1 rounded bg-amber-200/50 dark:bg-amber-950/50 text-amber-900 dark:text-amber-200 text-[10px] font-mono hover:bg-amber-300"
+              >
+                Downloaded
+              </button>
+              <button
+                type="button"
+                onClick={() => updateService.simulate({ status: 'up-to-date', isManualCheck: true })}
+                className="px-2 py-1 rounded bg-amber-200/50 dark:bg-amber-950/50 text-amber-900 dark:text-amber-200 text-[10px] font-mono hover:bg-amber-300"
+              >
+                UpToDate
+              </button>
+              <button
+                type="button"
+                onClick={() => updateService.simulate({ status: 'error', isManualCheck: true, errorMessage: 'Network timeout (simulated)' })}
+                className="px-2 py-1 rounded bg-amber-200/50 dark:bg-amber-950/50 text-amber-900 dark:text-amber-200 text-[10px] font-mono hover:bg-amber-300"
+              >
+                Error
+              </button>
+            </div>
+          </div>
+        )}
+      </section>
 
       {/* Cloud Database (Firebase Firestore) Card */}
       <section className="bg-white dark:bg-[#1A2535] p-6 rounded-2xl border border-teal-500/30 dark:border-teal-500/20 shadow-sm space-y-4">

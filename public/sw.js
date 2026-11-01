@@ -1,44 +1,55 @@
-const BASE = '/baccalaureate-study';
-const CACHE_NAME = 'mybac-offline-v5';
+/**
+ * Service Worker for Baccalaureate Study Hub
+ * Optimized for offline-first PWA, fast fresh-code adoption, resilient navigations, and zero-leak storage.
+ *
+ * NOTE: The __BUILD_ID__ token below is replaced at build time with a unique identifier.
+ */
 
+const CACHE_NAME = 'mybac-offline-__BUILD_ID__';
+const DYNAMIC_CACHE = 'mybac-dynamic-__BUILD_ID__';
+
+// Core app shell assets (eagerly precached on install).
+// Heavy media (campfire video/gif) are excluded from STATIC_ASSETS and cached at runtime on demand.
 const STATIC_ASSETS = [
-  BASE + '/',
-  BASE + '/index.html',
-  BASE + '/icon.svg',
-  BASE + '/original_icon_512.png',
-  BASE + '/manifest.json',
-  BASE + '/campfire-streak.webm',
-  BASE + '/campfire-streak.gif',
-  BASE + '/campfire-streak-poster.png',
-  BASE + '/campfire-streak-cold.webm',
-  BASE + '/campfire-streak-cold.gif',
-  BASE + '/campfire-streak-cold-poster.png'
+  '/',
+  '/index.html',
+  '/icon.svg',
+  '/app_icon.ico',
+  '/original_icon_512.png',
+  '/manifest.json'
 ];
 
-// Dynamic cache for JS/CSS bundles
-const DYNAMIC_CACHE = 'mybac-dynamic-v5';
-
-// API cache for offline data
-const API_CACHE = 'mybac-api-v5';
-
+/**
+ * Tolerant installation: caches critical assets individually.
+ * If any non-critical static asset fails to load, installation still completes cleanly.
+ */
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
-    }).catch(() => {
-      // Non-blocking: if any asset fails to cache, the SW still installs
+    caches.open(CACHE_NAME).then(async (cache) => {
+      const promises = STATIC_ASSETS.map((url) =>
+        cache.add(url).catch((err) => {
+          console.warn(`[SW] Precache skipped for ${url}:`, err);
+        })
+      );
+      await Promise.all(promises);
     })
   );
   self.skipWaiting();
 });
 
+/**
+ * Cache cleanup on activation: evict all older caches whose name does not match the active BUILD_ID.
+ */
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
         keys
-          .filter((key) => key !== CACHE_NAME && key !== DYNAMIC_CACHE && key !== API_CACHE)
-          .map((key) => caches.delete(key))
+          .filter((key) => key !== CACHE_NAME && key !== DYNAMIC_CACHE)
+          .map((key) => {
+            console.log(`[SW] Purging outdated cache: ${key}`);
+            return caches.delete(key);
+          })
       );
     })
   );
@@ -46,10 +57,7 @@ self.addEventListener('activate', (event) => {
 });
 
 /**
- * A navigation/document request whose content changes between builds.
- * The app shell (index.html) references hashed bundles, so serving a cached
- * copy pins the user to a stale build — the whole app would keep showing old
- * UI (and old bugs) until the cache happened to be refreshed.
+ * Check if the incoming request is an HTML / navigation request.
  */
 function isDocumentRequest(request) {
   if (request.mode === 'navigate') return true;
@@ -57,90 +65,134 @@ function isDocumentRequest(request) {
   return accept.includes('text/html');
 }
 
+/**
+ * Safely put a response into a cache.
+ * Excludes 206 Partial Content (Cache.put throws TypeError on 206) and opaque error types.
+ */
+async function safeCachePut(cacheName, request, response) {
+  if (!response || response.status !== 200 || response.type === 'opaque') {
+    return;
+  }
+  try {
+    const cache = await caches.open(cacheName);
+    await cache.put(request, response.clone());
+  } catch (err) {
+    console.warn(`[SW] Cache put failed for ${request.url || request}:`, err);
+  }
+}
+
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
 
-  // 1. App shell: network-first, so a freshly deployed build wins immediately.
+  // Never intercept or cache HTTP Range requests (e.g. video / audio streams).
+  // Cache.put cannot cache 206 Partial Content responses.
+  if (event.request.headers.has('range')) {
+    return;
+  }
+
+  // 1. App shell navigation: Network-first with a 3-second timeout before falling back to cached shell.
+  // Handles redirects safely without returning response.redirected===true to navigation requests.
   if (isDocumentRequest(event.request)) {
     event.respondWith(
-      fetch(event.request, { cache: 'no-store' })
-        .then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
-            const clone = networkResponse.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+      (async () => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+        try {
+          const networkResponse = await fetch(event.request, {
+            cache: 'no-store',
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
+
+          if (networkResponse && networkResponse.ok) {
+            // Rebuild clean response if redirected (e.g. Cloudflare Pages redirecting /index.html -> /)
+            // Returning a response with .redirected===true to a navigation request can trigger network errors in some browsers.
+            const responseBody = await networkResponse.blob();
+            const cleanResponse = new Response(responseBody, {
+              status: networkResponse.status,
+              statusText: networkResponse.statusText,
+              headers: networkResponse.headers,
+            });
+
+            await safeCachePut(CACHE_NAME, event.request, cleanResponse.clone());
+            await safeCachePut(CACHE_NAME, '/', cleanResponse.clone());
+
+            return cleanResponse;
           }
-          return networkResponse;
-        })
-        .catch(() =>
-          caches
-            .match(event.request)
-            .then((cached) => cached || caches.match(BASE + '/index.html'))
-        )
+          throw new Error(`Navigation fetch non-ok status: ${networkResponse.status}`);
+        } catch (fetchErr) {
+          clearTimeout(timeoutId);
+          // Network failed or timed out: fall back to cached shell
+          const cached =
+            (await caches.match(event.request)) ||
+            (await caches.match('/')) ||
+            (await caches.match('/index.html'));
+
+          if (cached) {
+            return cached;
+          }
+          throw fetchErr;
+        }
+      })()
     );
     return;
   }
 
-  // 2. JS/CSS bundles: cache-first with dynamic cache for better offline support
+  // 2. JS / CSS hashed assets: Cache-first with background revalidation.
   if (url.pathname.includes('/assets/')) {
     event.respondWith(
-      caches.match(event.request).then((cachedResponse) => {
+      (async () => {
+        const cachedResponse = await caches.match(event.request);
         if (cachedResponse) {
-          // Return cached, but update in background
+          // Revalidate in background without blocking
           fetch(event.request)
-            .then((res) => {
-              if (res && res.status === 200 && res.type !== 'opaque') {
-                const clone = res.clone();
-                caches.open(DYNAMIC_CACHE).then((cache) => cache.put(event.request, clone));
-              }
-            })
+            .then((networkRes) => safeCachePut(DYNAMIC_CACHE, event.request, networkRes))
             .catch(() => {});
           return cachedResponse;
         }
 
-        // Not in cache, fetch and cache
-        return fetch(event.request).then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200 && networkResponse.type !== 'opaque') {
-            const clone = networkResponse.clone();
-            caches.open(DYNAMIC_CACHE).then((cache) => cache.put(event.request, clone));
-          }
+        try {
+          const networkResponse = await fetch(event.request);
+          await safeCachePut(DYNAMIC_CACHE, event.request, networkResponse);
           return networkResponse;
-        }).catch(() => {
-          // Network failed and not in cache
-          return new Response('Offline - Resource not available', {
+        } catch {
+          return new Response('Offline - Asset unavailable', {
             status: 503,
-            statusText: 'Service Unavailable'
+            statusText: 'Service Unavailable',
           });
-        });
-      })
+        }
+      })()
     );
     return;
   }
 
-  // 3. Everything else: stale-while-revalidate
+  // 3. Runtime assets (images, fonts, campfire media, etc.): Stale-while-revalidate.
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
+    (async () => {
+      const cachedResponse = await caches.match(event.request);
+      const networkFetch = fetch(event.request)
+        .then(async (networkRes) => {
+          await safeCachePut(DYNAMIC_CACHE, event.request, networkRes);
+          return networkRes;
+        })
+        .catch(() => null);
+
       if (cachedResponse) {
-        fetch(event.request)
-          .then((res) => {
-            if (res && res.status === 200 && res.type !== 'opaque') {
-              const clone = res.clone();
-              caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-            }
-          })
-          .catch(() => {});
         return cachedResponse;
       }
 
-      return fetch(event.request).then((networkResponse) => {
-        if (networkResponse && networkResponse.status === 200 && networkResponse.type !== 'opaque') {
-          const clone = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-        }
-        return networkResponse;
+      const res = await networkFetch;
+      if (res) return res;
+
+      return new Response('Offline - Resource unavailable', {
+        status: 503,
+        statusText: 'Service Unavailable',
       });
-    })
+    })()
   );
 });
 
@@ -153,7 +205,7 @@ self.addEventListener('notificationclick', (event) => {
   const data = event.notification.data || {};
   const targetTab = data.tab || 'dashboard';
   const itemId = data.itemId;
-  const targetUrl = data.url || `${BASE}/?tab=${targetTab}${itemId ? `&id=${encodeURIComponent(itemId)}` : ''}`;
+  const targetUrl = data.url || `/?tab=${targetTab}${itemId ? `&id=${encodeURIComponent(itemId)}` : ''}`;
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
@@ -177,14 +229,13 @@ self.addEventListener('notificationclick', (event) => {
 
 /**
  * Push event: display notification even when app is fully closed
- * This is the core of background push notifications
  */
 self.addEventListener('push', (event) => {
   let title = 'MyBac Tracker';
   let options = {
     body: 'Rappel pour votre session de préparation au Bac',
-    icon: BASE + '/original_icon_512.png',
-    badge: BASE + '/original_icon_512.png',
+    icon: '/original_icon_512.png',
+    badge: '/original_icon_512.png',
     data: { tab: 'dashboard' },
     vibrate: [200, 100, 200],
     requireInteraction: false,

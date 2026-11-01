@@ -1,0 +1,895 @@
+diff --git a/src/App.tsx b/src/App.tsx
+index 6ea9523..dfe128f 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -1355,7 +1355,6 @@ export default function App() {
+         activeBlock={activeFocusBlock}
+         language={language}
+         onClose={() => {
+-          chimePlayer.playChime('modal_close');
+           setIsFocusModeOpen(false);
+         }}
+         onToggleMinimize={() => setIsFocusMinimized(!isFocusMinimized)}
+@@ -1386,7 +1385,6 @@ export default function App() {
+       <QuickAddModal
+         isOpen={isQuickAddOpen}
+         onClose={() => {
+-          chimePlayer.playChime('modal_close');
+           setIsQuickAddOpen(false);
+         }}
+         defaultType={quickAddDefaultType}
+diff --git a/src/components/shared/FocusModeModal.tsx b/src/components/shared/FocusModeModal.tsx
+index d7aa89c..d76edb9 100644
+--- a/src/components/shared/FocusModeModal.tsx
++++ b/src/components/shared/FocusModeModal.tsx
+@@ -215,13 +215,13 @@ export const FocusModeModal: React.FC<FocusModeModalProps> = ({
+       });
+     }
+ 
+-    chimePlayer.playChime('timer_tick');
++    chimePlayer.playChime('focus_start');
+   };
+ 
+   // Handler: Pause / Resume timer toggle
+   const handleTogglePause = () => {
+-    chimePlayer.playChime('timer_tick');
+     const currentTime = Date.now();
++    chimePlayer.playChime(savedSession?.isPaused || blockPause?.isPaused ? 'focus_resume' : 'focus_pause');
+ 
+     if (savedSession) {
+       let updated: StoredFocusSession;
+@@ -619,4 +619,4 @@ export const FocusModeModal: React.FC<FocusModeModalProps> = ({
+       </div>
+     </div>
+   );
+-};
+\ No newline at end of file
++};
+diff --git a/src/components/shared/NotificationPermissionBanner.tsx b/src/components/shared/NotificationPermissionBanner.tsx
+index c5977df..df89427 100644
+--- a/src/components/shared/NotificationPermissionBanner.tsx
++++ b/src/components/shared/NotificationPermissionBanner.tsx
+@@ -45,7 +45,6 @@ export const NotificationPermissionBanner: React.FC<NotificationPermissionBanner
+   };
+ 
+   const handleEnable = async () => {
+-    chimePlayer.playChime('click');
+     setIsRequesting(true);
+     try {
+       const perm = await notificationService.requestPermission();
+diff --git a/src/components/shared/Toast.tsx b/src/components/shared/Toast.tsx
+index 05dccec..66cb1f4 100644
+--- a/src/components/shared/Toast.tsx
++++ b/src/components/shared/Toast.tsx
+@@ -13,10 +13,10 @@ export interface Toast {
+ }
+ 
+ interface ToastContextValue {
+-  success: (title: string, message?: string, duration?: number) => void;
+-  error: (title: string, message?: string, duration?: number) => void;
+-  warning: (title: string, message?: string, duration?: number) => void;
+-  info: (title: string, message?: string, duration?: number) => void;
++  success: (title: string, message?: string, duration?: number, actionId?: string) => void;
++  error: (title: string, message?: string, duration?: number, actionId?: string) => void;
++  warning: (title: string, message?: string, duration?: number, actionId?: string) => void;
++  info: (title: string, message?: string, duration?: number, actionId?: string) => void;
+ }
+ 
+ const ToastContext = createContext<ToastContextValue | null>(null);
+@@ -106,26 +106,24 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
+ 
+   const dismiss = useCallback((id: string) => setToasts((p) => p.filter((t) => t.id !== id)), []);
+ 
+-  const push = useCallback((type: ToastType, title: string, message?: string, duration?: number) => {
++  const push = useCallback((type: ToastType, title: string, message?: string, duration?: number, actionId?: string) => {
+     const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+     setToasts((p) => [{ id, type, title, message, duration }, ...p].slice(0, 5));
+ 
+     if (type === 'success') {
+-      chimePlayer.playChime('toast_success');
++      chimePlayer.playChime('toast_success', { actionId });
+     } else if (type === 'warning') {
+-      chimePlayer.playChime('toast_warning');
++      chimePlayer.playChime('toast_warning', { actionId });
+     } else if (type === 'error') {
+-      chimePlayer.playChime('toast_error');
+-    } else {
+-      chimePlayer.playChime('tab_switch');
++      chimePlayer.playChime('toast_error', { actionId });
+     }
+   }, []);
+ 
+   const ctx: ToastContextValue = {
+-    success: (t, m, d) => push("success", t, m, d),
+-    error: (t, m, d) => push("error", t, m, d),
+-    warning: (t, m, d) => push("warning", t, m, d),
+-    info: (t, m, d) => push("info", t, m, d),
++    success: (t, m, d, actionId) => push("success", t, m, d, actionId),
++    error: (t, m, d, actionId) => push("error", t, m, d, actionId),
++    warning: (t, m, d, actionId) => push("warning", t, m, d, actionId),
++    info: (t, m, d, actionId) => push("info", t, m, d, actionId),
+   };
+ 
+   return (
+diff --git a/src/components/shared/WebPushSettings.tsx b/src/components/shared/WebPushSettings.tsx
+index 2266368..c845a3e 100644
+--- a/src/components/shared/WebPushSettings.tsx
++++ b/src/components/shared/WebPushSettings.tsx
+@@ -42,7 +42,6 @@ export const WebPushSettings: React.FC<WebPushSettingsProps> = ({
+ 
+   const handleSubscribe = async () => {
+     setLoading(true);
+-    chimePlayer.playChime('click');
+     try {
+       const success = await webPushService.subscribe();
+       const updatedStatus = webPushService.getSubscriptionStatus();
+@@ -78,7 +77,6 @@ export const WebPushSettings: React.FC<WebPushSettingsProps> = ({
+   };
+ 
+   const handleTestPush = () => {
+-    chimePlayer.playChime('click');
+     if (onTestNotification) {
+       onTestNotification();
+     }
+diff --git a/src/components/tabs/AverageTab.tsx b/src/components/tabs/AverageTab.tsx
+index 4566f1b..2c44ba3 100644
+--- a/src/components/tabs/AverageTab.tsx
++++ b/src/components/tabs/AverageTab.tsx
+@@ -87,7 +87,7 @@ export const AverageTab: React.FC<AverageTabProps> = ({
+       notes: notesValue.trim() || undefined,
+     });
+ 
+-    chimePlayer.playChime('add');
++    chimePlayer.playChime('grade_saved');
+     setIsModalOpen(false);
+     setNotesValue('');
+   };
+diff --git a/src/components/tabs/TimeBlockingTab.tsx b/src/components/tabs/TimeBlockingTab.tsx
+index b02641b..9d75e6a 100644
+--- a/src/components/tabs/TimeBlockingTab.tsx
++++ b/src/components/tabs/TimeBlockingTab.tsx
+@@ -39,7 +39,7 @@ import {
+ import { ActivitySticker, AppLanguage, StickerActivityType, TaskItem, TimeBlock } from '../../types';
+ import { ACTIVITY_STICKERS, BAC_SUBJECTS } from '../../utils/constants';
+ import { useToast } from '../shared/Toast';
+-import { chimePlayer } from '../../utils/audio';
++import { chimePlayer, createAudioActionId } from '../../utils/audio';
+ import { calculateDailyStreak, getLocalDateStr, isTimeBlockOccurrenceCompleted } from '../../utils/streak';
+ import { PlannerHistoryCalendar } from './PlannerHistoryCalendar';
+ 
+@@ -1417,10 +1417,12 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
+       setModalDurationMinutes(parsed.durationMins);
+     }
+     if (parsed.dayOffset === 1) setModalDayOption('tomorrow');
+-    chimePlayer.playChime('click');
++    const actionId = createAudioActionId();
+     toast.success(
+       isAr ? 'تم اعتماد البيانات ✓' : 'Données validées ✓',
+       adoptedTitle,
++      undefined,
++      actionId,
+     );
+   };
+ 
+@@ -1558,10 +1560,13 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
+     setModalPreserveSchedule(false);
+     setIsSubjectDropdownOpen(false);
+     setSubjectError('');
+-    chimePlayer.playChime('add');
++    const actionId = createAudioActionId();
++    chimePlayer.playChime('add', { actionId });
+     toast.success(
+       isAr ? 'تم الحفظ بنجاح ✓' : editingBlockId ? 'Bloc mis à jour ✓' : 'Bloc ajouté ✓',
+       `${finalTitle} · ${startStr} – ${endStr}`,
++      undefined,
++      actionId,
+     );
+   };
+ 
+@@ -1613,11 +1618,14 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
+       lunch: 'repas',
+       dinner: 'repas',
+     };
+-    chimePlayer.playChime(stickerSoundMap[sticker.type] ?? 'add');
++    const actionId = createAudioActionId();
++    chimePlayer.playChime(stickerSoundMap[sticker.type] ?? 'add', { actionId });
+ 
+     toast.success(
+       isAr ? `تم تثبيت ${sticker.label} (${startStr} – ${endStr}) ✓` : `${sticker.label} placé (${startStr} – ${endStr}) ✓`,
+       isAr ? 'تمت إضافة النشاط في الجدول' : 'Activité ajoutée sur votre planning',
++      undefined,
++      actionId,
+     );
+   };
+ 
+@@ -1675,12 +1683,15 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
+     });
+ 
+     setOriginalSnapshot(snapshot);
+-    chimePlayer.playChime('add');
++    const actionId = createAudioActionId();
++    chimePlayer.playChime('add', { actionId });
+     toast.success(
+       isAr ? '🧠 تم التوزيع الذكي' : '🧠 Redistribution intelligente',
+       isAr
+         ? 'الأصعب صباحًا • الحفظ مساءً • الراحة ثابتة — اضغط "تراجع" للعودة'
+         : 'Analytique le matin • Mémorisation l\'après-midi — "Annuler" pour revenir',
++      undefined,
++      actionId,
+     );
+   };
+ 
+@@ -1694,10 +1705,13 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
+       }
+     });
+     setOriginalSnapshot(null);
+-    chimePlayer.playChime('delete');
++    const actionId = createAudioActionId();
++    chimePlayer.playChime('delete', { actionId });
+     toast.success(
+       isAr ? '↩ تم التراجع' : '↩ Annulé',
+       isAr ? 'تم استعادة التوزيع الأصلي الخاص بك' : 'Votre planning original a été restauré',
++      undefined,
++      actionId,
+     );
+   };
+ 
+@@ -2312,16 +2326,22 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
+                           e.stopPropagation();
+                           onToggleComplete(block.id, selectedDateKey, !block.isCompleted);
+                           if (!block.isCompleted) {
+-                            chimePlayer.playChime('complete');
++                            const actionId = createAudioActionId();
++                            chimePlayer.playChime('complete', { actionId });
+                             toast.success(
+                               isAr ? 'تم إنجاز الحصة ✓' : 'Tâche terminée ✓',
+                               block.title,
++                              undefined,
++                              actionId,
+                             );
+                           } else {
+-                            chimePlayer.playChime('uncheck');
++                            const actionId = createAudioActionId();
++                            chimePlayer.playChime('uncheck', { actionId });
+                             toast.info(
+                               isAr ? 'إعادة المهمة للانتظار' : 'Tâche réactivée',
+                               block.title,
++                              undefined,
++                              actionId,
+                             );
+                           }
+                         }}
+@@ -2389,10 +2409,13 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
+                         onClick={(e) => {
+                           e.stopPropagation();
+                           onDeleteTimeBlock(block.id);
+-                          chimePlayer.playChime('delete');
++                          const actionId = createAudioActionId();
++                          chimePlayer.playChime('delete', { actionId });
+                           toast.warning(
+                             isAr ? 'تم حذف الحصة' : 'Tâche supprimée',
+                             block.title,
++                            undefined,
++                            actionId,
+                           );
+                         }}
+                         className="p-1 rounded-md text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 hidden group-hover:inline-flex cursor-pointer transition-colors"
+@@ -2420,16 +2443,22 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
+                             e.stopPropagation();
+                             onToggleComplete(block.id, selectedDateKey, !block.isCompleted);
+                             if (!block.isCompleted) {
+-                              chimePlayer.playChime('complete');
++                              const actionId = createAudioActionId();
++                              chimePlayer.playChime('complete', { actionId });
+                               toast.success(
+                                 isAr ? 'تم إنجاز الحصة ✓' : 'Tâche terminée ✓',
+                                 block.title,
++                                undefined,
++                                actionId,
+                               );
+                             } else {
+-                              chimePlayer.playChime('uncheck');
++                              const actionId = createAudioActionId();
++                              chimePlayer.playChime('uncheck', { actionId });
+                               toast.info(
+                                 isAr ? 'إعادة المهمة للانتظار' : 'Tâche réactivée',
+                                 block.title,
++                                undefined,
++                                actionId,
+                               );
+                             }
+                           }}
+@@ -2508,10 +2537,13 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
+                           onClick={(e) => {
+                             e.stopPropagation();
+                             onDeleteTimeBlock(block.id);
+-                            chimePlayer.playChime('delete');
++                            const actionId = createAudioActionId();
++                            chimePlayer.playChime('delete', { actionId });
+                             toast.warning(
+                               isAr ? 'تم حذف الحصة' : 'Tâche supprimée',
+                               block.title,
++                              undefined,
++                              actionId,
+                             );
+                           }}
+                           className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer transition-colors"
+diff --git a/src/services/notificationService.ts b/src/services/notificationService.ts
+index f8e4297..78d94c0 100644
+--- a/src/services/notificationService.ts
++++ b/src/services/notificationService.ts
+@@ -1028,10 +1028,8 @@ class NotificationService {
+   public async sendTestNotification(appData: FullAppData): Promise<boolean> {
+     // If permission has not been granted yet, prompt user immediately
+     if (this.isSupported() && Notification.permission === 'default') {
+-      const perm = await this.requestPermission();
+-      if (perm === 'granted') {
+-        chimePlayer.playChime('toast_success');
+-      }
++      await this.requestPermission();
++      // The reminder dispatched below is the single confirmation for this test action.
+     }
+ 
+     const lang = appData.settings.language || 'fr';
+diff --git a/src/utils/audio.test.ts b/src/utils/audio.test.ts
+new file mode 100644
+index 0000000..11f1c00
+--- /dev/null
++++ b/src/utils/audio.test.ts
+@@ -0,0 +1,147 @@
++import { afterEach, describe, expect, it, vi } from 'vitest';
++import { CalmAudioEngine } from './audio';
++
++class FakeParam {
++  value = 0;
++  setValueAtTime(value: number) { this.value = value; }
++  linearRampToValueAtTime(value: number) { this.value = value; }
++  exponentialRampToValueAtTime(value: number) { this.value = value; }
++  cancelScheduledValues() {}
++  setTargetAtTime(value: number) { this.value = value; }
++}
++
++class FakeNode {
++  gain = new FakeParam();
++  frequency = new FakeParam();
++  Q = new FakeParam();
++  type = 'sine';
++  buffer: unknown;
++  connect() {}
++  start = vi.fn();
++  stop = vi.fn();
++}
++
++class FakeAudioContext {
++  currentTime = 1;
++  sampleRate = 1000;
++  state = 'running';
++  destination = new FakeNode();
++  sources: FakeNode[] = [];
++  createOscillator() { const n = new FakeNode(); this.sources.push(n); return n; }
++  createGain() { return new FakeNode(); }
++  createBiquadFilter() { return new FakeNode(); }
++  createBuffer() { return { getChannelData: () => new Float32Array(1000) }; }
++  createBufferSource() { const n = new FakeNode(); this.sources.push(n); return n; }
++  resume() { return Promise.resolve(); }
++}
++
++const setup = (visibility: DocumentVisibilityState = 'visible') => {
++  const context = new FakeAudioContext();
++  const listeners: Record<string, (event: unknown) => void> = {};
++  vi.stubGlobal('document', { visibilityState: visibility });
++  vi.stubGlobal('window', {
++    AudioContext: class extends FakeAudioContext { constructor() { super(); return context as never; } },
++    addEventListener: (name: string, cb: (event: unknown) => void) => { listeners[name] = cb; },
++  });
++  const engine = new CalmAudioEngine();
++  engine.initGlobalListeners();
++  return { engine, context, listeners };
++};
++
++afterEach(() => vi.unstubAllGlobals());
++
++describe('CalmAudioEngine sound policy', () => {
++  it('evicts the oldest lowest-priority voice for a higher-priority reward', () => {
++    const { engine, context } = setup();
++    engine.playChime('click');
++    engine.playChime('tab_switch');
++    engine.playChime('modal_open');
++    const gains = (engine as unknown as { activeSounds: Array<{ gain: FakeNode }> }).activeSounds;
++    const evicted = gains[0].gain.gain;
++    engine.playChime('complete');
++    expect(evicted.value).toBe(0.0001);
++    expect(context.sources.length).toBeGreaterThan(0);
++  });
++
++  it('drops equal or lower priority at the polyphony cap and enforces per-id minimum gap', () => {
++    const { engine, context } = setup();
++    engine.playChime('complete');
++    engine.playChime('streak');
++    engine.playChime('simulator_celebrate');
++    const count = context.sources.length;
++    engine.playChime('add');
++    expect(context.sources.length).toBe(count);
++    const { engine: fresh, context: freshContext } = setup();
++    fresh.playChime('click');
++    const once = freshContext.sources.length;
++    freshContext.currentTime += 0.01;
++    fresh.playChime('click');
++    expect(freshContext.sources.length).toBe(once);
++  });
++
++  it('mutes hidden tabs except unlocked focus-end and reminder sounds', () => {
++    const { engine, context } = setup('visible');
++    engine.playChime('click'); // Create and unlock the context before hiding the tab.
++    vi.stubGlobal('document', { visibilityState: 'hidden' });
++    context.sources = [];
++    engine.playChime('complete');
++    expect(context.sources).toHaveLength(0);
++    engine.playChime('focus_finish');
++    expect(context.sources.length).toBeGreaterThan(0);
++    const beforeReminder = context.sources.length;
++    engine.playChime('notification');
++    expect(context.sources.length).toBeGreaterThan(beforeReminder);
++  });
++
++  it('suppresses a toast tied to an action that already played a stronger cue', () => {
++    const { engine, context } = setup();
++    engine.playChime('complete', { actionId: 'task-1' });
++    const count = context.sources.length;
++    engine.playChime('toast_success', { actionId: 'task-1' });
++    expect(context.sources.length).toBe(count);
++    engine.playChime('toast_success', { actionId: 'other-action' });
++    expect(context.sources.length).toBeGreaterThan(count);
++  });
++
++  it('replaces a lower-priority sound from the same action with its confirmation', () => {
++    const { engine } = setup();
++    engine.playChime('click', { actionId: 'save-1' });
++    const voices = (engine as unknown as { activeSounds: Array<{ gain: FakeNode; priority: number }> }).activeSounds;
++    const tickVoice = voices[0];
++    engine.playChime('toast_success', { actionId: 'save-1' });
++    expect(tickVoice.gain.gain.value).toBe(0.0001);
++    expect((engine as unknown as { activeSounds: Array<{ priority: number }> }).activeSounds.some((voice) => voice.priority === 3)).toBe(true);
++  });
++
++  it('allows a standalone toast, but suppresses one immediately after a semantic cue', () => {
++    const { engine, context } = setup();
++    context.currentTime = 0.01; // First sound in a freshly unlocked context must not be mistaken for a duplicate.
++    engine.playChime('toast_success');
++    const standaloneToastSources = context.sources.length;
++    expect(standaloneToastSources).toBeGreaterThan(0);
++    context.currentTime += 0.2;
++    engine.playChime('complete');
++    const afterSemanticCue = context.sources.length;
++    context.currentTime += 0.01;
++    engine.playChime('toast_success');
++    expect(context.sources.length).toBe(afterSemanticCue);
++  });
++
++  it('does not construct a new AudioContext for hidden-tab alarm exceptions', () => {
++    const { engine, context } = setup('hidden');
++    engine.playChime('focus_finish');
++    engine.playChime('notification');
++    expect(context.sources).toHaveLength(0);
++    expect((engine as unknown as { ctx: FakeAudioContext | null }).ctx).toBeNull();
++  });
++
++  it('plays click only for opted-in controls', () => {
++    const { listeners, context } = setup();
++    const target = { closest: (selector: string) => selector === '[data-sound="click"]' ? null : null };
++    listeners.click({ target });
++    expect(context.sources).toHaveLength(0);
++    target.closest = (selector: string) => selector === '[data-sound="click"]' ? {} as HTMLElement : null;
++    listeners.click({ target });
++    expect(context.sources.length).toBeGreaterThan(0);
++  });
++});
+diff --git a/src/utils/audio.ts b/src/utils/audio.ts
+index 98dca95..4ab25e2 100644
+--- a/src/utils/audio.ts
++++ b/src/utils/audio.ts
+@@ -11,33 +11,44 @@ export type SoundEffectType =
+   | 'delete'
+   | 'praying'
+   | 'rest'
+-  | 'pause'
+   | 'repas'
+   | 'sport'
++  | 'walking'
+   | 'sleeping'
+   | 'click'
+-  | 'drag'
+-  | 'camera_snap'
+-  | 'alert'
+   | 'streak'
+   | 'tab_switch'
+   | 'modal_open'
+   | 'modal_close'
+-  | 'theme_toggle'
+-  | 'timer_tick'
++  | 'focus_start'
++  | 'focus_pause'
++  | 'focus_resume'
+   | 'focus_finish'
++  | 'grade_saved'
+   | 'toast_success'
+   | 'toast_warning'
+   | 'toast_error'
++  | 'error'
+   | 'notification'
+   | 'simulator_celebrate';
+ 
+-class CalmAudioEngine {
++export interface ChimeOptions {
++  /** Shared by a semantic sound and its related toast to guarantee one cue per action. */
++  actionId?: string;
++}
++
++export const createAudioActionId = (): string => `audio-action-${Date.now()}-${Math.random().toString(36).slice(2)}`;
++
++export class CalmAudioEngine {
+   private ctx: AudioContext | null = null;
+   private volume: number = 0.45; // Gentle default master volume
+   private enabled: boolean = true;
+   private lastPlayTime: Record<string, number> = {};
+-  private lastRichSoundTime: number = 0;
++  private lastRichSoundTime: number = Number.NEGATIVE_INFINITY;
++  private activeSounds: Array<{ endsAt: number; priority: number; gain: GainNode }> = [];
++  private currentSoundGain: GainNode | null = null;
++  private readonly maxPolyphony = 3;
++  private readonly actionSounds = new Map<string, { priority: number; at: number; gain: GainNode }>();
+   private isListenersInitialized: boolean = false;
+ 
+   public setVolume(vol: number): void {
+@@ -96,16 +107,17 @@ class CalmAudioEngine {
+     osc.type = type;
+     osc.frequency.setValueAtTime(freq, startTime);
+ 
+-    const actualVolume = peakGain * this.volume;
++    const actualVolume = Math.min(0.5, peakGain) * this.volume;
+ 
+     // Smooth ADSR Envelope (never target 0, always 0.0001 for Web Audio API safety)
+     gain.gain.setValueAtTime(0.0001, startTime);
+-    gain.gain.linearRampToValueAtTime(actualVolume, startTime + 0.02); // Gentle soft attack
++    // An 8 ms attack and a soft exponential release avoid clicks while keeping UI cues brief.
++    gain.gain.linearRampToValueAtTime(actualVolume, startTime + 0.008);
+     gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration); // Smooth organic decay
+ 
+     osc.connect(filter);
+     filter.connect(gain);
+-    gain.connect(ctx.destination);
++    gain.connect(this.currentSoundGain ?? ctx.destination);
+ 
+     osc.start(startTime);
+     osc.stop(startTime + duration + 0.01);
+@@ -114,27 +126,85 @@ class CalmAudioEngine {
+   /**
+    * Plays a distinct, calm, and soothing sound effect
+    */
+-  public playChime(type: SoundEffectType | string = 'complete'): void {
++  public playChime(type: SoundEffectType | string = 'complete', options: ChimeOptions = {}): void {
+     if (!this.enabled || this.volume <= 0) return;
+-    const ctx = this.getContext();
++    const isCriticalBackgroundSound = type === 'focus_finish' || type === 'notification';
++    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
++      // Background alarms/reminders may use an already unlocked context only.
++      if (!isCriticalBackgroundSound || this.ctx?.state !== 'running') return;
++    }
++    const ctx = typeof document !== 'undefined' && document.visibilityState === 'hidden'
++      && this.ctx?.state === 'running'
++      ? this.ctx
++      : this.getContext();
+     if (!ctx) return;
+ 
+     const now = ctx.currentTime;
+ 
++    const priority = type === 'complete' || type === 'streak' || type === 'focus_finish' || type === 'simulator_celebrate'
++      ? 4
++      : type === 'click'
++        ? 1
++        : type === 'tab_switch' || type === 'modal_open' || type === 'modal_close'
++          ? 2
++          : 3;
++    const actionId = options.actionId;
++    const priorActionSound = actionId ? this.actionSounds.get(actionId) : undefined;
++    if (priorActionSound) {
++      if (priorActionSound.priority >= priority) return;
++      // A later, more meaningful cue replaces a lower-priority cue from the same action.
++      priorActionSound.gain.gain.cancelScheduledValues(now);
++      priorActionSound.gain.gain.setTargetAtTime(0.0001, now, 0.005);
++      priorActionSound.gain.gain.setValueAtTime(0.0001, now + 0.02);
++      this.activeSounds = this.activeSounds.filter((sound) => sound.gain !== priorActionSound.gain);
++    }
++
+     // Suppress generic click if a rich, meaningful chime just played in the same cycle
+     if (type === 'click') {
+       if (now - this.lastRichSoundTime < 0.08) {
+         return;
+       }
++    } else if (!options.actionId && type.startsWith('toast_') && now - this.lastRichSoundTime < 0.15) {
++      // A toast caused by a just-confirmed action should not add a second sound.
++      return;
+     } else {
+       this.lastRichSoundTime = now;
+     }
+ 
+-    // Throttle micro sounds (prevent auditory fatigue on rapid clicking)
+-    const minInterval = type === 'tab_switch' || type === 'click' ? 0.04 : 0.03;
++    const minInterval = type === 'click' ? 0.12 : type === 'tab_switch' ? 0.12 : 0.08;
+     if (this.lastPlayTime[type] && now - this.lastPlayTime[type] < minInterval) {
+       return;
+     }
++    this.activeSounds = this.activeSounds.filter((sound) => sound.endsAt > now);
++    if (this.activeSounds.length >= this.maxPolyphony) {
++      const lowestPriority = Math.min(...this.activeSounds.map((sound) => sound.priority));
++      if (priority <= lowestPriority) return;
++      const oldestLowest = this.activeSounds.find((sound) => sound.priority === lowestPriority);
++      if (!oldestLowest) return;
++      oldestLowest.gain.gain.cancelScheduledValues(now);
++      oldestLowest.gain.gain.setTargetAtTime(0.0001, now, 0.005);
++      oldestLowest.gain.gain.setValueAtTime(0.0001, now + 0.02);
++      this.activeSounds = this.activeSounds.filter((sound) => sound !== oldestLowest);
++    }
++    const durationByType: Record<string, number> = {
++      complete: 1, streak: 1, focus_finish: 1.6, simulator_celebrate: 1,
++      praying: 0.8, sleeping: 1.6, rest: 1, sport: 0.6, walking: 0.6,
++      repas: 0.7, notification: 0.6, toast_success: 0.4,
++      toast_warning: 0.25, toast_error: 0.25, delete: 0.3, uncheck: 0.25,
++      add: 0.2, modal_open: 0.2, modal_close: 0.2, focus_start: 0.2,
++      focus_pause: 0.2, focus_resume: 0.2, grade_saved: 0.2, click: 0.06, tab_switch: 0.06,
++    };
++    const soundGain = ctx.createGain();
++    soundGain.gain.setValueAtTime(1, now);
++    soundGain.connect(ctx.destination);
++    this.activeSounds.push({ endsAt: now + (durationByType[type] ?? 0.4), priority, gain: soundGain });
++    if (actionId) {
++      this.actionSounds.set(actionId, { priority, at: now, gain: soundGain });
++      for (const [key, value] of this.actionSounds) {
++        if (now - value.at > 1) this.actionSounds.delete(key);
++      }
++    }
++    this.currentSoundGain = soundGain;
+     this.lastPlayTime[type] = now;
+ 
+     switch (type) {
+@@ -163,13 +233,13 @@ class CalmAudioEngine {
+         osc.frequency.setValueAtTime(340, now);
+         osc.frequency.exponentialRampToValueAtTime(680, now + 0.08);
+ 
+-        const vol = 0.26 * this.volume;
++        const vol = 0.2 * this.volume;
+         gain.gain.setValueAtTime(0.0001, now);
+-        gain.gain.linearRampToValueAtTime(vol, now + 0.015);
++        gain.gain.linearRampToValueAtTime(vol, now + 0.008);
+         gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.14);
+ 
+         osc.connect(gain);
+-        gain.connect(ctx.destination);
++        gain.connect(this.currentSoundGain ?? ctx.destination);
+         osc.start(now);
+         osc.stop(now + 0.15);
+         break;
+@@ -182,17 +252,16 @@ class CalmAudioEngine {
+         break;
+       }
+ 
+-      // 5. Prayer / Mindfulness: Tibetan Zen Bowl Resonance (432Hz harmonic)
++      // 5. Prayer / Mindfulness: quiet C/G resonance, aligned with the shared tonal center.
+       case 'praying': {
+-        this.playTone(432.0, now, 2.2, 0.25, 'sine');
+-        this.playTone(216.0, now, 2.2, 0.15, 'sine');
+-        this.playTone(864.0, now + 0.02, 1.8, 0.08, 'sine');
++        this.playTone(261.63, now, 0.72, 0.18, 'sine');
++        this.playTone(392.0, now + 0.02, 0.72, 0.11, 'sine');
++        this.playTone(523.25, now + 0.04, 0.65, 0.06, 'sine');
+         break;
+       }
+ 
+       // 6. Rest / Coffee Pause: Relaxing warm tea bell
+-      case 'rest':
+-      case 'pause': {
++      case 'rest': {
+         this.playTone(440.0, now, 0.8, 0.18, 'sine');
+         this.playTone(659.25, now + 0.09, 0.9, 0.16, 'sine');
+         break;
+@@ -221,9 +290,7 @@ class CalmAudioEngine {
+       }
+ 
+       // 10. Click / Drag / Snap: Luxury Haptic Tactile Tap (Crisp Bandpass Noise + Micro Sine Drop)
+-      case 'click':
+-      case 'drag':
+-      case 'camera_snap': {
++      case 'click': {
+         const bufferSize = Math.floor(ctx.sampleRate * 0.035);
+         const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+         const data = buffer.getChannelData(0);
+@@ -240,13 +307,14 @@ class CalmAudioEngine {
+         filter.Q.setValueAtTime(2.2, now);
+ 
+         const gain = ctx.createGain();
+-        const clickVol = 0.28 * this.volume;
+-        gain.gain.setValueAtTime(clickVol, now);
++        const clickVol = 0.1 * this.volume;
++        gain.gain.setValueAtTime(0.0001, now);
++        gain.gain.linearRampToValueAtTime(clickVol, now + 0.008);
+         gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.035);
+ 
+         noise.connect(filter);
+         filter.connect(gain);
+-        gain.connect(ctx.destination);
++        gain.connect(this.currentSoundGain ?? ctx.destination);
+         noise.start(now);
+ 
+         // Gentle sub-transient for warm tactile body (1100Hz -> 380Hz)
+@@ -256,12 +324,13 @@ class CalmAudioEngine {
+         osc.frequency.setValueAtTime(1100, now);
+         osc.frequency.exponentialRampToValueAtTime(380, now + 0.03);
+ 
+-        const subVol = 0.16 * this.volume;
+-        oscGain.gain.setValueAtTime(subVol, now);
++        const subVol = 0.06 * this.volume;
++        oscGain.gain.setValueAtTime(0.0001, now);
++        oscGain.gain.linearRampToValueAtTime(subVol, now + 0.008);
+         oscGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.03);
+ 
+         osc.connect(oscGain);
+-        oscGain.connect(ctx.destination);
++        oscGain.connect(this.currentSoundGain ?? ctx.destination);
+         osc.start(now);
+         osc.stop(now + 0.035);
+         break;
+@@ -288,7 +357,7 @@ class CalmAudioEngine {
+ 
+         osc.connect(filter);
+         filter.connect(gain);
+-        gain.connect(ctx.destination);
++        gain.connect(this.currentSoundGain ?? ctx.destination);
+         osc.start(now);
+         osc.stop(now + 0.04);
+         break;
+@@ -304,11 +373,11 @@ class CalmAudioEngine {
+ 
+         const vol = 0.12 * this.volume;
+         gain.gain.setValueAtTime(0.0001, now);
+-        gain.gain.linearRampToValueAtTime(vol, now + 0.02);
++        gain.gain.linearRampToValueAtTime(vol, now + 0.008);
+         gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.15);
+ 
+         osc.connect(gain);
+-        gain.connect(ctx.destination);
++        gain.connect(this.currentSoundGain ?? ctx.destination);
+         osc.start(now);
+         osc.stop(now + 0.16);
+         break;
+@@ -324,24 +393,17 @@ class CalmAudioEngine {
+ 
+         const vol = 0.1 * this.volume;
+         gain.gain.setValueAtTime(0.0001, now);
+-        gain.gain.linearRampToValueAtTime(vol, now + 0.015);
++        gain.gain.linearRampToValueAtTime(vol, now + 0.008);
+         gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.13);
+ 
+         osc.connect(gain);
+-        gain.connect(ctx.destination);
++        gain.connect(this.currentSoundGain ?? ctx.destination);
+         osc.start(now);
+         osc.stop(now + 0.14);
+         break;
+       }
+ 
+-      // 14. Theme Toggle: Dual frequency slide
+-      case 'theme_toggle': {
+-        this.playTone(523.25, now, 0.09, 0.12, 'sine');
+-        this.playTone(783.99, now + 0.05, 0.12, 0.14, 'sine');
+-        break;
+-      }
+-
+-      // 15. Focus Session Finished: Rich celebratory chime
++      // Focus session finished.
+       case 'focus_finish': {
+         const chord = [523.25, 659.25, 783.99, 1046.5];
+         chord.forEach((freq, idx) => {
+@@ -350,12 +412,28 @@ class CalmAudioEngine {
+         break;
+       }
+ 
+-      // 16. Timer Tick: Subtle tick for focus controls
+-      case 'timer_tick': {
++      // Focus state transitions: start, pause and resume.
++      case 'focus_start': {
++        this.playTone(523.25, now, 0.16, 0.12, 'sine');
++        this.playTone(659.25, now + 0.055, 0.18, 0.1, 'sine');
++        break;
++      }
++      case 'focus_pause': {
++        this.playTone(659.25, now, 0.12, 0.1, 'sine');
++        this.playTone(523.25, now + 0.045, 0.14, 0.08, 'sine');
++        break;
++      }
++      case 'focus_resume': {
+         this.playTone(600, now, 0.03, 0.06, 'triangle');
+         break;
+       }
+ 
++      case 'grade_saved': {
++        this.playTone(523.25, now, 0.18, 0.12, 'sine');
++        this.playTone(659.25, now + 0.06, 0.18, 0.09, 'sine');
++        break;
++      }
++
+       // 17. Toast Success: Bright, reassuring double-tone
+       case 'toast_success': {
+         this.playTone(659.25, now, 0.18, 0.14, 'sine');
+@@ -371,7 +449,8 @@ class CalmAudioEngine {
+       }
+ 
+       // 19. Toast Error: Gentle cushioned descending tone
+-      case 'toast_error': {
++      case 'toast_error':
++      case 'error': {
+         const osc = ctx.createOscillator();
+         const gain = ctx.createGain();
+         osc.type = 'sine';
+@@ -380,11 +459,11 @@ class CalmAudioEngine {
+ 
+         const vol = 0.14 * this.volume;
+         gain.gain.setValueAtTime(0.0001, now);
+-        gain.gain.linearRampToValueAtTime(vol, now + 0.02);
++        gain.gain.linearRampToValueAtTime(vol, now + 0.008);
+         gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+ 
+         osc.connect(gain);
+-        gain.connect(ctx.destination);
++        gain.connect(this.currentSoundGain ?? ctx.destination);
+         osc.start(now);
+         osc.stop(now + 0.23);
+         break;
+@@ -400,12 +479,6 @@ class CalmAudioEngine {
+       }
+ 
+       // 21. Alert / Reminder: Soft harmonious 2-tone bell
+-      case 'alert': {
+-        this.playTone(523.25, now, 0.45, 0.18, 'sine');
+-        this.playTone(698.46, now + 0.12, 0.6, 0.16, 'sine');
+-        break;
+-      }
+-
+       // 22. Scheduled Notification Reminder: Crystalline, warm dual chime
+       case 'notification': {
+         this.playTone(659.25, now, 0.35, 0.18, 'sine');
+@@ -418,6 +491,7 @@ class CalmAudioEngine {
+         break;
+       }
+     }
++    this.currentSoundGain = null;
+   }
+ 
+   /**
+@@ -439,7 +513,7 @@ class CalmAudioEngine {
+     window.addEventListener('pointerdown', unlockAudio, { passive: true });
+     window.addEventListener('keydown', unlockAudio, { passive: true });
+ 
+-    // 2. Global event delegation for all interactive elements
++    // 2. Click sounds are opt-in per control; ordinary interaction stays silent.
+     window.addEventListener(
+       'click',
+       (e: MouseEvent) => {
+@@ -447,16 +521,8 @@ class CalmAudioEngine {
+         const target = e.target as HTMLElement | null;
+         if (!target) return;
+ 
+-        // Skip if explicitly marked as silent
+-        if (target.closest('[data-no-sound="true"]')) return;
+-
+-        // Detect if clicked element is an interactive button, tab, checkbox, radio, dropdown or clickable item
+-        const isInteractive = target.closest(
+-          'button, a[href], summary, [role="button"], [role="tab"], input[type="checkbox"], input[type="radio"], select, .cursor-pointer, .interactive-click'
+-        );
+-
+-        if (isInteractive) {
+-          // Play tactile click (automatically suppressed if a specific richer chime ran in this interaction)
++        const optedInControl = target.closest('[data-sound="click"]');
++        if (optedInControl && !target.closest('[data-no-sound="true"]')) {
+           this.playChime('click');
+         }
+       },

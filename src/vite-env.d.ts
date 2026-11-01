@@ -3,6 +3,7 @@
 export interface DesktopUpdateStatus {
   status: 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error';
   version?: string;
+  releaseNotes?: string;
   percent?: number;
   transferred?: number;
   total?: number;
@@ -10,7 +11,15 @@ export interface DesktopUpdateStatus {
   message?: string;
 }
 
+export interface UpdaterSettings {
+  autoDownload: boolean;
+  autoInstallOnAppQuit: boolean;
+}
+
 declare global {
+  const __APP_VERSION__: string;
+  const __BUILD_ID__: string;
+
   interface Window {
     electronAPI?: {
       isElectron: boolean;
@@ -25,9 +34,10 @@ declare global {
         checkForUpdates: () => Promise<unknown>;
         restartAndInstall: () => Promise<void>;
         getAppVersion: () => Promise<string>;
+        getSettings?: () => Promise<UpdaterSettings>;
+        setSettings?: (settings: Partial<UpdaterSettings>) => Promise<void>;
+        openExternal?: (url: string) => Promise<{ success: boolean; error?: string }>;
       };
     };
   }
 }
-
-

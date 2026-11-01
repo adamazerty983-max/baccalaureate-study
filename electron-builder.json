@@ -9,7 +9,10 @@
     "provider": "github",
     "owner": "adamazerty983-max",
     "repo": "baccalaureate-study",
-    "releaseType": "release"
+    "releaseType": "draft"
+  },
+  "releaseInfo": {
+    "releaseNotesFile": "release/release-notes.md"
   },
   "files": [
     "dist/**/*",

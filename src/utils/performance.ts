@@ -20,7 +20,7 @@ export const preloadCriticalChunks = () => {
     const link = document.createElement('link');
     link.rel = 'prefetch';
     link.as = 'script';
-    link.href = `/baccalaureate-study/assets/${chunk}.js`;
+    link.href = `/assets/${chunk}.js`;
     document.head.appendChild(link);
   });
 };
