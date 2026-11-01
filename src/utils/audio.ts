@@ -16,6 +16,7 @@ export type SoundEffectType =
   | 'walking'
   | 'sleeping'
   | 'click'
+  | 'ui_tick'
   | 'streak'
   | 'tab_switch'
   | 'modal_open'
@@ -36,6 +37,17 @@ export interface ChimeOptions {
   /** Shared by a semantic sound and its related toast to guarantee one cue per action. */
   actionId?: string;
 }
+
+// Only these cues have a current sound design. Legacy API ids remain accepted but resolve silently.
+const ACTIVE_SOUND_IDS = new Set([
+  'ui_tick',
+  'complete',
+  'focus_start',
+  'focus_finish',
+  'notification',
+  'toast_error',
+  'grade_saved',
+]);
 
 export const createAudioActionId = (): string => `audio-action-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
@@ -107,7 +119,8 @@ export class CalmAudioEngine {
     osc.type = type;
     osc.frequency.setValueAtTime(freq, startTime);
 
-    const actualVolume = Math.min(0.5, peakGain) * this.volume;
+    // Leave headroom for overlapping chord voices, including at the 100% volume setting.
+    const actualVolume = Math.min(0.15, peakGain) * this.volume;
 
     // Smooth ADSR Envelope (never target 0, always 0.0001 for Web Audio API safety)
     gain.gain.setValueAtTime(0.0001, startTime);
@@ -127,6 +140,9 @@ export class CalmAudioEngine {
    * Plays a distinct, calm, and soothing sound effect
    */
   public playChime(type: SoundEffectType | string = 'complete', options: ChimeOptions = {}): void {
+    // Existing callers use "error"; map that semantic alias onto the approved error cue.
+    if (type === 'error') type = 'toast_error';
+    if (!ACTIVE_SOUND_IDS.has(type)) return;
     if (!this.enabled || this.volume <= 0) return;
     const isCriticalBackgroundSound = type === 'focus_finish' || type === 'notification';
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
@@ -141,13 +157,7 @@ export class CalmAudioEngine {
 
     const now = ctx.currentTime;
 
-    const priority = type === 'complete' || type === 'streak' || type === 'focus_finish' || type === 'simulator_celebrate'
-      ? 4
-      : type === 'click'
-        ? 1
-        : type === 'tab_switch' || type === 'modal_open' || type === 'modal_close'
-          ? 2
-          : 3;
+    const priority = type === 'complete' || type === 'focus_finish' ? 4 : type === 'ui_tick' ? 1 : 3;
     const actionId = options.actionId;
     const priorActionSound = actionId ? this.actionSounds.get(actionId) : undefined;
     if (priorActionSound) {
@@ -159,8 +169,8 @@ export class CalmAudioEngine {
       this.activeSounds = this.activeSounds.filter((sound) => sound.gain !== priorActionSound.gain);
     }
 
-    // Suppress generic click if a rich, meaningful chime just played in the same cycle
-    if (type === 'click') {
+    // Suppress an optional UI tick if a richer sound just played in the same cycle.
+    if (type === 'ui_tick') {
       if (now - this.lastRichSoundTime < 0.08) {
         return;
       }
@@ -171,7 +181,7 @@ export class CalmAudioEngine {
       this.lastRichSoundTime = now;
     }
 
-    const minInterval = type === 'click' ? 0.12 : type === 'tab_switch' ? 0.12 : 0.08;
+    const minInterval = type === 'ui_tick' ? 0.12 : 0.08;
     if (this.lastPlayTime[type] && now - this.lastPlayTime[type] < minInterval) {
       return;
     }
@@ -187,12 +197,8 @@ export class CalmAudioEngine {
       this.activeSounds = this.activeSounds.filter((sound) => sound !== oldestLowest);
     }
     const durationByType: Record<string, number> = {
-      complete: 1, streak: 1, focus_finish: 1.6, simulator_celebrate: 1,
-      praying: 0.8, sleeping: 1.6, rest: 1, sport: 0.6, walking: 0.6,
-      repas: 0.7, notification: 0.6, toast_success: 0.4,
-      toast_warning: 0.25, toast_error: 0.25, delete: 0.3, uncheck: 0.25,
-      add: 0.2, modal_open: 0.2, modal_close: 0.2, focus_start: 0.2,
-      focus_pause: 0.2, focus_resume: 0.2, grade_saved: 0.2, click: 0.06, tab_switch: 0.06,
+      complete: 1, focus_finish: 1.3, notification: 0.6, toast_error: 0.3,
+      focus_start: 0.2, grade_saved: 0.2, ui_tick: 0.06,
     };
     const soundGain = ctx.createGain();
     soundGain.gain.setValueAtTime(1, now);
@@ -289,8 +295,8 @@ export class CalmAudioEngine {
         break;
       }
 
-      // 10. Click / Drag / Snap: Luxury Haptic Tactile Tap (Crisp Bandpass Noise + Micro Sine Drop)
-      case 'click': {
+      // Optional UI tick: quiet filtered noise with a C5 sine transient.
+      case 'ui_tick': {
         const bufferSize = Math.floor(ctx.sampleRate * 0.035);
         const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
         const data = buffer.getChannelData(0);
@@ -317,12 +323,11 @@ export class CalmAudioEngine {
         gain.connect(this.currentSoundGain ?? ctx.destination);
         noise.start(now);
 
-        // Gentle sub-transient for warm tactile body (1100Hz -> 380Hz)
+        // A C5 sub-transient keeps the optional tick aligned with the shared tonal center.
         const osc = ctx.createOscillator();
         const oscGain = ctx.createGain();
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(1100, now);
-        osc.frequency.exponentialRampToValueAtTime(380, now + 0.03);
+        osc.frequency.setValueAtTime(523.25, now);
 
         const subVol = 0.06 * this.volume;
         oscGain.gain.setValueAtTime(0.0001, now);
@@ -407,7 +412,7 @@ export class CalmAudioEngine {
       case 'focus_finish': {
         const chord = [523.25, 659.25, 783.99, 1046.5];
         chord.forEach((freq, idx) => {
-          this.playTone(freq, now + idx * 0.1, 1.4, 0.22, 'sine');
+          this.playTone(freq, now + idx * 0.08, 1.05, 0.22, 'sine');
         });
         break;
       }
@@ -448,24 +453,11 @@ export class CalmAudioEngine {
         break;
       }
 
-      // 19. Toast Error: Gentle cushioned descending tone
+      // Error: a soft descending G-to-E pair in the shared C-major tonal center.
       case 'toast_error':
       case 'error': {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(380, now);
-        osc.frequency.exponentialRampToValueAtTime(240, now + 0.2);
-
-        const vol = 0.14 * this.volume;
-        gain.gain.setValueAtTime(0.0001, now);
-        gain.gain.linearRampToValueAtTime(vol, now + 0.008);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
-
-        osc.connect(gain);
-        gain.connect(this.currentSoundGain ?? ctx.destination);
-        osc.start(now);
-        osc.stop(now + 0.23);
+        this.playTone(392.0, now, 0.22, 0.14, 'sine');
+        this.playTone(329.63, now + 0.06, 0.2, 0.1, 'sine');
         break;
       }
 
@@ -482,7 +474,7 @@ export class CalmAudioEngine {
       // 22. Scheduled Notification Reminder: Crystalline, warm dual chime
       case 'notification': {
         this.playTone(659.25, now, 0.35, 0.18, 'sine');
-        this.playTone(880.0, now + 0.08, 0.5, 0.2, 'sine');
+        this.playTone(783.99, now + 0.08, 0.5, 0.2, 'sine');
         break;
       }
 
@@ -495,8 +487,7 @@ export class CalmAudioEngine {
   }
 
   /**
-   * Initializes global user-gesture auto-unlock and delegates pleasant tactile click feedback
-   * to all interactive buttons, toggles, filter pills, and navigation elements across the whole platform.
+   * Unlocks the Web Audio context after a user gesture and ticks only on explicitly opted-in controls.
    */
   public initGlobalListeners(): void {
     if (this.isListenersInitialized || typeof window === 'undefined') return;
@@ -521,9 +512,9 @@ export class CalmAudioEngine {
         const target = e.target as HTMLElement | null;
         if (!target) return;
 
-        const optedInControl = target.closest('[data-sound="click"]');
+        const optedInControl = target.closest('[data-sound="ui_tick"]');
         if (optedInControl && !target.closest('[data-no-sound="true"]')) {
-          this.playChime('click');
+          this.playChime('ui_tick');
         }
       },
       { capture: false, passive: true }
