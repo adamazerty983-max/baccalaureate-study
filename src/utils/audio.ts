@@ -31,23 +31,11 @@ type SoundPriority = 1 | 2 | 3 | 4;
 type SoundBufferMap = Partial<Record<SoundId, AudioBuffer>>;
 export type SoundAssetPaths = Partial<Record<SoundId, string>>;
 
-/** Public files are kept outside the JavaScript bundle and load lazily after a gesture. */
-export const SOUND_ASSET_PATHS: SoundAssetPaths = {
-  ui_tick: 'sounds/ui_tick.ogg',
-  item_completed: 'sounds/item_completed.ogg',
-  item_added: 'sounds/item_added.ogg',
-  item_undone: 'sounds/item_undone.ogg',
-  item_deleted: 'sounds/item_deleted.ogg',
-  grade_saved: 'sounds/grade_saved.ogg',
-  focus_start: 'sounds/focus_start.ogg',
-  focus_pause: 'sounds/focus_pause.ogg',
-  focus_resume: 'sounds/focus_resume.ogg',
-  focus_end_alarm: 'sounds/focus_end_alarm.ogg',
-  reminder: 'sounds/reminder.ogg',
-  error: 'sounds/error.ogg',
-  warning: 'sounds/warning.ogg',
-  milestone: 'sounds/milestone.ogg',
-};
+/**
+ * Intentionally empty until reviewed CC0/public-domain samples are supplied.
+ * Keeping this separate from the JS bundle lets approved files live in public/sounds/.
+ */
+export const SOUND_ASSET_PATHS: SoundAssetPaths = {};
 
 /** Fetch and decode each configured file once. Failures are isolated per asset. */
 export class SoundBufferLoader {
