@@ -66,7 +66,10 @@ function updateBuildPlugin(currentBuildId: string, version: string): Plugin {
 
 export default defineConfig(() => {
   return {
-    base: '/',
+    // This app is hosted under the GitHub Pages repository path. A root base
+    // makes Vite-generated lazy chunks resolve outside the app, leaving Suspense
+    // fallbacks visible after navigating to any code-split tab.
+    base: '/baccalaureate-study/',
     define: {
       __APP_VERSION__: JSON.stringify(pkg.version),
       __BUILD_ID__: JSON.stringify(buildId),
