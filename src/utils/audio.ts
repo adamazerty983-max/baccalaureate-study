@@ -11,33 +11,44 @@ export type SoundEffectType =
   | 'delete'
   | 'praying'
   | 'rest'
-  | 'pause'
   | 'repas'
   | 'sport'
+  | 'walking'
   | 'sleeping'
   | 'click'
-  | 'drag'
-  | 'camera_snap'
-  | 'alert'
   | 'streak'
   | 'tab_switch'
   | 'modal_open'
   | 'modal_close'
-  | 'theme_toggle'
-  | 'timer_tick'
+  | 'focus_start'
+  | 'focus_pause'
+  | 'focus_resume'
   | 'focus_finish'
+  | 'grade_saved'
   | 'toast_success'
   | 'toast_warning'
   | 'toast_error'
+  | 'error'
   | 'notification'
   | 'simulator_celebrate';
 
-class CalmAudioEngine {
+export interface ChimeOptions {
+  /** Shared by a semantic sound and its related toast to guarantee one cue per action. */
+  actionId?: string;
+}
+
+export const createAudioActionId = (): string => `audio-action-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+export class CalmAudioEngine {
   private ctx: AudioContext | null = null;
   private volume: number = 0.45; // Gentle default master volume
   private enabled: boolean = true;
   private lastPlayTime: Record<string, number> = {};
-  private lastRichSoundTime: number = 0;
+  private lastRichSoundTime: number = Number.NEGATIVE_INFINITY;
+  private activeSounds: Array<{ endsAt: number; priority: number; gain: GainNode }> = [];
+  private currentSoundGain: GainNode | null = null;
+  private readonly maxPolyphony = 3;
+  private readonly actionSounds = new Map<string, { priority: number; at: number; gain: GainNode }>();
   private isListenersInitialized: boolean = false;
 
   public setVolume(vol: number): void {
@@ -96,16 +107,17 @@ class CalmAudioEngine {
     osc.type = type;
     osc.frequency.setValueAtTime(freq, startTime);
 
-    const actualVolume = peakGain * this.volume;
+    const actualVolume = Math.min(0.5, peakGain) * this.volume;
 
     // Smooth ADSR Envelope (never target 0, always 0.0001 for Web Audio API safety)
     gain.gain.setValueAtTime(0.0001, startTime);
-    gain.gain.linearRampToValueAtTime(actualVolume, startTime + 0.02); // Gentle soft attack
+    // An 8 ms attack and a soft exponential release avoid clicks while keeping UI cues brief.
+    gain.gain.linearRampToValueAtTime(actualVolume, startTime + 0.008);
     gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration); // Smooth organic decay
 
     osc.connect(filter);
     filter.connect(gain);
-    gain.connect(ctx.destination);
+    gain.connect(this.currentSoundGain ?? ctx.destination);
 
     osc.start(startTime);
     osc.stop(startTime + duration + 0.01);
@@ -114,27 +126,85 @@ class CalmAudioEngine {
   /**
    * Plays a distinct, calm, and soothing sound effect
    */
-  public playChime(type: SoundEffectType | string = 'complete'): void {
+  public playChime(type: SoundEffectType | string = 'complete', options: ChimeOptions = {}): void {
     if (!this.enabled || this.volume <= 0) return;
-    const ctx = this.getContext();
+    const isCriticalBackgroundSound = type === 'focus_finish' || type === 'notification';
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+      // Background alarms/reminders may use an already unlocked context only.
+      if (!isCriticalBackgroundSound || this.ctx?.state !== 'running') return;
+    }
+    const ctx = typeof document !== 'undefined' && document.visibilityState === 'hidden'
+      && this.ctx?.state === 'running'
+      ? this.ctx
+      : this.getContext();
     if (!ctx) return;
 
     const now = ctx.currentTime;
+
+    const priority = type === 'complete' || type === 'streak' || type === 'focus_finish' || type === 'simulator_celebrate'
+      ? 4
+      : type === 'click'
+        ? 1
+        : type === 'tab_switch' || type === 'modal_open' || type === 'modal_close'
+          ? 2
+          : 3;
+    const actionId = options.actionId;
+    const priorActionSound = actionId ? this.actionSounds.get(actionId) : undefined;
+    if (priorActionSound) {
+      if (priorActionSound.priority >= priority) return;
+      // A later, more meaningful cue replaces a lower-priority cue from the same action.
+      priorActionSound.gain.gain.cancelScheduledValues(now);
+      priorActionSound.gain.gain.setTargetAtTime(0.0001, now, 0.005);
+      priorActionSound.gain.gain.setValueAtTime(0.0001, now + 0.02);
+      this.activeSounds = this.activeSounds.filter((sound) => sound.gain !== priorActionSound.gain);
+    }
 
     // Suppress generic click if a rich, meaningful chime just played in the same cycle
     if (type === 'click') {
       if (now - this.lastRichSoundTime < 0.08) {
         return;
       }
+    } else if (!options.actionId && type.startsWith('toast_') && now - this.lastRichSoundTime < 0.15) {
+      // A toast caused by a just-confirmed action should not add a second sound.
+      return;
     } else {
       this.lastRichSoundTime = now;
     }
 
-    // Throttle micro sounds (prevent auditory fatigue on rapid clicking)
-    const minInterval = type === 'tab_switch' || type === 'click' ? 0.04 : 0.03;
+    const minInterval = type === 'click' ? 0.12 : type === 'tab_switch' ? 0.12 : 0.08;
     if (this.lastPlayTime[type] && now - this.lastPlayTime[type] < minInterval) {
       return;
     }
+    this.activeSounds = this.activeSounds.filter((sound) => sound.endsAt > now);
+    if (this.activeSounds.length >= this.maxPolyphony) {
+      const lowestPriority = Math.min(...this.activeSounds.map((sound) => sound.priority));
+      if (priority <= lowestPriority) return;
+      const oldestLowest = this.activeSounds.find((sound) => sound.priority === lowestPriority);
+      if (!oldestLowest) return;
+      oldestLowest.gain.gain.cancelScheduledValues(now);
+      oldestLowest.gain.gain.setTargetAtTime(0.0001, now, 0.005);
+      oldestLowest.gain.gain.setValueAtTime(0.0001, now + 0.02);
+      this.activeSounds = this.activeSounds.filter((sound) => sound !== oldestLowest);
+    }
+    const durationByType: Record<string, number> = {
+      complete: 1, streak: 1, focus_finish: 1.6, simulator_celebrate: 1,
+      praying: 0.8, sleeping: 1.6, rest: 1, sport: 0.6, walking: 0.6,
+      repas: 0.7, notification: 0.6, toast_success: 0.4,
+      toast_warning: 0.25, toast_error: 0.25, delete: 0.3, uncheck: 0.25,
+      add: 0.2, modal_open: 0.2, modal_close: 0.2, focus_start: 0.2,
+      focus_pause: 0.2, focus_resume: 0.2, grade_saved: 0.2, click: 0.06, tab_switch: 0.06,
+    };
+    const soundGain = ctx.createGain();
+    soundGain.gain.setValueAtTime(1, now);
+    soundGain.connect(ctx.destination);
+    this.activeSounds.push({ endsAt: now + (durationByType[type] ?? 0.4), priority, gain: soundGain });
+    if (actionId) {
+      this.actionSounds.set(actionId, { priority, at: now, gain: soundGain });
+      for (const [key, value] of this.actionSounds) {
+        if (now - value.at > 1) this.actionSounds.delete(key);
+      }
+    }
+    this.currentSoundGain = soundGain;
     this.lastPlayTime[type] = now;
 
     switch (type) {
@@ -163,13 +233,13 @@ class CalmAudioEngine {
         osc.frequency.setValueAtTime(340, now);
         osc.frequency.exponentialRampToValueAtTime(680, now + 0.08);
 
-        const vol = 0.26 * this.volume;
+        const vol = 0.2 * this.volume;
         gain.gain.setValueAtTime(0.0001, now);
-        gain.gain.linearRampToValueAtTime(vol, now + 0.015);
+        gain.gain.linearRampToValueAtTime(vol, now + 0.008);
         gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.14);
 
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.currentSoundGain ?? ctx.destination);
         osc.start(now);
         osc.stop(now + 0.15);
         break;
@@ -182,17 +252,16 @@ class CalmAudioEngine {
         break;
       }
 
-      // 5. Prayer / Mindfulness: Tibetan Zen Bowl Resonance (432Hz harmonic)
+      // 5. Prayer / Mindfulness: quiet C/G resonance, aligned with the shared tonal center.
       case 'praying': {
-        this.playTone(432.0, now, 2.2, 0.25, 'sine');
-        this.playTone(216.0, now, 2.2, 0.15, 'sine');
-        this.playTone(864.0, now + 0.02, 1.8, 0.08, 'sine');
+        this.playTone(261.63, now, 0.72, 0.18, 'sine');
+        this.playTone(392.0, now + 0.02, 0.72, 0.11, 'sine');
+        this.playTone(523.25, now + 0.04, 0.65, 0.06, 'sine');
         break;
       }
 
       // 6. Rest / Coffee Pause: Relaxing warm tea bell
-      case 'rest':
-      case 'pause': {
+      case 'rest': {
         this.playTone(440.0, now, 0.8, 0.18, 'sine');
         this.playTone(659.25, now + 0.09, 0.9, 0.16, 'sine');
         break;
@@ -221,9 +290,7 @@ class CalmAudioEngine {
       }
 
       // 10. Click / Drag / Snap: Luxury Haptic Tactile Tap (Crisp Bandpass Noise + Micro Sine Drop)
-      case 'click':
-      case 'drag':
-      case 'camera_snap': {
+      case 'click': {
         const bufferSize = Math.floor(ctx.sampleRate * 0.035);
         const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
         const data = buffer.getChannelData(0);
@@ -240,13 +307,14 @@ class CalmAudioEngine {
         filter.Q.setValueAtTime(2.2, now);
 
         const gain = ctx.createGain();
-        const clickVol = 0.28 * this.volume;
-        gain.gain.setValueAtTime(clickVol, now);
+        const clickVol = 0.1 * this.volume;
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.linearRampToValueAtTime(clickVol, now + 0.008);
         gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.035);
 
         noise.connect(filter);
         filter.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.currentSoundGain ?? ctx.destination);
         noise.start(now);
 
         // Gentle sub-transient for warm tactile body (1100Hz -> 380Hz)
@@ -256,12 +324,13 @@ class CalmAudioEngine {
         osc.frequency.setValueAtTime(1100, now);
         osc.frequency.exponentialRampToValueAtTime(380, now + 0.03);
 
-        const subVol = 0.16 * this.volume;
-        oscGain.gain.setValueAtTime(subVol, now);
+        const subVol = 0.06 * this.volume;
+        oscGain.gain.setValueAtTime(0.0001, now);
+        oscGain.gain.linearRampToValueAtTime(subVol, now + 0.008);
         oscGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.03);
 
         osc.connect(oscGain);
-        oscGain.connect(ctx.destination);
+        oscGain.connect(this.currentSoundGain ?? ctx.destination);
         osc.start(now);
         osc.stop(now + 0.035);
         break;
@@ -288,7 +357,7 @@ class CalmAudioEngine {
 
         osc.connect(filter);
         filter.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.currentSoundGain ?? ctx.destination);
         osc.start(now);
         osc.stop(now + 0.04);
         break;
@@ -304,11 +373,11 @@ class CalmAudioEngine {
 
         const vol = 0.12 * this.volume;
         gain.gain.setValueAtTime(0.0001, now);
-        gain.gain.linearRampToValueAtTime(vol, now + 0.02);
+        gain.gain.linearRampToValueAtTime(vol, now + 0.008);
         gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.15);
 
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.currentSoundGain ?? ctx.destination);
         osc.start(now);
         osc.stop(now + 0.16);
         break;
@@ -324,24 +393,17 @@ class CalmAudioEngine {
 
         const vol = 0.1 * this.volume;
         gain.gain.setValueAtTime(0.0001, now);
-        gain.gain.linearRampToValueAtTime(vol, now + 0.015);
+        gain.gain.linearRampToValueAtTime(vol, now + 0.008);
         gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.13);
 
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.currentSoundGain ?? ctx.destination);
         osc.start(now);
         osc.stop(now + 0.14);
         break;
       }
 
-      // 14. Theme Toggle: Dual frequency slide
-      case 'theme_toggle': {
-        this.playTone(523.25, now, 0.09, 0.12, 'sine');
-        this.playTone(783.99, now + 0.05, 0.12, 0.14, 'sine');
-        break;
-      }
-
-      // 15. Focus Session Finished: Rich celebratory chime
+      // Focus session finished.
       case 'focus_finish': {
         const chord = [523.25, 659.25, 783.99, 1046.5];
         chord.forEach((freq, idx) => {
@@ -350,9 +412,25 @@ class CalmAudioEngine {
         break;
       }
 
-      // 16. Timer Tick: Subtle tick for focus controls
-      case 'timer_tick': {
+      // Focus state transitions: start, pause and resume.
+      case 'focus_start': {
+        this.playTone(523.25, now, 0.16, 0.12, 'sine');
+        this.playTone(659.25, now + 0.055, 0.18, 0.1, 'sine');
+        break;
+      }
+      case 'focus_pause': {
+        this.playTone(659.25, now, 0.12, 0.1, 'sine');
+        this.playTone(523.25, now + 0.045, 0.14, 0.08, 'sine');
+        break;
+      }
+      case 'focus_resume': {
         this.playTone(600, now, 0.03, 0.06, 'triangle');
+        break;
+      }
+
+      case 'grade_saved': {
+        this.playTone(523.25, now, 0.18, 0.12, 'sine');
+        this.playTone(659.25, now + 0.06, 0.18, 0.09, 'sine');
         break;
       }
 
@@ -371,7 +449,8 @@ class CalmAudioEngine {
       }
 
       // 19. Toast Error: Gentle cushioned descending tone
-      case 'toast_error': {
+      case 'toast_error':
+      case 'error': {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = 'sine';
@@ -380,11 +459,11 @@ class CalmAudioEngine {
 
         const vol = 0.14 * this.volume;
         gain.gain.setValueAtTime(0.0001, now);
-        gain.gain.linearRampToValueAtTime(vol, now + 0.02);
+        gain.gain.linearRampToValueAtTime(vol, now + 0.008);
         gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
 
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(this.currentSoundGain ?? ctx.destination);
         osc.start(now);
         osc.stop(now + 0.23);
         break;
@@ -400,12 +479,6 @@ class CalmAudioEngine {
       }
 
       // 21. Alert / Reminder: Soft harmonious 2-tone bell
-      case 'alert': {
-        this.playTone(523.25, now, 0.45, 0.18, 'sine');
-        this.playTone(698.46, now + 0.12, 0.6, 0.16, 'sine');
-        break;
-      }
-
       // 22. Scheduled Notification Reminder: Crystalline, warm dual chime
       case 'notification': {
         this.playTone(659.25, now, 0.35, 0.18, 'sine');
@@ -418,6 +491,7 @@ class CalmAudioEngine {
         break;
       }
     }
+    this.currentSoundGain = null;
   }
 
   /**
@@ -439,7 +513,7 @@ class CalmAudioEngine {
     window.addEventListener('pointerdown', unlockAudio, { passive: true });
     window.addEventListener('keydown', unlockAudio, { passive: true });
 
-    // 2. Global event delegation for all interactive elements
+    // 2. Click sounds are opt-in per control; ordinary interaction stays silent.
     window.addEventListener(
       'click',
       (e: MouseEvent) => {
@@ -447,16 +521,8 @@ class CalmAudioEngine {
         const target = e.target as HTMLElement | null;
         if (!target) return;
 
-        // Skip if explicitly marked as silent
-        if (target.closest('[data-no-sound="true"]')) return;
-
-        // Detect if clicked element is an interactive button, tab, checkbox, radio, dropdown or clickable item
-        const isInteractive = target.closest(
-          'button, a[href], summary, [role="button"], [role="tab"], input[type="checkbox"], input[type="radio"], select, .cursor-pointer, .interactive-click'
-        );
-
-        if (isInteractive) {
-          // Play tactile click (automatically suppressed if a specific richer chime ran in this interaction)
+        const optedInControl = target.closest('[data-sound="click"]');
+        if (optedInControl && !target.closest('[data-no-sound="true"]')) {
           this.playChime('click');
         }
       },

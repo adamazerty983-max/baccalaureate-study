@@ -215,13 +215,13 @@ export const FocusModeModal: React.FC<FocusModeModalProps> = ({
       });
     }
 
-    chimePlayer.playChime('timer_tick');
+    chimePlayer.playChime('focus_start');
   };
 
   // Handler: Pause / Resume timer toggle
   const handleTogglePause = () => {
-    chimePlayer.playChime('timer_tick');
     const currentTime = Date.now();
+    chimePlayer.playChime(savedSession?.isPaused || blockPause?.isPaused ? 'focus_resume' : 'focus_pause');
 
     if (savedSession) {
       let updated: StoredFocusSession;

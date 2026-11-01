@@ -39,7 +39,7 @@ import {
 import { ActivitySticker, AppLanguage, StickerActivityType, TaskItem, TimeBlock } from '../../types';
 import { ACTIVITY_STICKERS, BAC_SUBJECTS } from '../../utils/constants';
 import { useToast } from '../shared/Toast';
-import { chimePlayer } from '../../utils/audio';
+import { chimePlayer, createAudioActionId } from '../../utils/audio';
 import { calculateDailyStreak, getLocalDateStr, isTimeBlockOccurrenceCompleted } from '../../utils/streak';
 import { PlannerHistoryCalendar } from './PlannerHistoryCalendar';
 
@@ -1417,10 +1417,12 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
       setModalDurationMinutes(parsed.durationMins);
     }
     if (parsed.dayOffset === 1) setModalDayOption('tomorrow');
-    chimePlayer.playChime('click');
+    const actionId = createAudioActionId();
     toast.success(
       isAr ? 'تم اعتماد البيانات ✓' : 'Données validées ✓',
       adoptedTitle,
+      undefined,
+      actionId,
     );
   };
 
@@ -1558,10 +1560,13 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
     setModalPreserveSchedule(false);
     setIsSubjectDropdownOpen(false);
     setSubjectError('');
-    chimePlayer.playChime('add');
+    const actionId = createAudioActionId();
+    chimePlayer.playChime('add', { actionId });
     toast.success(
       isAr ? 'تم الحفظ بنجاح ✓' : editingBlockId ? 'Bloc mis à jour ✓' : 'Bloc ajouté ✓',
       `${finalTitle} · ${startStr} – ${endStr}`,
+      undefined,
+      actionId,
     );
   };
 
@@ -1613,11 +1618,14 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
       lunch: 'repas',
       dinner: 'repas',
     };
-    chimePlayer.playChime(stickerSoundMap[sticker.type] ?? 'add');
+    const actionId = createAudioActionId();
+    chimePlayer.playChime(stickerSoundMap[sticker.type] ?? 'add', { actionId });
 
     toast.success(
       isAr ? `تم تثبيت ${sticker.label} (${startStr} – ${endStr}) ✓` : `${sticker.label} placé (${startStr} – ${endStr}) ✓`,
       isAr ? 'تمت إضافة النشاط في الجدول' : 'Activité ajoutée sur votre planning',
+      undefined,
+      actionId,
     );
   };
 
@@ -1675,12 +1683,15 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
     });
 
     setOriginalSnapshot(snapshot);
-    chimePlayer.playChime('add');
+    const actionId = createAudioActionId();
+    chimePlayer.playChime('add', { actionId });
     toast.success(
       isAr ? '🧠 تم التوزيع الذكي' : '🧠 Redistribution intelligente',
       isAr
         ? 'الأصعب صباحًا • الحفظ مساءً • الراحة ثابتة — اضغط "تراجع" للعودة'
         : 'Analytique le matin • Mémorisation l\'après-midi — "Annuler" pour revenir',
+      undefined,
+      actionId,
     );
   };
 
@@ -1694,10 +1705,13 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
       }
     });
     setOriginalSnapshot(null);
-    chimePlayer.playChime('delete');
+    const actionId = createAudioActionId();
+    chimePlayer.playChime('delete', { actionId });
     toast.success(
       isAr ? '↩ تم التراجع' : '↩ Annulé',
       isAr ? 'تم استعادة التوزيع الأصلي الخاص بك' : 'Votre planning original a été restauré',
+      undefined,
+      actionId,
     );
   };
 
@@ -2312,16 +2326,22 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                           e.stopPropagation();
                           onToggleComplete(block.id, selectedDateKey, !block.isCompleted);
                           if (!block.isCompleted) {
-                            chimePlayer.playChime('complete');
+                            const actionId = createAudioActionId();
+                            chimePlayer.playChime('complete', { actionId });
                             toast.success(
                               isAr ? 'تم إنجاز الحصة ✓' : 'Tâche terminée ✓',
                               block.title,
+                              undefined,
+                              actionId,
                             );
                           } else {
-                            chimePlayer.playChime('uncheck');
+                            const actionId = createAudioActionId();
+                            chimePlayer.playChime('uncheck', { actionId });
                             toast.info(
                               isAr ? 'إعادة المهمة للانتظار' : 'Tâche réactivée',
                               block.title,
+                              undefined,
+                              actionId,
                             );
                           }
                         }}
@@ -2389,10 +2409,13 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                         onClick={(e) => {
                           e.stopPropagation();
                           onDeleteTimeBlock(block.id);
-                          chimePlayer.playChime('delete');
+                          const actionId = createAudioActionId();
+                          chimePlayer.playChime('delete', { actionId });
                           toast.warning(
                             isAr ? 'تم حذف الحصة' : 'Tâche supprimée',
                             block.title,
+                            undefined,
+                            actionId,
                           );
                         }}
                         className="p-1 rounded-md text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 hidden group-hover:inline-flex cursor-pointer transition-colors"
@@ -2420,16 +2443,22 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                             e.stopPropagation();
                             onToggleComplete(block.id, selectedDateKey, !block.isCompleted);
                             if (!block.isCompleted) {
-                              chimePlayer.playChime('complete');
+                              const actionId = createAudioActionId();
+                              chimePlayer.playChime('complete', { actionId });
                               toast.success(
                                 isAr ? 'تم إنجاز الحصة ✓' : 'Tâche terminée ✓',
                                 block.title,
+                                undefined,
+                                actionId,
                               );
                             } else {
-                              chimePlayer.playChime('uncheck');
+                              const actionId = createAudioActionId();
+                              chimePlayer.playChime('uncheck', { actionId });
                               toast.info(
                                 isAr ? 'إعادة المهمة للانتظار' : 'Tâche réactivée',
                                 block.title,
+                                undefined,
+                                actionId,
                               );
                             }
                           }}
@@ -2508,10 +2537,13 @@ export const TimeBlockingTab: React.FC<TimeBlockingTabProps> = ({
                           onClick={(e) => {
                             e.stopPropagation();
                             onDeleteTimeBlock(block.id);
-                            chimePlayer.playChime('delete');
+                            const actionId = createAudioActionId();
+                            chimePlayer.playChime('delete', { actionId });
                             toast.warning(
                               isAr ? 'تم حذف الحصة' : 'Tâche supprimée',
                               block.title,
+                              undefined,
+                              actionId,
                             );
                           }}
                           className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer transition-colors"

@@ -87,7 +87,7 @@ export const AverageTab: React.FC<AverageTabProps> = ({
       notes: notesValue.trim() || undefined,
     });
 
-    chimePlayer.playChime('add');
+    chimePlayer.playChime('grade_saved');
     setIsModalOpen(false);
     setNotesValue('');
   };

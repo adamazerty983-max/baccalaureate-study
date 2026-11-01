@@ -13,10 +13,10 @@ export interface Toast {
 }
 
 interface ToastContextValue {
-  success: (title: string, message?: string, duration?: number) => void;
-  error: (title: string, message?: string, duration?: number) => void;
-  warning: (title: string, message?: string, duration?: number) => void;
-  info: (title: string, message?: string, duration?: number) => void;
+  success: (title: string, message?: string, duration?: number, actionId?: string) => void;
+  error: (title: string, message?: string, duration?: number, actionId?: string) => void;
+  warning: (title: string, message?: string, duration?: number, actionId?: string) => void;
+  info: (title: string, message?: string, duration?: number, actionId?: string) => void;
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null);
@@ -106,26 +106,24 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
   const dismiss = useCallback((id: string) => setToasts((p) => p.filter((t) => t.id !== id)), []);
 
-  const push = useCallback((type: ToastType, title: string, message?: string, duration?: number) => {
+  const push = useCallback((type: ToastType, title: string, message?: string, duration?: number, actionId?: string) => {
     const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     setToasts((p) => [{ id, type, title, message, duration }, ...p].slice(0, 5));
 
     if (type === 'success') {
-      chimePlayer.playChime('toast_success');
+      chimePlayer.playChime('toast_success', { actionId });
     } else if (type === 'warning') {
-      chimePlayer.playChime('toast_warning');
+      chimePlayer.playChime('toast_warning', { actionId });
     } else if (type === 'error') {
-      chimePlayer.playChime('toast_error');
-    } else {
-      chimePlayer.playChime('tab_switch');
+      chimePlayer.playChime('toast_error', { actionId });
     }
   }, []);
 
   const ctx: ToastContextValue = {
-    success: (t, m, d) => push("success", t, m, d),
-    error: (t, m, d) => push("error", t, m, d),
-    warning: (t, m, d) => push("warning", t, m, d),
-    info: (t, m, d) => push("info", t, m, d),
+    success: (t, m, d, actionId) => push("success", t, m, d, actionId),
+    error: (t, m, d, actionId) => push("error", t, m, d, actionId),
+    warning: (t, m, d, actionId) => push("warning", t, m, d, actionId),
+    info: (t, m, d, actionId) => push("info", t, m, d, actionId),
   };
 
   return (
