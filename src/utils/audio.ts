@@ -1,193 +1,247 @@
 /**
- * Ambient, Calm, and Harmonious Web Audio Synthesizer for Baccalaureate Study Hub.
- * Features organic, warm tones (Sine + Low-Pass Filter) with zero harsh frequencies.
- * Inspired by Calm, Apple iOS haptics, and Notion.
+ * Low-fatigue sound engine for StudyOS.
+ * The small Web Audio synth is always available as a fallback; licensed assets are optional.
  */
 
-export type SoundEffectType =
-  | 'complete'
-  | 'uncheck'
-  | 'add'
-  | 'delete'
-  | 'praying'
-  | 'rest'
-  | 'repas'
-  | 'sport'
-  | 'walking'
-  | 'sleeping'
-  | 'click'
+export type SoundId =
   | 'ui_tick'
-  | 'streak'
-  | 'tab_switch'
-  | 'modal_open'
-  | 'modal_close'
+  | 'item_completed'
+  | 'item_added'
+  | 'item_undone'
+  | 'item_deleted'
+  | 'grade_saved'
   | 'focus_start'
   | 'focus_pause'
   | 'focus_resume'
-  | 'focus_finish'
-  | 'grade_saved'
-  | 'toast_success'
-  | 'toast_warning'
-  | 'toast_error'
+  | 'focus_end_alarm'
+  | 'reminder'
   | 'error'
-  | 'notification'
-  | 'simulator_celebrate';
+  | 'warning'
+  | 'milestone';
+
+/** Legacy values remain accepted so existing components keep their public API. */
+export type SoundEffectType = SoundId | string;
 
 export interface ChimeOptions {
-  /** Shared by a semantic sound and its related toast to guarantee one cue per action. */
+  /** Shared by a semantic sound and its toast to guarantee one cue per action. */
   actionId?: string;
 }
 
-// Only these cues have a current sound design. Legacy API ids remain accepted but resolve silently.
-const ACTIVE_SOUND_IDS = new Set([
-  'ui_tick',
-  'complete',
-  'focus_start',
-  'focus_finish',
-  'notification',
-  'toast_error',
-  'grade_saved',
+type SoundPriority = 1 | 2 | 3 | 4;
+type SoundBufferMap = Partial<Record<SoundId, AudioBuffer>>;
+export type SoundAssetPaths = Partial<Record<SoundId, string>>;
+
+/**
+ * Intentionally empty until reviewed CC0/public-domain samples are supplied.
+ * Keeping this separate from the JS bundle lets approved files live in public/sounds/.
+ */
+export const SOUND_ASSET_PATHS: SoundAssetPaths = {};
+
+/** Fetch and decode each configured file once. Failures are isolated per asset. */
+export class SoundBufferLoader {
+  private readonly buffers: SoundBufferMap = {};
+  private loadPromise: Promise<void> | null = null;
+
+  public constructor(
+    private readonly context: Pick<AudioContext, 'decodeAudioData'>,
+    private readonly paths: SoundAssetPaths,
+    private readonly fetcher: typeof fetch = fetch
+  ) {}
+
+  public loadAll(): Promise<void> {
+    if (this.loadPromise) return this.loadPromise;
+    this.loadPromise = Promise.all(Object.entries(this.paths).map(async ([id, url]) => {
+      if (!url) return;
+      try {
+        const response = await this.fetcher(url);
+        if (!response.ok) throw new Error(`Sound request failed (${response.status})`);
+        const audioBuffer = await this.context.decodeAudioData(await response.arrayBuffer());
+        this.buffers[id as SoundId] = audioBuffer;
+      } catch {
+        // The engine deliberately falls back to its built-in synth for this ID.
+      }
+    })).then(() => undefined);
+    return this.loadPromise;
+  }
+
+  public get(id: SoundId): AudioBuffer | undefined {
+    return this.buffers[id];
+  }
+}
+
+const LEGACY_SOUND_IDS: Record<string, SoundId | null> = {
+  complete: 'item_completed',
+  add: 'item_added',
+  uncheck: 'item_undone',
+  delete: 'item_deleted',
+  focus_finish: 'focus_end_alarm',
+  notification: 'reminder',
+  toast_error: 'error',
+  toast_warning: 'warning',
+  error: 'error',
+  streak: 'milestone',
+  simulator_celebrate: 'milestone',
+  // Passive, generic and modal sounds are intentionally silent.
+  click: null,
+  tab_switch: null,
+  modal_open: null,
+  modal_close: null,
+  toast_success: null,
+  praying: null,
+  rest: null,
+  repas: null,
+  sport: null,
+  walking: null,
+  sleeping: null,
+  alert: null,
+};
+
+const ACTIVE_SOUND_IDS = new Set<SoundId>([
+  'ui_tick', 'item_completed', 'item_added', 'item_undone', 'item_deleted', 'grade_saved',
+  'focus_start', 'focus_pause', 'focus_resume', 'focus_end_alarm', 'reminder', 'error', 'warning', 'milestone',
 ]);
+
+const PRIORITY: Record<SoundId, SoundPriority> = {
+  ui_tick: 1,
+  focus_start: 2,
+  focus_pause: 2,
+  focus_resume: 2,
+  reminder: 2,
+  item_added: 3,
+  item_undone: 3,
+  item_deleted: 3,
+  error: 3,
+  warning: 3,
+  item_completed: 4,
+  grade_saved: 4,
+  focus_end_alarm: 4,
+  milestone: 4,
+};
+
+const DURATION: Record<SoundId, number> = {
+  ui_tick: 0.06,
+  item_completed: 0.62,
+  item_added: 0.18,
+  item_undone: 0.2,
+  item_deleted: 0.2,
+  grade_saved: 0.28,
+  focus_start: 0.2,
+  focus_pause: 0.16,
+  focus_resume: 0.16,
+  focus_end_alarm: 0.9,
+  reminder: 0.42,
+  error: 0.25,
+  warning: 0.24,
+  milestone: 0.7,
+};
 
 export const createAudioActionId = (): string => `audio-action-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
+type ActiveVoice = { endsAt: number; priority: SoundPriority; gain: GainNode };
+type ActionVoice = { priority: SoundPriority; at: number; gain: GainNode };
+
 export class CalmAudioEngine {
   private ctx: AudioContext | null = null;
-  private volume: number = 0.45; // Gentle default master volume
-  private enabled: boolean = true;
-  private lastPlayTime: Record<string, number> = {};
-  private lastRichSoundTime: number = Number.NEGATIVE_INFINITY;
-  private activeSounds: Array<{ endsAt: number; priority: number; gain: GainNode }> = [];
+  private volume = 0.45;
+  private enabled = true;
+  private lastPlayTime: Partial<Record<SoundId, number>> = {};
+  private lastRichSoundTime = Number.NEGATIVE_INFINITY;
+  private activeSounds: ActiveVoice[] = [];
   private currentSoundGain: GainNode | null = null;
   private readonly maxPolyphony = 3;
-  private readonly actionSounds = new Map<string, { priority: number; at: number; gain: GainNode }>();
-  private isListenersInitialized: boolean = false;
+  private readonly actionSounds = new Map<string, ActionVoice>();
+  private isListenersInitialized = false;
+  private soundLoader: SoundBufferLoader | null = null;
 
-  public setVolume(vol: number): void {
-    this.volume = Math.max(0, Math.min(1, vol));
-  }
-
-  public setEnabled(enabled: boolean): void {
-    this.enabled = enabled;
-  }
-
-  public isSoundEnabled(): boolean {
-    return this.enabled;
-  }
+  public setVolume(vol: number): void { this.volume = Math.max(0, Math.min(1, vol)); }
+  public setEnabled(enabled: boolean): void { this.enabled = enabled; }
+  public isSoundEnabled(): boolean { return this.enabled; }
 
   private getContext(): AudioContext | null {
-    if (!this.enabled || this.volume <= 0) return null;
-    if (typeof window === 'undefined') return null;
-
+    if (!this.enabled || this.volume <= 0 || typeof window === 'undefined') return null;
     if (!this.ctx) {
-      const AudioCtx =
-        window.AudioContext ||
-        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      if (AudioCtx) {
-        this.ctx = new AudioCtx();
-      }
+      const AudioCtx = window.AudioContext
+        || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (AudioCtx) this.ctx = new AudioCtx();
     }
-
-    if (this.ctx && this.ctx.state === 'suspended') {
-      this.ctx.resume().catch(() => {});
-    }
-
+    if (this.ctx?.state === 'suspended') this.ctx.resume().catch(() => {});
     return this.ctx;
   }
 
-  /**
-   * Helper: Plays a smooth, low-pass filtered resonant tone
-   */
-  private playTone(
-    freq: number,
-    startTime: number,
-    duration: number,
-    peakGain: number = 0.2,
-    type: OscillatorType = 'sine'
-  ) {
+  private getSoundLoader(ctx: AudioContext): SoundBufferLoader {
+    if (!this.soundLoader) {
+      const base = import.meta.env.BASE_URL || '/';
+      const paths = Object.fromEntries(Object.entries(SOUND_ASSET_PATHS).map(([id, path]) => [
+        id,
+        path ? new URL(`${base}${path.replace(/^\/+/, '')}`, window.location.origin).toString() : '',
+      ])) as SoundAssetPaths;
+      this.soundLoader = new SoundBufferLoader(ctx, paths);
+    }
+    return this.soundLoader;
+  }
+
+  /** Call only from a real user gesture; loading never delays a sound or startup. */
+  private warmSoundAssets(ctx: AudioContext): void {
+    void this.getSoundLoader(ctx).loadAll();
+  }
+
+  private playTone(freq: number, startTime: number, duration: number, peakGain = 0.12, type: OscillatorType = 'sine'): void {
     const ctx = this.getContext();
     if (!ctx) return;
-
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     const filter = ctx.createBiquadFilter();
-
-    // Warm low-pass filter to eliminate harshness
     filter.type = 'lowpass';
     filter.frequency.setValueAtTime(2200, startTime);
-
     osc.type = type;
     osc.frequency.setValueAtTime(freq, startTime);
-
-    // Leave headroom for overlapping chord voices, including at the 100% volume setting.
     const actualVolume = Math.min(0.15, peakGain) * this.volume;
-
-    // Smooth ADSR Envelope (never target 0, always 0.0001 for Web Audio API safety)
     gain.gain.setValueAtTime(0.0001, startTime);
-    // An 8 ms attack and a soft exponential release avoid clicks while keeping UI cues brief.
+    // Short 8 ms attack and exponential release avoid clicks without a long tail.
     gain.gain.linearRampToValueAtTime(actualVolume, startTime + 0.008);
-    gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration); // Smooth organic decay
-
+    gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
     osc.connect(filter);
     filter.connect(gain);
     gain.connect(this.currentSoundGain ?? ctx.destination);
-
     osc.start(startTime);
     osc.stop(startTime + duration + 0.01);
   }
 
-  /**
-   * Plays a distinct, calm, and soothing sound effect
-   */
-  public playChime(type: SoundEffectType | string = 'complete', options: ChimeOptions = {}): void {
-    // Existing callers use "error"; map that semantic alias onto the approved error cue.
-    if (type === 'error') type = 'toast_error';
-    if (!ACTIVE_SOUND_IDS.has(type)) return;
-    if (!this.enabled || this.volume <= 0) return;
-    const isCriticalBackgroundSound = type === 'focus_finish' || type === 'notification';
-    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
-      // Background alarms/reminders may use an already unlocked context only.
-      if (!isCriticalBackgroundSound || this.ctx?.state !== 'running') return;
-    }
-    const ctx = typeof document !== 'undefined' && document.visibilityState === 'hidden'
-      && this.ctx?.state === 'running'
-      ? this.ctx
-      : this.getContext();
+  private resolveId(type: string): SoundId | null {
+    if (type in LEGACY_SOUND_IDS) return LEGACY_SOUND_IDS[type];
+    return ACTIVE_SOUND_IDS.has(type as SoundId) ? type as SoundId : null;
+  }
+
+  public playChime(type: SoundEffectType | string = 'item_completed', options: ChimeOptions = {}): void {
+    const id = this.resolveId(type);
+    if (!id || !this.enabled || this.volume <= 0) return;
+    const hidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
+    const isBackgroundException = id === 'focus_end_alarm' || id === 'reminder';
+    if (hidden && (!isBackgroundException || this.ctx?.state !== 'running')) return;
+    const ctx = hidden && this.ctx?.state === 'running' ? this.ctx : this.getContext();
     if (!ctx) return;
-
     const now = ctx.currentTime;
-
-    const priority = type === 'complete' || type === 'focus_finish' ? 4 : type === 'ui_tick' ? 1 : 3;
+    const priority = PRIORITY[id];
     const actionId = options.actionId;
     const priorActionSound = actionId ? this.actionSounds.get(actionId) : undefined;
     if (priorActionSound) {
       if (priorActionSound.priority >= priority) return;
-      // A later, more meaningful cue replaces a lower-priority cue from the same action.
       priorActionSound.gain.gain.cancelScheduledValues(now);
       priorActionSound.gain.gain.setTargetAtTime(0.0001, now, 0.005);
       priorActionSound.gain.gain.setValueAtTime(0.0001, now + 0.02);
       this.activeSounds = this.activeSounds.filter((sound) => sound.gain !== priorActionSound.gain);
     }
 
-    // Suppress an optional UI tick if a richer sound just played in the same cycle.
-    if (type === 'ui_tick') {
-      if (now - this.lastRichSoundTime < 0.08) {
-        return;
-      }
-    } else if (!options.actionId && type.startsWith('toast_') && now - this.lastRichSoundTime < 0.15) {
-      // A toast caused by a just-confirmed action should not add a second sound.
-      return;
-    } else {
-      this.lastRichSoundTime = now;
-    }
+    // The short fallback covers legacy toasts that do not pass the originating action token.
+    if (id === 'ui_tick' && now - this.lastRichSoundTime < 0.08) return;
+    if ((id === 'error' || id === 'warning') && !actionId && now - this.lastRichSoundTime < 0.15) return;
+    if (id !== 'ui_tick') this.lastRichSoundTime = now;
 
-    const minInterval = type === 'ui_tick' ? 0.12 : 0.08;
-    if (this.lastPlayTime[type] && now - this.lastPlayTime[type] < minInterval) {
-      return;
-    }
+    const minInterval = id === 'ui_tick' ? 0.12 : 0.08;
+    if (this.lastPlayTime[id] !== undefined && now - this.lastPlayTime[id]! < minInterval) return;
     this.activeSounds = this.activeSounds.filter((sound) => sound.endsAt > now);
     if (this.activeSounds.length >= this.maxPolyphony) {
-      const lowestPriority = Math.min(...this.activeSounds.map((sound) => sound.priority));
+      const lowestPriority = Math.min(...this.activeSounds.map((sound) => sound.priority)) as SoundPriority;
       if (priority <= lowestPriority) return;
       const oldestLowest = this.activeSounds.find((sound) => sound.priority === lowestPriority);
       if (!oldestLowest) return;
@@ -196,336 +250,131 @@ export class CalmAudioEngine {
       oldestLowest.gain.gain.setValueAtTime(0.0001, now + 0.02);
       this.activeSounds = this.activeSounds.filter((sound) => sound !== oldestLowest);
     }
-    const durationByType: Record<string, number> = {
-      complete: 1, focus_finish: 1.3, notification: 0.6, toast_error: 0.3,
-      focus_start: 0.2, grade_saved: 0.2, ui_tick: 0.06,
-    };
-    const soundGain = ctx.createGain();
-    soundGain.gain.setValueAtTime(1, now);
-    soundGain.connect(ctx.destination);
-    this.activeSounds.push({ endsAt: now + (durationByType[type] ?? 0.4), priority, gain: soundGain });
+
+    const voiceGain = ctx.createGain();
+    const buffer = this.soundLoader?.get(id);
+    const estimatedDuration = buffer?.duration ?? DURATION[id];
+    voiceGain.gain.setValueAtTime(buffer ? this.volume : 1, now);
+    voiceGain.connect(ctx.destination);
+    this.activeSounds.push({ endsAt: now + estimatedDuration, priority, gain: voiceGain });
     if (actionId) {
-      this.actionSounds.set(actionId, { priority, at: now, gain: soundGain });
-      for (const [key, value] of this.actionSounds) {
-        if (now - value.at > 1) this.actionSounds.delete(key);
-      }
+      this.actionSounds.set(actionId, { priority, at: now, gain: voiceGain });
+      for (const [key, value] of this.actionSounds) if (now - value.at > 1) this.actionSounds.delete(key);
     }
-    this.currentSoundGain = soundGain;
-    this.lastPlayTime[type] = now;
+    this.lastPlayTime[id] = now;
+    this.currentSoundGain = voiceGain;
 
-    switch (type) {
-      // 1. Task Completed / Checked: Warm Celesta Chord (C5 -> E5 -> G5 -> C6)
-      case 'complete':
-      case 'streak': {
-        const notes = [523.25, 659.25, 783.99, 1046.5]; // C5, E5, G5, C6
-        notes.forEach((freq, idx) => {
-          this.playTone(freq, now + idx * 0.065, 0.75, 0.24, 'sine');
-        });
-        break;
-      }
-
-      // 2. Uncheck / Reactivate: Gentle subtle wooden marimba tap
-      case 'uncheck': {
-        this.playTone(440.0, now, 0.14, 0.2, 'triangle');
-        this.playTone(330.0, now + 0.04, 0.16, 0.14, 'sine');
-        break;
-      }
-
-      // 3. Add Item / Save Block: Soft tactile bubble pop
-      case 'add': {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(340, now);
-        osc.frequency.exponentialRampToValueAtTime(680, now + 0.08);
-
-        const vol = 0.2 * this.volume;
-        gain.gain.setValueAtTime(0.0001, now);
-        gain.gain.linearRampToValueAtTime(vol, now + 0.008);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.14);
-
-        osc.connect(gain);
-        gain.connect(this.currentSoundGain ?? ctx.destination);
-        osc.start(now);
-        osc.stop(now + 0.15);
-        break;
-      }
-
-      // 4. Delete Item: Soft descending warm note
-      case 'delete': {
-        this.playTone(523.25, now, 0.14, 0.2, 'sine');
-        this.playTone(392.0, now + 0.06, 0.22, 0.15, 'sine');
-        break;
-      }
-
-      // 5. Prayer / Mindfulness: quiet C/G resonance, aligned with the shared tonal center.
-      case 'praying': {
-        this.playTone(261.63, now, 0.72, 0.18, 'sine');
-        this.playTone(392.0, now + 0.02, 0.72, 0.11, 'sine');
-        this.playTone(523.25, now + 0.04, 0.65, 0.06, 'sine');
-        break;
-      }
-
-      // 6. Rest / Coffee Pause: Relaxing warm tea bell
-      case 'rest': {
-        this.playTone(440.0, now, 0.8, 0.18, 'sine');
-        this.playTone(659.25, now + 0.09, 0.9, 0.16, 'sine');
-        break;
-      }
-
-      // 7. Sport / Walking: Refreshing brisk tone
-      case 'sport':
-      case 'walking': {
-        this.playTone(587.33, now, 0.35, 0.18, 'sine');
-        this.playTone(880.0, now + 0.07, 0.5, 0.15, 'sine');
-        break;
-      }
-
-      // 8. Meal: Cozy soft chime
-      case 'repas': {
-        this.playTone(493.88, now, 0.5, 0.16, 'sine');
-        this.playTone(659.25, now + 0.08, 0.6, 0.14, 'sine');
-        break;
-      }
-
-      // 9. Sleep: Ambient deep lullaby wave
-      case 'sleeping': {
-        this.playTone(220.0, now, 1.6, 0.2, 'sine');
-        this.playTone(329.63, now + 0.1, 1.4, 0.12, 'sine');
-        break;
-      }
-
-      // Optional UI tick: quiet filtered noise with a C5 sine transient.
-      case 'ui_tick': {
-        const bufferSize = Math.floor(ctx.sampleRate * 0.035);
-        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-        const data = buffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) {
-          data[i] = Math.random() * 2 - 1;
-        }
-
-        const noise = ctx.createBufferSource();
-        noise.buffer = buffer;
-
-        const filter = ctx.createBiquadFilter();
-        filter.type = 'bandpass';
-        filter.frequency.setValueAtTime(2600, now);
-        filter.Q.setValueAtTime(2.2, now);
-
-        const gain = ctx.createGain();
-        const clickVol = 0.1 * this.volume;
-        gain.gain.setValueAtTime(0.0001, now);
-        gain.gain.linearRampToValueAtTime(clickVol, now + 0.008);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.035);
-
-        noise.connect(filter);
-        filter.connect(gain);
-        gain.connect(this.currentSoundGain ?? ctx.destination);
-        noise.start(now);
-
-        // A C5 sub-transient keeps the optional tick aligned with the shared tonal center.
-        const osc = ctx.createOscillator();
-        const oscGain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(523.25, now);
-
-        const subVol = 0.06 * this.volume;
-        oscGain.gain.setValueAtTime(0.0001, now);
-        oscGain.gain.linearRampToValueAtTime(subVol, now + 0.008);
-        oscGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.03);
-
-        osc.connect(oscGain);
-        oscGain.connect(this.currentSoundGain ?? ctx.destination);
-        osc.start(now);
-        osc.stop(now + 0.035);
-        break;
-      }
-
-      // 11. Tab Switch: Ultra-light tactile iOS-style haptic tap
-      case 'tab_switch': {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        const filter = ctx.createBiquadFilter();
-
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(800, now);
-        osc.frequency.exponentialRampToValueAtTime(400, now + 0.035);
-
-        filter.type = 'bandpass';
-        filter.frequency.setValueAtTime(1400, now);
-        filter.Q.setValueAtTime(1.5, now);
-
-        const vol = 0.08 * this.volume;
-        gain.gain.setValueAtTime(0.0001, now);
-        gain.gain.linearRampToValueAtTime(vol, now + 0.005);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.035);
-
-        osc.connect(filter);
-        filter.connect(gain);
-        gain.connect(this.currentSoundGain ?? ctx.destination);
-        osc.start(now);
-        osc.stop(now + 0.04);
-        break;
-      }
-
-      // 12. Modal Open: Airy whoosh ascending sweep
-      case 'modal_open': {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(440, now);
-        osc.frequency.exponentialRampToValueAtTime(920, now + 0.14);
-
-        const vol = 0.12 * this.volume;
-        gain.gain.setValueAtTime(0.0001, now);
-        gain.gain.linearRampToValueAtTime(vol, now + 0.008);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.15);
-
-        osc.connect(gain);
-        gain.connect(this.currentSoundGain ?? ctx.destination);
-        osc.start(now);
-        osc.stop(now + 0.16);
-        break;
-      }
-
-      // 13. Modal Close: Soft dismissing sweep
-      case 'modal_close': {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(800, now);
-        osc.frequency.exponentialRampToValueAtTime(360, now + 0.12);
-
-        const vol = 0.1 * this.volume;
-        gain.gain.setValueAtTime(0.0001, now);
-        gain.gain.linearRampToValueAtTime(vol, now + 0.008);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.13);
-
-        osc.connect(gain);
-        gain.connect(this.currentSoundGain ?? ctx.destination);
-        osc.start(now);
-        osc.stop(now + 0.14);
-        break;
-      }
-
-      // Focus session finished.
-      case 'focus_finish': {
-        const chord = [523.25, 659.25, 783.99, 1046.5];
-        chord.forEach((freq, idx) => {
-          this.playTone(freq, now + idx * 0.08, 1.05, 0.22, 'sine');
-        });
-        break;
-      }
-
-      // Focus state transitions: start, pause and resume.
-      case 'focus_start': {
-        this.playTone(523.25, now, 0.16, 0.12, 'sine');
-        this.playTone(659.25, now + 0.055, 0.18, 0.1, 'sine');
-        break;
-      }
-      case 'focus_pause': {
-        this.playTone(659.25, now, 0.12, 0.1, 'sine');
-        this.playTone(523.25, now + 0.045, 0.14, 0.08, 'sine');
-        break;
-      }
-      case 'focus_resume': {
-        this.playTone(600, now, 0.03, 0.06, 'triangle');
-        break;
-      }
-
-      case 'grade_saved': {
-        this.playTone(523.25, now, 0.18, 0.12, 'sine');
-        this.playTone(659.25, now + 0.06, 0.18, 0.09, 'sine');
-        break;
-      }
-
-      // 17. Toast Success: Bright, reassuring double-tone
-      case 'toast_success': {
-        this.playTone(659.25, now, 0.18, 0.14, 'sine');
-        this.playTone(880.0, now + 0.08, 0.26, 0.16, 'sine');
-        break;
-      }
-
-      // 18. Toast Warning: Advisory double pulse
-      case 'toast_warning': {
-        this.playTone(550.0, now, 0.08, 0.14, 'triangle');
-        this.playTone(550.0, now + 0.08, 0.09, 0.14, 'triangle');
-        break;
-      }
-
-      // Error: a soft descending G-to-E pair in the shared C-major tonal center.
-      case 'toast_error':
-      case 'error': {
-        this.playTone(392.0, now, 0.22, 0.14, 'sine');
-        this.playTone(329.63, now + 0.06, 0.2, 0.1, 'sine');
-        break;
-      }
-
-      // 20. Simulator High Achievement (Mention Très Bien)
-      case 'simulator_celebrate': {
-        const notes = [523.25, 659.25, 783.99, 1046.5];
-        notes.forEach((freq, idx) => {
-          this.playTone(freq, now + idx * 0.06, 0.8, 0.2, 'sine');
-        });
-        break;
-      }
-
-      // 21. Alert / Reminder: Soft harmonious 2-tone bell
-      // 22. Scheduled Notification Reminder: Crystalline, warm dual chime
-      case 'notification': {
-        this.playTone(659.25, now, 0.35, 0.18, 'sine');
-        this.playTone(783.99, now + 0.08, 0.5, 0.2, 'sine');
-        break;
-      }
-
-      default: {
-        this.playTone(523.25, now, 0.4, 0.15, 'sine');
-        break;
-      }
+    if (buffer) {
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(voiceGain);
+      source.start(now);
+      this.currentSoundGain = null;
+      return;
     }
+
+    this.playSynth(id, ctx, now);
     this.currentSoundGain = null;
   }
 
-  /**
-   * Unlocks the Web Audio context after a user gesture and ticks only on explicitly opted-in controls.
-   */
+  private playSynth(id: SoundId, ctx: AudioContext, now: number): void {
+    switch (id) {
+      case 'ui_tick': {
+        const length = Math.floor(ctx.sampleRate * 0.035);
+        const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let index = 0; index < length; index++) data[index] = Math.random() * 2 - 1;
+        const noise = ctx.createBufferSource();
+        noise.buffer = buffer;
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.setValueAtTime(2200, now);
+        filter.Q.setValueAtTime(2.2, now);
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.linearRampToValueAtTime(0.035 * this.volume, now + 0.006);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.035);
+        noise.connect(filter); filter.connect(gain); gain.connect(this.currentSoundGain ?? ctx.destination); noise.start(now);
+        this.playTone(523.25, now, 0.03, 0.035, 'sine');
+        break;
+      }
+      case 'item_completed':
+      case 'milestone': {
+        const notes = id === 'milestone' ? [523.25, 659.25, 783.99] : [523.25, 659.25, 783.99];
+        notes.forEach((frequency, index) => this.playTone(frequency, now + index * 0.055, id === 'milestone' ? 0.48 : 0.38, 0.13));
+        break;
+      }
+      case 'item_added':
+        this.playTone(523.25, now, 0.12, 0.09);
+        this.playTone(659.25, now + 0.045, 0.13, 0.08);
+        break;
+      case 'item_undone':
+        this.playTone(659.25, now, 0.11, 0.075);
+        this.playTone(523.25, now + 0.045, 0.12, 0.07);
+        break;
+      case 'item_deleted':
+        this.playTone(523.25, now, 0.12, 0.075);
+        this.playTone(392, now + 0.045, 0.14, 0.065);
+        break;
+      case 'grade_saved':
+        this.playTone(523.25, now, 0.17, 0.12);
+        this.playTone(659.25, now + 0.055, 0.18, 0.1);
+        break;
+      case 'focus_start':
+        this.playTone(523.25, now, 0.13, 0.09);
+        this.playTone(659.25, now + 0.05, 0.14, 0.08);
+        break;
+      case 'focus_pause':
+        this.playTone(659.25, now, 0.11, 0.07);
+        this.playTone(523.25, now + 0.045, 0.12, 0.065);
+        break;
+      case 'focus_resume':
+        this.playTone(523.25, now, 0.1, 0.07, 'triangle');
+        break;
+      case 'focus_end_alarm':
+        [523.25, 659.25, 783.99].forEach((frequency, index) => this.playTone(frequency, now + index * 0.075, 0.45, 0.14));
+        break;
+      case 'reminder':
+        this.playTone(659.25, now, 0.22, 0.085);
+        this.playTone(783.99, now + 0.07, 0.25, 0.09);
+        break;
+      case 'error':
+        this.playTone(392, now, 0.14, 0.075);
+        this.playTone(329.63, now + 0.05, 0.15, 0.07);
+        break;
+      case 'warning':
+        this.playTone(440, now, 0.11, 0.065, 'triangle');
+        this.playTone(392, now + 0.05, 0.12, 0.06, 'triangle');
+        break;
+    }
+  }
+
+  /** Resume audio and lazily fetch/decode licensed files after a user gesture. */
   public initGlobalListeners(): void {
     if (this.isListenersInitialized || typeof window === 'undefined') return;
     this.isListenersInitialized = true;
-
-    // 1. Resume AudioContext on very first user interaction so no audio is blocked by browser autoplay policies
     const unlockAudio = () => {
-      if (this.ctx && this.ctx.state === 'suspended') {
+      if (this.ctx?.state === 'suspended') {
         this.ctx.resume().catch(() => {});
-      } else if (!this.ctx && this.enabled) {
-        this.getContext();
+        this.warmSoundAssets(this.ctx);
       }
+      else if (!this.ctx && this.enabled) {
+        const ctx = this.getContext();
+        if (ctx) this.warmSoundAssets(ctx);
+      } else if (this.ctx) this.warmSoundAssets(this.ctx);
     };
     window.addEventListener('pointerdown', unlockAudio, { passive: true });
     window.addEventListener('keydown', unlockAudio, { passive: true });
-
-    // 2. Click sounds are opt-in per control; ordinary interaction stays silent.
-    window.addEventListener(
-      'click',
-      (e: MouseEvent) => {
-        if (!this.enabled || this.volume <= 0) return;
-        const target = e.target as HTMLElement | null;
-        if (!target) return;
-
-        const optedInControl = target.closest('[data-sound="ui_tick"]');
-        if (optedInControl && !target.closest('[data-no-sound="true"]')) {
-          this.playChime('ui_tick');
-        }
-      },
-      { capture: false, passive: true }
-    );
+    window.addEventListener('click', (event: MouseEvent) => {
+      if (!this.enabled || this.volume <= 0) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('[data-sound="ui_tick"]') && !target.closest('[data-no-sound="true"]')) {
+        this.playChime('ui_tick');
+      }
+    }, { passive: true });
   }
 }
 
 export const chimePlayer = new CalmAudioEngine();
 
-// Auto-activate global listeners in browser environment
-if (typeof window !== 'undefined') {
-  chimePlayer.initGlobalListeners();
-}
-
+if (typeof window !== 'undefined') chimePlayer.initGlobalListeners();

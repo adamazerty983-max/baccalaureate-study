@@ -1,17 +1,38 @@
-# Sound credits
+# سجل مصادر الأصوات وتراخيصها
 
-No recorded audio assets are shipped by this change. The seven active cues are synthesized at runtime in `src/utils/audio.ts` with Web Audio oscillators, filtered noise, and envelopes. They use no external samples, packs, or generation service; there are no per-file source recordings or third-party sound licenses to list.
+تاريخ المراجعة: 2026-11-01
 
-| Sound id | Implementation | External source / author / license |
-|---|---|---|
-| `ui_tick` | Quiet filtered noise plus a C5 sine transient; opt-in only | None; synthesized in project code |
-| `complete` | C5–E5–G5–C6 sine chord | None; synthesized in project code |
-| `focus_start` | C5/E5 sine pair | None; synthesized in project code |
-| `focus_finish` | Short C/E/G/C alarm chord | None; synthesized in project code |
-| `notification` | E5/G5 sine pair | None; synthesized in project code |
-| `toast_error` | Gentle descending G4/E4 pair | None; synthesized in project code |
-| `grade_saved` | C5/E5 sine pair | None; synthesized in project code |
+## الحالة الحالية
 
-The official [Kenney UI Audio](https://kenney.nl/assets/ui-audio) and [Interface Sounds](https://kenney.nl/assets/interface-sounds) pages identify those packs as CC0. Kenney's [support page](https://kenney.nl/support) says its asset-page content is usable commercially and attribution is optional. No pack was downloaded or included: the development environment could not resolve `kenney.nl` (`No such host is known`). The Kenney assets are therefore not sources for any sound above.
+لا توجد ملفات صوتية خارجية داخل `public/sounds/` أو `public/sounds-raw/`، لذلك لا توجد أصوات مختارة أو مضمّنة حاليًا. الأصوات المستخدمة ما زالت مولّدة محليًا بواسطة Web Audio، ويعمل هذا التوليد كبديل تلقائي إذا غاب ملف أو فشل تحميله.
 
-The synth implementation follows the repository's code licensing terms; the repository license was not audited as part of this change.
+لم يُستدعَ مولّد مدفوع ولم تُستهلك أي أرصدة في هذه المرحلة. موصل `soundy` غير متاح ضمن أدوات هذه الجلسة، لذلك لم يمكن التحقق من أنه خدمة Lots of Sounds أو قراءة بيانات تراخيص عيناته. راجع `DOWNLOAD_LIST.md` لمسار CC0 الاحتياطي.
+
+## سجل الملفات المعتمدة
+
+أضف سطرًا لكل ملف بعد اختياره من مصدر صريح CC0 أو الملكية العامة. لا تضع الملف في `public/sounds/` قبل ملء جميع الحقول والتحقق من الملف الأصلي والرخصة.
+
+| ID | الملف المنشور | ملف المصدر الأصلي | مصدر / رابط مباشر | المؤلف | الترخيص كما ورد في المصدر | مدة/معالجة | تاريخ التحقق |
+|---|---|---|---|---|---|---|---|
+| — | لا توجد ملفات منشورة | — | — | — | — | — | — |
+
+## قالب إدخال المصدر
+
+```text
+ID:
+الملف المنشور:
+اسم الملف الأصلي:
+رابط صفحة المصدر:
+رابط الملف / رقم عينة MCP:
+المؤلف:
+حقل الترخيص كما يظهر في المصدر: CC0 / Public Domain (انسخ القيمة حرفيًا)
+تاريخ التنزيل والتحقق:
+المعالجة: قص الصمت، mono، fade 5–10 ms، peak <= -3 dBFS، الصيغة، الحجم
+```
+
+## سياسة النشر
+
+- نستخدم فقط ملفًا ثبت من صفحة المصدر أو بيانات MCP أن ترخيصه CC0 أو Public Domain صراحةً.
+- تُحفظ الحزم الأصلية في `public/sounds-raw/` للمراجعة، بينما تذهب النسخ المعالجة فقط إلى `public/sounds/`.
+- لا تُنشر أي عينة مجهولة الترخيص أو تعتمد على تخمين اسم الحزمة.
+- لا تعدّل `public/sw.js` لهذه المهمة؛ إذا أضيفت الملفات لاحقًا، راجع اقتراح التخزين المؤقت وقتها دون precache.

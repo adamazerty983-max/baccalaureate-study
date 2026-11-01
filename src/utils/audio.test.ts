@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CalmAudioEngine } from './audio';
+import { CalmAudioEngine, SoundBufferLoader, SoundId } from './audio';
 
 class FakeParam {
   value = 0;
@@ -32,6 +32,7 @@ class FakeAudioContext {
   createBiquadFilter() { return new FakeNode(); }
   createBuffer() { return { getChannelData: () => new Float32Array(1000) }; }
   createBufferSource() { const n = new FakeNode(); this.sources.push(n); return n; }
+  decodeAudioData = vi.fn(async () => ({ duration: 0.12 } as AudioBuffer));
   resume() { return Promise.resolve(); }
 }
 
@@ -151,12 +152,58 @@ describe('CalmAudioEngine sound policy', () => {
     expect(context.sources.length).toBeGreaterThan(0);
   });
 
-  it('keeps all non-approved legacy sounds silent by default', () => {
+  it('keeps generic clicks, modal sounds, and unrelated legacy sounds silent', () => {
     const { engine, context } = setup();
     ['click', 'add', 'delete', 'uncheck', 'praying', 'rest', 'sport', 'repas', 'sleeping',
-      'streak', 'tab_switch', 'modal_open', 'modal_close', 'focus_pause', 'focus_resume',
-      'toast_success', 'toast_warning', 'simulator_celebrate']
+      'tab_switch', 'modal_open', 'modal_close', 'toast_success', 'simulator_celebrate']
       .forEach((id) => engine.playChime(id));
-    expect(context.sources).toHaveLength(0);
+    // Semantic legacy aliases resolve to their intentional sound categories.
+    expect(context.sources.length).toBeGreaterThan(0);
+    const beforeSilentIds = context.sources.length;
+    ['click', 'tab_switch', 'modal_open', 'modal_close', 'toast_success', 'praying', 'rest', 'sport', 'repas', 'sleeping']
+      .forEach((id) => engine.playChime(id));
+    expect(context.sources.length).toBe(beforeSilentIds);
+  });
+
+  it('loads and decodes configured CC0 assets once, only when the loader is warmed', async () => {
+    const context = new FakeAudioContext();
+    const buffer = { duration: 0.12 } as AudioBuffer;
+    context.decodeAudioData.mockResolvedValue(buffer);
+    const fetcher = vi.fn(async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) } as Response));
+    const loader = new SoundBufferLoader(context as never, { item_added: '/sounds/item_added.ogg' }, fetcher);
+
+    expect(fetcher).not.toHaveBeenCalled();
+    await Promise.all([loader.loadAll(), loader.loadAll()]);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(context.decodeAudioData).toHaveBeenCalledTimes(1);
+    expect(loader.get('item_added')).toBe(buffer);
+  });
+
+  it('plays a decoded buffer when available and falls back to synth after a load failure', async () => {
+    const { engine, context } = setup();
+    const buffer = { duration: 0.12 } as AudioBuffer;
+    const successful = new SoundBufferLoader(
+      context as never,
+      { item_added: '/sounds/item_added.ogg' },
+      vi.fn(async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) } as Response))
+    );
+    context.decodeAudioData.mockResolvedValue(buffer);
+    await successful.loadAll();
+    (engine as unknown as { soundLoader: SoundBufferLoader }).soundLoader = successful;
+    engine.playChime('item_added');
+    expect(context.sources).toHaveLength(1);
+    expect(context.sources[0].buffer).toBe(buffer);
+
+    const { engine: fallbackEngine, context: fallbackContext } = setup();
+    const failed = new SoundBufferLoader(
+      fallbackContext as never,
+      { item_added: '/sounds/item_added.ogg' },
+      vi.fn(async () => ({ ok: false, status: 404 } as Response))
+    );
+    await failed.loadAll();
+    (fallbackEngine as unknown as { soundLoader: SoundBufferLoader }).soundLoader = failed;
+    fallbackEngine.playChime('item_added');
+    expect(failed.get('item_added' as SoundId)).toBeUndefined();
+    expect(fallbackContext.sources.some((source) => source.constructor.name === 'FakeNode')).toBe(true);
   });
 });
