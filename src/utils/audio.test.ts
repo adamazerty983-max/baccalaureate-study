@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CalmAudioEngine, SoundBufferLoader, SoundId } from './audio';
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { CalmAudioEngine, SOUND_ASSET_PATHS, SoundBufferLoader, SoundId } from './audio';
 
 class FakeParam {
   value = 0;
@@ -177,6 +179,29 @@ describe('CalmAudioEngine sound policy', () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(context.decodeAudioData).toHaveBeenCalledTimes(1);
     expect(loader.get('item_added')).toBe(buffer);
+  });
+
+  it('maps all 14 canonical ids to existing public sound files', () => {
+    const entries = Object.entries(SOUND_ASSET_PATHS);
+    expect(entries).toHaveLength(14);
+    for (const [id, relativePath] of entries) {
+      expect(relativePath, `${id} has a public asset path`).toBeTruthy();
+      expect(existsSync(resolve(process.cwd(), 'public', relativePath!)), `${id} file exists`).toBe(true);
+    }
+  });
+
+  it('decodes every configured sound into a buffer addressed by its canonical ID', async () => {
+    const context = new FakeAudioContext();
+    let decoded = 0;
+    context.decodeAudioData.mockImplementation(async () => ({ duration: 0.1 + (decoded++ / 100) } as AudioBuffer));
+    const fetcher = vi.fn(async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) } as Response));
+    const loader = new SoundBufferLoader(context as never, SOUND_ASSET_PATHS, fetcher);
+    await loader.loadAll();
+
+    expect(fetcher).toHaveBeenCalledTimes(14);
+    for (const id of Object.keys(SOUND_ASSET_PATHS) as SoundId[]) {
+      expect(loader.get(id), `${id} was decoded`).toBeDefined();
+    }
   });
 
   it('plays a decoded buffer when available and falls back to synth after a load failure', async () => {

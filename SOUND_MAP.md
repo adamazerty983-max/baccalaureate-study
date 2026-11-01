@@ -1,12 +1,12 @@
 # StudyOS interaction and sound map
 
-**Status:** refreshed static source audit, 2026-11-01. This document records call sites and sound policy; runtime counts remain **[unverified]**. No third-party audio files were found or added. The engine now accepts 14 intent IDs, resolves legacy IDs to those intents, and keeps the Web Audio synth as fallback.
+**Status:** static source audit and CC0 sound integration, 2026-11-01. This document records call sites and sound policy; runtime interaction counts remain **[unverified]**. Fourteen processed OGG files are mapped by intent in `src/utils/audio.ts`; the Web Audio synth remains the per-ID fallback.
 
 ## Architecture found
 
 1. The frontend is React + TypeScript built by Vite; `src/main.tsx` mounts the app and `src/App.tsx` owns the main tab and modal composition.
 2. `src/utils/audio.ts` exports `CalmAudioEngine`, the singleton `chimePlayer`, `playChime`, and its public sound-id type.
-3. The engine currently synthesizes with Web Audio oscillators, filters, noise, and gain envelopes; no generated sound assets are present in `public/sounds/`.
+3. The engine loads mono OGG assets lazily after a user gesture, decodes each once, and uses Web Audio synthesis if loading or decoding fails.
 4. The engine has 14 active intent IDs: `ui_tick`, `item_completed`, `item_added`, `item_undone`, `item_deleted`, `grade_saved`, `focus_start`, `focus_pause`, `focus_resume`, `focus_end_alarm`, `reminder`, `error`, `warning`, and `milestone`.
 5. Legacy component calls resolve through aliases (for example `complete` → `item_completed`, `focus_finish` → `focus_end_alarm`); generic click, tab, modal, success-toast, and activity calls stay silent.
 6. Sound preferences exist as `settings.chimeSoundEnabled` and `settings.soundVolume`, wired by `App.tsx` and exposed in Settings.
@@ -138,7 +138,7 @@ The SFX generation tool accepts prompt, model, estimate flag and count. The insp
 
 Terms checked on 2026-11-01: [ElevenCreative Terms](https://elevenlabs.io/creative-terms), [ElevenLabs Terms of Service](https://elevenlabs.io/terms-of-use), [commercial-use billing documentation](https://elevenlabs.io/docs/overview/administration/billing), [subscription-end commercial rights / attribution](https://elevenlabs.io/docs/help-center/account/general/what-happens-to-my-content-after-my-subscription-ends). These are historical estimate/terms notes; this task uses no generated audio.
 
-The user-mentioned `soundy` connector could not be identified or called in this session: no Lots of Sounds tools were exposed, and Plugin Management search did not return a matching catalog connector. The repo also has no `public/sounds-raw/` or `public/sounds/`. The allowed Kenney fallback is documented in `DOWNLOAD_LIST.md`; official Kenney pages list both [UI Audio](https://kenney.nl/assets/ui-audio) and [Interface Sounds](https://kenney.nl/assets/interface-sounds) as CC0. No Kenney sample was downloaded or selected in this run.
+The initial connector lookup could not identify or call the user-mentioned `soundy` catalog. CC0 fallback files were later found in the provided `publicsounds-rawui-audio/` folder. Its included license identifies the UI SFX Set by Kenney Vleugels as CC0. The second Interface Sounds pack was not present. Fourteen outputs selected from the available set are documented in `SOUND_CREDITS.md` and `SOUND_CHOICES.md`; raw files are not committed.
 
 ## Runtime status
 
