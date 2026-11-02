@@ -42,6 +42,7 @@ export const WebPushSettings: React.FC<WebPushSettingsProps> = ({
 
   const handleSubscribe = async () => {
     setLoading(true);
+    chimePlayer.playChime('click');
     try {
       const success = await webPushService.subscribe();
       const updatedStatus = webPushService.getSubscriptionStatus();
@@ -77,6 +78,7 @@ export const WebPushSettings: React.FC<WebPushSettingsProps> = ({
   };
 
   const handleTestPush = () => {
+    chimePlayer.playChime('click');
     if (onTestNotification) {
       onTestNotification();
     }

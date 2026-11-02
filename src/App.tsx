@@ -1382,6 +1382,7 @@ export default function App() {
         activeBlock={activeFocusBlock}
         language={language}
         onClose={() => {
+          chimePlayer.playChime('modal_close');
           setIsFocusModeOpen(false);
         }}
         onToggleMinimize={() => setIsFocusMinimized(!isFocusMinimized)}
@@ -1412,6 +1413,7 @@ export default function App() {
       <QuickAddModal
         isOpen={isQuickAddOpen}
         onClose={() => {
+          chimePlayer.playChime('modal_close');
           setIsQuickAddOpen(false);
         }}
         defaultType={quickAddDefaultType}

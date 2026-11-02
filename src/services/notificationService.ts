@@ -1028,8 +1028,10 @@ class NotificationService {
   public async sendTestNotification(appData: FullAppData): Promise<boolean> {
     // If permission has not been granted yet, prompt user immediately
     if (this.isSupported() && Notification.permission === 'default') {
-      await this.requestPermission();
-      // The reminder dispatched below is the single confirmation for this test action.
+      const perm = await this.requestPermission();
+      if (perm === 'granted') {
+        chimePlayer.playChime('toast_success');
+      }
     }
 
     const lang = appData.settings.language || 'fr';

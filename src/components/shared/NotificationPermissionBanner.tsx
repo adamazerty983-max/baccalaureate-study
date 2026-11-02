@@ -45,6 +45,7 @@ export const NotificationPermissionBanner: React.FC<NotificationPermissionBanner
   };
 
   const handleEnable = async () => {
+    chimePlayer.playChime('click');
     setIsRequesting(true);
     try {
       const perm = await notificationService.requestPermission();
