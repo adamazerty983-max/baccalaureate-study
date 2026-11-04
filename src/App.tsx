@@ -70,7 +70,6 @@ import { mergeAppData, stampNow } from './utils/merge';
 import { chimePlayer } from './utils/audio';
 import { getT } from './utils/i18n';
 import { getLocalDateStr, isTimeBlockOccurrenceCompleted } from './utils/streak';
-import { preloadCriticalChunks, runWhenIdle } from './utils/performance';
 
 export default function App() {
   const [appData, setAppData] = useState<FullAppData>(() => loadStoredAppData());
@@ -106,12 +105,6 @@ export default function App() {
   // Idle background preloader for secondary tabs
   useEffect(() => {
     const cancel = startIdleTabPreloading(500);
-
-    // Preload critical chunks when browser is idle
-    runWhenIdle(() => {
-      preloadCriticalChunks();
-    });
-
     return () => cancel();
   }, []);
 
