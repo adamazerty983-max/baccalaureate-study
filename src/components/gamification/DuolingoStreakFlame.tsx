@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { watchVideoPlayback } from './videoPlayback';
 
 interface DuolingoStreakFlameProps {
   size?: number;
@@ -33,34 +34,7 @@ export const DuolingoStreakFlame: React.FC<DuolingoStreakFlameProps> = ({
     const video = videoRef.current;
     if (!video) return;
 
-    let settled = false;
-    const fallback = () => {
-      if (settled) return;
-      settled = true;
-      setUseGif(true);
-    };
-    const markPlaying = () => {
-      settled = true;
-    };
-
-    video.addEventListener('playing', markPlaying);
-    video.addEventListener('error', fallback);
-
-    const attempt = video.play();
-    if (attempt && typeof attempt.catch === 'function') {
-      attempt.catch(fallback);
-    }
-
-    // Fallback if video takes too long to play
-    const timer = window.setTimeout(() => {
-      if (video.paused || video.readyState < 3) fallback();
-    }, 2000);
-
-    return () => {
-      window.clearTimeout(timer);
-      video.removeEventListener('playing', markPlaying);
-      video.removeEventListener('error', fallback);
-    };
+    return watchVideoPlayback(video, () => setUseGif(true));
   }, [useGif]);
 
   const mediaStyle: React.CSSProperties = {
