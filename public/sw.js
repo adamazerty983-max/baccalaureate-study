@@ -8,15 +8,18 @@
 const CACHE_NAME = 'mybac-offline-__BUILD_ID__';
 const DYNAMIC_CACHE = 'mybac-dynamic-__BUILD_ID__';
 
+const BASE = self.location.pathname.includes('/baccalaureate-study') ? '/baccalaureate-study' : '';
+
 // Core app shell assets (eagerly precached on install).
-// Heavy media (campfire video/gif) are excluded from STATIC_ASSETS and cached at runtime on demand.
+// The lightweight 34KB campfire poster is included in STATIC_ASSETS so the flame visual is always instant & offline-ready.
 const STATIC_ASSETS = [
-  '/',
-  '/index.html',
-  '/icon.svg',
-  '/app_icon.ico',
-  '/original_icon_512.png',
-  '/manifest.json'
+  BASE + '/',
+  BASE + '/index.html',
+  BASE + '/icon.svg',
+  BASE + '/app_icon.ico',
+  BASE + '/original_icon_512.png',
+  BASE + '/manifest.json',
+  BASE + '/campfire-streak-poster.png'
 ];
 
 /**
@@ -119,7 +122,7 @@ self.addEventListener('fetch', (event) => {
             });
 
             await safeCachePut(CACHE_NAME, event.request, cleanResponse.clone());
-            await safeCachePut(CACHE_NAME, '/', cleanResponse.clone());
+            await safeCachePut(CACHE_NAME, BASE + '/', cleanResponse.clone());
 
             return cleanResponse;
           }
@@ -129,6 +132,8 @@ self.addEventListener('fetch', (event) => {
           // Network failed or timed out: fall back to cached shell
           const cached =
             (await caches.match(event.request)) ||
+            (await caches.match(BASE + '/')) ||
+            (await caches.match(BASE + '/index.html')) ||
             (await caches.match('/')) ||
             (await caches.match('/index.html'));
 
@@ -187,6 +192,14 @@ self.addEventListener('fetch', (event) => {
 
       const res = await networkFetch;
       if (res) return res;
+
+      // If a campfire media request fails while offline, fall back to the precached poster
+      if (url.pathname.includes('campfire-streak')) {
+        const poster =
+          (await caches.match(BASE + '/campfire-streak-poster.png')) ||
+          (await caches.match('/campfire-streak-poster.png'));
+        if (poster) return poster;
+      }
 
       return new Response('Offline - Resource unavailable', {
         status: 503,

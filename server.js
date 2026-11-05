@@ -225,11 +225,11 @@ if (pushEnabled) {
   }, 24 * 60 * 60 * 1000);
 }
 
-// Serve dist static assets.
+// Serve dist static assets at root and under repository path.
 // Hashed bundles under /assets are immutable and keep the long cache, but the
 // app shell (index.html) and the service worker must always revalidate —
 // otherwise a browser can keep booting an old build from its HTTP cache.
-app.use(express.static(distPath, {
+const staticOptions = {
   maxAge: '1d',
   index: 'index.html',
   setHeaders: (res, filePath) => {
@@ -237,7 +237,10 @@ app.use(express.static(distPath, {
       res.setHeader('Cache-Control', 'no-cache');
     }
   }
-}));
+};
+
+app.use(express.static(distPath, staticOptions));
+app.use('/baccalaureate-study', express.static(distPath, staticOptions));
 
 // Fallback to index.html for SPA client-side routing
 app.get('*', (req, res) => {

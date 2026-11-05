@@ -112,6 +112,11 @@ function setupCustomProtocol() {
       pathname = '/index.html';
     }
 
+    // Strip repository subpath if present (e.g. /baccalaureate-study/assets/...)
+    if (pathname.startsWith('/baccalaureate-study')) {
+      pathname = pathname.replace(/^\/baccalaureate-study/, '') || '/index.html';
+    }
+
     let filePath = path.join(distDir, pathname);
 
     // Guard against directory traversal attacks

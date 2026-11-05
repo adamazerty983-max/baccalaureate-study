@@ -179,7 +179,8 @@ class UpdateService {
     this.recordLastCheckTime();
 
     try {
-      const res = await fetch('/version.json', { cache: 'no-store' });
+      const versionUrl = `${import.meta.env.BASE_URL || '/'}version.json`.replace(/\/\//g, '/');
+      const res = await fetch(versionUrl, { cache: 'no-store' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
       const data = await res.json();

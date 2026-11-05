@@ -52,8 +52,14 @@ if (isDesktop) {
   // Allow service worker registration in production builds (import.meta.env.PROD),
   // enabling testing on localhost via `vite preview` while keeping it disabled on dev server.
   if (import.meta.env.PROD) {
+    const swUrl = window.location.pathname.startsWith('/baccalaureate-study')
+      ? '/baccalaureate-study/sw.js'
+      : '/sw.js';
+    const swScope = window.location.pathname.startsWith('/baccalaureate-study')
+      ? '/baccalaureate-study/'
+      : '/';
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => undefined);
+      navigator.serviceWorker.register(swUrl, { scope: swScope }).catch(() => undefined);
     });
   }
 }
